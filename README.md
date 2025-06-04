@@ -1,2 +1,5 @@
-hello
-test2 - andy
+MistralGPT: Our innovative solution harnesses the power of advanced AI to revolutionize how organizations detect and understand malicious activity across their networks. By seamlessly integrating data from both high-interaction honeypots and your internal traffic monitoring (Mistral), our intelligent chatbot enables security teams to rapidly identify, compare, and investigate suspicious events.
+
+Using state-of-the-art machine learning and vector database technology, our system finds meaningful similarities between external attacker behaviors and internal activity, surfacing critical threat patterns and actionable insights in real time. Analysts can interact naturally with the chatbot, asking complex questions and receiving clear, context-rich answers—dramatically accelerating investigation and response.
+
+Empower your SOC with proactive, AI-driven security analytics—reduce risk, save time, and gain unparalleled visibility into emerging threats with our unified chatbot solution.
