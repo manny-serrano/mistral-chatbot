@@ -38,7 +38,7 @@ while True:
     prompt = f"""Use the following context to answer the question.\n\nContext:\n{context}\n\nQuestion: {question}\nAnswer:"""
 
     response = openai.chat.completions.create(
-        model="GPT 4.1",
+        model="GPT 4.1", #Possible models: 'Mistral on-site', 'GPT 4.1', 'GPT 4.1 Nano', 'GPT 4.1 Mini', 'o4 Mini']
         messages=[{"role": "user", "content": prompt}]
     )
     print("\nLLM Answer:")
