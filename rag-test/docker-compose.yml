@@ -5,7 +5,7 @@ services: # defines all containers to run
       - "8000:8000" # Map port 8000 on host computer to port 8000 in the container
     volumes:
       - ./backend:/app #Mount your backend code into the container
-      - /Users/emmanuelserrano/Desktop/FLOW_Sample:/data  # Mount host data dir to /data in container
+      - ./data:/data  # Mount host data dir to /data in container
     depends_on:
       - qdrant #waits for qdrant service
       - ollama #waits for ollama service

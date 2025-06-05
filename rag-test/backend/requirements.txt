@@ -3,3 +3,4 @@ uvicorn[standard]
 sentence-transformers
 qdrant-client
 httpx
+python-multipart

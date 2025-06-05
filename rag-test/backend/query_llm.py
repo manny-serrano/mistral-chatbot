@@ -24,6 +24,7 @@ def build_llm_prompt(user_query, flows):
         f"{context}\n\n"
         f"User question: {user_query}\n"
         "Answer as helpfully as possible."
+        "Keep the answers short and concise, and accurate."
     )
     return prompt
 
@@ -43,7 +44,7 @@ def main():
     print("Hello! 👋  My name is Flojo and I am here to help you 😎 . Type 'exit' to quit.\n")
     while True:
         # Step 1: Get user query
-        user_query = input("Please ask me a question: ")
+        user_query = input("If you want to upload a JSON file to test head to http://localhost:8000/ and run python3 query_llm.py again. Please ask me a question: ")
         if user_query.strip().lower() in {"exit", "quit"}:
             print("Goodbye!")
             break
