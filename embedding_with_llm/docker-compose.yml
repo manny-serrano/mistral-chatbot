@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: milvus
+    ports:
+      - "19530:19530"  # Milvus gRPC
+      - "9091:9091"    # Milvus HTTP
+    environment:
+      - TZ=UTC
+    command: ["milvus", "run", "standalone"]
+
+  app:
+    build: .
+    container_name: embedding_llm_app
+    depends_on:
+      - milvus
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE}
+    volumes:
+      - .:/app
+    tty: true 

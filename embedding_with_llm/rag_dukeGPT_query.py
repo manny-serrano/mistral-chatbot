@@ -14,7 +14,9 @@ connections.connect("default", host="localhost", port="19530")
 collection = Collection("sbert_embeddings")
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Prompt user for a question
+# Initialize conversation history
+messages = []
+
 while True:
     question = input("Enter your question (or type 'stop' to exit): ")
     if question.strip().lower() in ['stop', 'exit']:
@@ -34,12 +36,20 @@ while True:
     top_texts = [hit.entity.get("text") for hit in results[0] if hit.entity.get("text")]
     context = "\n".join(top_texts)
 
-    # Build prompt and query OpenAI
+    # Build prompt for this turn
     prompt = f"""Use the following context to answer the question.\n\nContext:\n{context}\n\nQuestion: {question}\nAnswer:"""
 
+    # Add the user's question to the conversation history
+    messages.append({"role": "user", "content": prompt})
+
+    # Query OpenAI with the full conversation history
     response = openai.chat.completions.create(
         model="GPT 4.1", #Possible models: 'Mistral on-site', 'GPT 4.1', 'GPT 4.1 Nano', 'GPT 4.1 Mini', 'o4 Mini']
-        messages=[{"role": "user", "content": prompt}]
+        messages=messages
     )
+    answer = response.choices[0].message.content
     print("\nLLM Answer:")
-    print(response.choices[0].message.content) 
+    print(answer)
+
+    # Add the LLM's answer to the conversation history
+    messages.append({"role": "assistant", "content": answer}) 
