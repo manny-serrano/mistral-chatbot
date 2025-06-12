@@ -60,10 +60,10 @@ while True:
     if question.strip().lower() in ['stop', 'exit']:
         print("Exiting.")
         break
-    result = qa_chain({"query": question})
+    result = qa_chain.invoke({"query": question})
     print("\nLLM Answer:")
     print(result["result"])
-    print("\n--- Source Documents ---")
-    for doc in result["source_documents"]:
-        print(doc.page_content)
-        print("------") 
+    # print("\n--- Source Documents ---")
+    #for doc in result["source_documents"]:
+    #    print(doc.page_content)
+    #    print("------") 
