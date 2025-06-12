@@ -12,4 +12,4 @@ ENV TOKENIZERS_PARALLELISM=false
 
 RUN chmod +x entrypoint.sh
 
-CMD ["./entrypoint.sh"] 
+CMD ["./entrypoint.sh"]

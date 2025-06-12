@@ -1,4 +1,7 @@
-version: '3.8'
+networks:
+  milvus:
+    driver: bridge
+
 services:
   etcd:
     container_name: milvus-etcd
@@ -16,6 +19,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - milvus
 
   minio:
     container_name: milvus-minio
@@ -34,6 +39,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - milvus
 
   standalone:
     container_name: milvus-standalone
@@ -49,30 +56,32 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
-      start_period: 90s
+      start_period: 120s
       timeout: 20s
-      retries: 3
+      retries: 5
     ports:
       - "19530:19530"
       - "9091:9091"
     depends_on:
-      - "etcd"
-      - "minio"
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - milvus
 
   app:
     build: .
     container_name: embedding_llm_app
     depends_on:
-      - standalone
+      standalone:
+        condition: service_healthy
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_API_BASE=${OPENAI_API_BASE}
     volumes:
       - .:/app
     tty: true
+    stdin_open: true
     networks:
-      - milvus
-
-networks:
-  milvus:
-    name: milvus 
+      - milvus 

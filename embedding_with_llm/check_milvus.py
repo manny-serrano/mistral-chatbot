@@ -22,9 +22,9 @@ print("\nSchema:", collection.schema)
 print("Number of entities:", collection.num_entities)
 
 # Query and print first 5 embeddings
-results = collection.query(expr="", output_fields=["id", "embedding"], limit=5)
-print("\nFirst 5 embeddings:")
+results = collection.query(expr="", output_fields=["pk", "vector"], limit=5)
+print("\nFirst 5 entities:")
 for res in results:
-    print(f"ID: {res['id']}")
-    print(f"Embedding (first 5 values): {res['embedding'][:5]}")
+    print(f"PK: {res['pk']} (showing first 5 dims)")
+    print(f"Vector: {res['vector'][:5]}")
     print() 
