@@ -1,0 +1,10 @@
+{
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "timestamp": "2024-03-20T10:00:00Z",
+    "src_ip": "192.168.1.100",
+    "dst_ip": "10.0.0.50",
+    "src_port": 54321,
+    "dst_port": 22,
+    "protocol": "TCP",
+    "tags": ["ssh", "scan_attempt"]
+} 
