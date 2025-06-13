@@ -5,13 +5,13 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAI
 from langchain.chains import RetrievalQA
 from dotenv import load_dotenv
-from pymilvus import connections
+
 
 # Load environment variables
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 openai_api_base = os.getenv("OPENAI_API_BASE")
-openai_model = os.getenv("OPENAI_MODEL", "GPT 4.1")
+openai_model = "GPT 4.1"
 
 # Set up embeddings
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
