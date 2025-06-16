@@ -1,0 +1,258 @@
+[
+  {
+    "src_ip": "20.150.193.32",
+    "dst_ip": "152.3.101.110",
+    "uuid": "2074be488cbc4c09ad55e5683d0df86e",
+    "timestamp": "2025-05-30T11:48:01.000000000+00:00",
+    "src_port": 48272,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "", 
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "20.150.193.32",
+    "dst_ip": "152.3.101.110",
+    "uuid": "2074be488cbc4c09ad55e5683d0df86e",
+    "timestamp": "2025-05-30T11:48:01.000000000+00:00",
+    "src_port": 48272,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "20.150.193.32",
+    "dst_ip": "152.3.101.110",
+    "uuid": "2074be488cbc4c09ad55e5683d0df86e",
+    "timestamp": "2025-05-30T11:48:41.000000000+00:00",
+    "src_port": 48272,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "13.86.105.235",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:33:53.000000000+00:00",
+    "src_port": 56442,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "13.86.105.235",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:33:53.000000000+00:00",
+    "src_port": 56442,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "13.86.105.235",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:33:53.000000000+00:00",
+    "src_port": 56442,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "13.86.105.235",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:33:53.000000000+00:00",
+    "src_port": 56442,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "13.86.105.235",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:34:33.000000000+00:00",
+    "src_port": 56442,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "69.164.213.157",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:42:58.000000000+00:00",
+    "src_port": 12194,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "69.164.213.157",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:43:38.000000000+00:00",
+    "src_port": 12194,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "69.164.213.157",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:43:42.000000000+00:00",
+    "src_port": 3822,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "69.164.213.157",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:43:42.000000000+00:00",
+    "src_port": 3822,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "69.164.213.157",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:43:48.000000000+00:00",
+    "src_port": 3822,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "69.164.213.157",
+    "dst_ip": "152.3.101.91",
+    "uuid": "bb7d7ab7fdc74c21b43165a131d52cd5",
+    "timestamp": "2025-05-30T10:43:48.000000000+00:00",
+    "src_port": 3822,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "147.45.116.88",
+    "dst_ip": "152.3.101.110",
+    "uuid": "2074be488cbc4c09ad55e5683d0df86e",
+    "timestamp": "2025-05-30T12:51:47.000000000+00:00",
+    "src_port": 42784,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  },
+  {
+    "src_ip": "147.45.116.88",
+    "dst_ip": "152.3.101.110",
+    "uuid": "2074be488cbc4c09ad55e5683d0df86e",
+    "timestamp": "2025-05-30T12:51:47.000000000+00:00",
+    "src_port": 42784,
+    "dst_port": null,
+    "protocol": "ftp",
+    "con_type": null,
+    "transport": null,
+    "tags": [
+      "",
+      "conpot",
+      "ftp"
+    ]
+  }
+]
