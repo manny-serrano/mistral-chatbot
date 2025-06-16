@@ -36,8 +36,7 @@ if collection_name in utility.list_collections():
         # Check if collection has data
         num_entities = collection.num_entities
         if num_entities > 0:
-            print(f"Collection '{collection_name}' already exists with {num_entities} embeddings. Skipping embedding.")
-            should_skip_embedding = True
+            print(f"Collection '{collection_name}' already exists with {num_entities} embeddings. New files will be embedded if they have not been processed before.")
         else:
             print(f"Collection '{collection_name}' exists but is empty. Proceeding with embedding...")
     except Exception as e:
@@ -46,7 +45,7 @@ if collection_name in utility.list_collections():
 else:
     print(f"Collection '{collection_name}' does not exist. Creating and embedding data...")
 
-if not should_skip_embedding:
+if True:
     # Create collection if it doesn't exist
     if collection_name not in utility.list_collections():
         print("Creating new collection...")
