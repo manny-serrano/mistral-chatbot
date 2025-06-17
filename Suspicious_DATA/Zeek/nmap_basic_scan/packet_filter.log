@@ -1,0 +1,1 @@
+{"ts":"2024-06-14T21:08:03.021955Z","node":"zeek","filter":"ip or not ip","init":true,"success":true}

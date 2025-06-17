@@ -1,0 +1,4 @@
+{"ts":"2024-06-13T19:59:15.956273Z","uid":"CDfRayzPvKj5BlFvk","id.orig_h":"99.43.180.14","id.orig_p":50421,"id.resp_h":"67.159.64.185","id.resp_p":22,"name":"bad_TCP_checksum","notice":false,"peer":"zeek","source":"TCP"}
+{"ts":"2024-06-13T19:59:16.426772Z","uid":"CfYQjT9tR5Yp5APX1","id.orig_h":"67.159.64.185","id.orig_p":39095,"id.resp_h":"54.67.68.88","id.resp_p":443,"name":"bad_TCP_checksum","notice":false,"peer":"zeek","source":"TCP"}
+{"ts":"2024-06-13T19:59:27.380028Z","uid":"Cm7M6r3odSoWWH4ksj","id.orig_h":"67.159.64.185","id.orig_p":123,"id.resp_h":"162.159.200.1","id.resp_p":123,"name":"bad_UDP_checksum","notice":false,"peer":"zeek","source":"UDP"}
+{"ts":"2024-06-13T19:59:45.841854Z","uid":"ChWhFq2G1edDWrAOwe","id.orig_h":"152.3.101.79","id.orig_p":16655,"id.resp_h":"67.159.64.185","id.resp_p":5900,"name":"bad_TCP_checksum","notice":false,"peer":"zeek","source":"TCP"}
