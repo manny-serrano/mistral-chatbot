@@ -1,6 +1,7 @@
 from sentence_transformers import SentenceTransformer
 from pymilvus import connections, FieldSchema, CollectionSchema, DataType, Collection, utility
 import json
+import ast
 import time
 from datetime import datetime
 import glob, os
@@ -21,29 +22,36 @@ for attempt in range(60):  # Try for up to 60*2=120 seconds (2 minutes)
 else:
     raise RuntimeError("Failed to connect to Milvus after 120 seconds. Check if Milvus service is running properly.")
 
-collection_name = "sbert_embeddings"
-
-print(f"Checking if collection '{collection_name}' exists and has data...")
-should_skip_embedding = False
-
-if collection_name in utility.list_collections():
-    # Collection exists, now check if it has data and is loaded
-    collection = Collection(collection_name)
-    try:
-        # Load the collection if it's not already loaded
-        collection.load()
-        
-        # Check if collection has data
-        num_entities = collection.num_entities
-        if num_entities > 0:
-            print(f"Collection '{collection_name}' already exists with {num_entities} embeddings. New files will be embedded if they have not been processed before.")
-        else:
-            print(f"Collection '{collection_name}' exists but is empty. Proceeding with embedding...")
-    except Exception as e:
-        print(f"Error checking collection status: {e}")
-        print("Proceeding with embedding to ensure collection is properly set up...")
+# --- Step 1 – collection creation / selection ---
+existing_collections = utility.list_collections()
+if existing_collections:
+    print(f"Existing collections: {', '.join(existing_collections)}")
 else:
-    print(f"Collection '{collection_name}' does not exist. Creating and embedding data...")
+    print("No existing collections found.")
+
+# Ask whether the user wants to create a new collection first
+create_new_input = input("Would you like to create a new collection? (y/N): ").strip().lower()
+
+if create_new_input == "y":
+    collection_name = input("Enter a name for the new collection: ").strip()
+    if not collection_name:
+        print("Collection name cannot be empty. Exiting.")
+        exit(1)
+    print(f"A new collection named '{collection_name}' will be created (if it does not already exist).")
+else:
+    collection_name = input("Enter the name of the collection you would like to embed the file into: ").strip()
+    if not collection_name:
+        print("Collection name cannot be empty. Exiting.")
+        exit(1)
+
+# If a new collection was just defined, optionally let the user override where to embed
+if create_new_input == "y":
+    embed_target = input(f"Enter the name of the collection you would like to embed the file into (default: {collection_name}): ").strip()
+    if embed_target:
+        collection_name = embed_target
+
+# Pause before moving on to file selection
+input("Press Enter to continue to file selection…")
 
 if True:
     # Create collection if it doesn't exist
@@ -95,6 +103,12 @@ if True:
 
     print(f"Found {len(files_to_process)} file(s) matching pattern '{FILE_GLOB}'.\n")
 
+    # Ask the user which kind of log is being embedded so we can pick the right
+    # sentence-extraction routine.
+    data_type_in = input("What type of data are you embedding? Enter 'honeypot' or 'flow' (default: flow): ").strip().lower()
+    data_type = data_type_in if data_type_in in {"honeypot", "flow"} else "flow"
+    print(f"Embedding as {data_type} data…")
+
     # For each file, we will first check whether any embeddings with this source_file already exist.
 
     EMBEDDING_BATCH_SIZE = 100  # Process embeddings in batches
@@ -129,6 +143,45 @@ if True:
             f"Bytes: {bytes_total}, Packets: {packets_total}."
         )
 
+    # Helper to convert a honeypot log entry into a readable sentence
+    def honeypot_to_sentence(evt: dict) -> str:
+        """Convert a STINGAR honeypot event dictionary to a sentence suitable for embedding."""
+        app = evt.get("app", "unknown_app")
+        protocol = evt.get("protocol", "unknown_proto")
+        sensor_host = evt.get("sensor", {}).get("hostname", "unknown_sensor")
+        src_ip, src_port = evt.get("src_ip", "?"), evt.get("src_port", "?")
+        dst_ip, dst_port = evt.get("dst_ip", "?"), evt.get("dst_port", "?")
+
+        # Attempt to derive an event description
+        hp_data = evt.get("hp_data", {}) or {}
+        event_desc = (
+            hp_data.get("event_type") or
+            hp_data.get("con_type") or
+            hp_data.get("mqtt_action") or
+            "activity"
+        )
+
+        ts = evt.get("start_time") or evt.get("@timestamp") or evt.get("end_time") or "unknown_time"
+
+        return (
+            f"Honeypot {app} on {sensor_host} observed {event_desc} using {protocol} "
+            f"from {src_ip}:{src_port} to {dst_ip}:{dst_port} at {ts}."
+        )
+
+    # Generic parser that tolerates both strict JSON and Python-literal style dicts (such as STINGAR samples)
+    def parse_event_line(line_str: str):
+        """Parse a single-line JSON or Python-dict string into a dictionary.
+
+        Returns None if the line cannot be parsed."""
+        try:
+            return json.loads(line_str)
+        except json.JSONDecodeError:
+            try:
+                return ast.literal_eval(line_str)
+            except Exception:
+                print(f"Warning: could not parse line -> skipping: {line_str[:80]}…")
+                return None
+
     for filename in files_to_process:
         print(f"\nProcessing file: {filename}")
 
@@ -151,26 +204,31 @@ if True:
         with open(filename, 'r') as f:
             for line_num, line in enumerate(f, 1):
                 if line.strip():
-                    data = json.loads(line)
-                    if 'flows' in data:
-                        log_text = flow_to_sentence(data['flows'])
+                    data = parse_event_line(line)
+                    if data is None:
+                        continue
+                    log_text = None
+                    if data_type == "flow":
+                        if 'flows' in data:
+                            log_text = flow_to_sentence(data['flows'])
+                    else:  # honeypot mode
+                        log_text = honeypot_to_sentence(data)
+
+                    if log_text:
                         batch_texts.append(log_text)
 
-                        if len(batch_texts) >= EMBEDDING_BATCH_SIZE:
-                            # Compute embeddings for the batch
-                            batch_embeddings = model.encode(batch_texts)
-                            embeddings_list = [emb.tolist() for emb in batch_embeddings]
-
-                            # Also build source_file list
-                            src_list = [filename] * len(embeddings_list)
-
-                            for i in range(0, len(embeddings_list), INSERT_BATCH_SIZE):
-                                chunk_embeddings = embeddings_list[i:i+INSERT_BATCH_SIZE]
-                                chunk_texts = batch_texts[i:i+INSERT_BATCH_SIZE]
-                                chunk_src = src_list[i:i+INSERT_BATCH_SIZE]
-                                collection.insert([chunk_embeddings, chunk_texts, chunk_src])
-                                total_inserted += len(chunk_embeddings)
-                            batch_texts = []
+                    # Flush batch if size threshold reached
+                    if len(batch_texts) >= EMBEDDING_BATCH_SIZE:
+                        batch_embeddings = model.encode(batch_texts)
+                        embeddings_list = [emb.tolist() for emb in batch_embeddings]
+                        src_list = [filename] * len(embeddings_list)
+                        for i in range(0, len(embeddings_list), INSERT_BATCH_SIZE):
+                            chunk_embeddings = embeddings_list[i:i+INSERT_BATCH_SIZE]
+                            chunk_texts = batch_texts[i:i+INSERT_BATCH_SIZE]
+                            chunk_src = src_list[i:i+INSERT_BATCH_SIZE]
+                            collection.insert([chunk_embeddings, chunk_texts, chunk_src])
+                            total_inserted += len(chunk_embeddings)
+                        batch_texts = []
 
         # Process remaining records for this file
         if batch_texts:
