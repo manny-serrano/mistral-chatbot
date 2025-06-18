@@ -7,6 +7,7 @@ from langchain.chains import RetrievalQA
 from dotenv import load_dotenv
 from pymilvus import connections, utility
 from langchain_core.retrievers import BaseRetriever
+import math
 
 
 # Load environment variables
@@ -16,7 +17,8 @@ openai_api_base = os.getenv("OPENAI_API_BASE")
 openai_model = "GPT 4.1"
 
 # Set up embeddings
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+model_name = os.getenv("EMB_MODEL", "BAAI/bge-base-en")
+embeddings = HuggingFaceEmbeddings(model_name=model_name)
 
 # Connect to Milvus first, with simple retry loop
 print("Connecting to Milvus to enumerate collections…")
@@ -85,10 +87,10 @@ if len(vectorstores) == 1:
     retriever = vectorstores[0].as_retriever(search_kwargs={"k": 5})
 else:
     class MultiCollectionRetriever(BaseRetriever):
-        """Retriever that queries multiple Milvus collections and merges results by similarity distance."""
+        """Retriever that queries multiple Milvus collections and merges an even share from each store."""
 
         stores: list
-        k: int = 5
+        k_total: int = 10  # final number of docs to return
         # Allow arbitrary vectorstore objects
         model_config = {
             "arbitrary_types_allowed": True,
@@ -97,9 +99,15 @@ else:
 
         def _get_relevant_documents(self, query, *, run_manager=None):
             scored_docs = []
+            stores_count = len(self.stores)
+            if stores_count == 0:
+                return []
+
+            k_per_store = math.ceil(self.k_total / stores_count)
+
             for vs in self.stores:
                 try:
-                    docs_scores = vs.similarity_search_with_score(query, k=self.k)
+                    docs_scores = vs.similarity_search_with_score(query, k=k_per_store)
                     # Attach collection provenance
                     for doc, score in docs_scores:
                         doc.metadata = doc.metadata or {}
@@ -107,13 +115,15 @@ else:
                     scored_docs.extend(docs_scores)
                 except Exception as e:
                     print(f"Warning retrieving from {vs.collection_name}: {e}")
+
+            # Merge and keep the overall best k_total
             scored_docs.sort(key=lambda pair: pair[1])  # lower distance better
-            return [d[0] for d in scored_docs[: self.k]]
+            return [d[0] for d in scored_docs[: self.k_total]]
 
         async def _aget_relevant_documents(self, query, *, run_manager=None):
             return self._get_relevant_documents(query, run_manager=run_manager)
 
-    retriever = MultiCollectionRetriever(stores=vectorstores, k=5)
+    retriever = MultiCollectionRetriever(stores=vectorstores, k_total=10)
 
 # Set up LLM
 llm = OpenAI(model=openai_model, openai_api_key=openai_api_key, openai_api_base=openai_api_base)
@@ -134,7 +144,7 @@ while True:
     result = qa_chain.invoke({"query": question})
     print("\nLLM Answer:")
     print(result["result"])
-    # print("\n--- Source Documents ---")
-    #for doc in result["source_documents"]:
-    #    print(doc.page_content)
-    #    print("------") 
+    print("\n--- Source Documents ---")
+    for doc in result["source_documents"]:
+       print(doc.page_content)
+       print("------") 

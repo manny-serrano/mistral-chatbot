@@ -22,6 +22,10 @@ for attempt in range(60):  # Try for up to 60*2=120 seconds (2 minutes)
 else:
     raise RuntimeError("Failed to connect to Milvus after 120 seconds. Check if Milvus service is running properly.")
 
+# Load embedding model early (needed for schema dim)
+print("Loading sentence transformer model (BAAI/bge-base-en)…")
+model = SentenceTransformer('BAAI/bge-base-en')
+
 # --- Step 1 – collection creation / selection ---
 existing_collections = utility.list_collections()
 if existing_collections:
@@ -57,10 +61,11 @@ if True:
     # Create collection if it doesn't exist
     if collection_name not in utility.list_collections():
         print("Creating new collection...")
-        # Define schema compatible with LangChain
+        # Define schema compatible with LangChain – vector dim equals embedding size
+        emb_dim = model.get_sentence_embedding_dimension()
         fields = [
             FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=384),
+            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=emb_dim),
             FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=2048),
             FieldSchema(name="source_file", dtype=DataType.VARCHAR, max_length=512)
         ]
@@ -82,9 +87,6 @@ if True:
             # If loading fails (e.g. index missing) we'll continue, queries will
             # be skipped and data re-inserted.
             print(f"Warning: could not load collection: {e}")
-
-    print("Loading sentence transformer model...")
-    model = SentenceTransformer('all-MiniLM-L6-v2')
 
     # --- Determine which files to embed ---
     env_pattern = os.getenv("FLOW_LOG_PATTERN")
