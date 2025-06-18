@@ -1,0 +1,4 @@
+# generated / runtime data – never commit
+volumes/
+neo4j-graphdatabase/neo4j/data/
+neo4j-graphdatabase/neo4j/logs/
