@@ -3,3 +3,5 @@ MistralGPT: Our innovative solution harnesses the power of advanced AI to revolu
 Using state-of-the-art machine learning and vector database technology, our system finds meaningful similarities between external attacker behaviors and internal activity, surfacing critical threat patterns and actionable insights in real time. Analysts can interact naturally with the chatbot, asking complex questions and receiving clear, context-rich answers—dramatically accelerating investigation and response.
 
 Empower your SOC with proactive, AI-driven security analytics—reduce risk, save time, and gain unparalleled visibility into emerging threats with our unified chatbot solution.
+
+https://gitlab.oit.duke.edu/academic-technology/public-resources-duke/code_plus_windows
