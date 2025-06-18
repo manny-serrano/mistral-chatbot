@@ -1,0 +1,3 @@
+[submodule "mistral-enhancing-network-security-analysis"]
+	path = mistral-enhancing-network-security-analysis
+	url = git@gitlab.oit.duke.edu:codeplus/mistral-enhancing-network-security-analysis.git
