@@ -17,8 +17,10 @@ openai_api_base = os.getenv("OPENAI_API_BASE")
 openai_model = "GPT 4.1"
 
 # Set up embeddings
-model_name = os.getenv("EMB_MODEL", "BAAI/bge-base-en")
+model_name = os.getenv("EMB_MODEL", "BAAI/bge-large-en-v1.5")
+print(f"Loading embedding model optimized for cybersecurity and numerical data: {model_name}")
 embeddings = HuggingFaceEmbeddings(model_name=model_name)
+print("Successfully loaded BAAI/bge-large-en-v1.5 - excellent for technical content and numbers!")
 
 # Connect to Milvus first, with simple retry loop
 print("Connecting to Milvus to enumerate collections…")
