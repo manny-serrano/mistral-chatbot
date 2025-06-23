@@ -1,0 +1,341 @@
+import os
+import time
+from typing import List, Dict, Any, Optional
+from langchain_milvus import Milvus
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import OpenAI
+from langchain.chains import RetrievalQA
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.documents import Document
+from langchain.prompts import PromptTemplate
+from langchain.schema import BaseOutputParser
+from dotenv import load_dotenv
+from pymilvus import connections, utility
+from neo4j import GraphDatabase
+import json
+import math
+
+# Load environment variables
+load_dotenv()
+
+class QueryClassifier:
+    """Classifies queries to determine which database to use."""
+    
+    def __init__(self, llm: OpenAI):
+        self.llm = llm
+        self.classification_prompt = PromptTemplate(
+            input_variables=["query"],
+            template="""
+            Analyze the following security query and classify it into one of these categories:
+            
+            1. GRAPH_QUERY - For queries about relationships, connections, paths, network topology, 
+               "who connected to whom", "show me the path", "find connections between", 
+               "network relationships", "communication patterns"
+            
+            2. SEMANTIC_QUERY - For queries about finding similar patterns, behaviors, 
+               "find similar to", "show me traffic like", "detect patterns similar to", 
+               "find flows that look like", "semantic similarity", "behavioral analysis"
+            
+            3. HYBRID_QUERY - For queries that need both relationship analysis AND semantic similarity,
+               "find similar attacks and their network paths", "show me connections of similar traffic"
+            
+            Query: {query}
+            
+            Respond with only: GRAPH_QUERY, SEMANTIC_QUERY, or HYBRID_QUERY
+            """
+        )
+    
+    def classify_query(self, query: str) -> str:
+        """Classify the query type."""
+        try:
+            response = self.llm.invoke(
+                self.classification_prompt.format(query=query)
+            )
+            classification = response.strip().upper()
+            if classification in ["GRAPH_QUERY", "SEMANTIC_QUERY", "HYBRID_QUERY"]:
+                return classification
+            else:
+                # Default to semantic query if classification is unclear
+                return "SEMANTIC_QUERY"
+        except Exception as e:
+            print(f"Error classifying query: {e}")
+            return "SEMANTIC_QUERY"
+
+class Neo4jRetriever(BaseRetriever):
+    """Retriever for Neo4j graph database queries."""
+    
+    def __init__(self, uri: str, user: str, password: str):
+        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        
+    def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
+        """Retrieve relevant documents from Neo4j based on the query."""
+        try:
+            with self.driver.session() as session:
+                # Convert natural language query to Cypher
+                cypher_query = self._query_to_cypher(query)
+                result = session.run(cypher_query)
+                
+                documents = []
+                for record in result:
+                    # Convert Neo4j record to document format
+                    content = self._format_neo4j_result(record)
+                    metadata = {
+                        "source": "neo4j",
+                        "query_type": "graph",
+                        "record_data": dict(record)
+                    }
+                    documents.append(Document(page_content=content, metadata=metadata))
+                
+                return documents
+        except Exception as e:
+            print(f"Error querying Neo4j: {e}")
+            return []
+    
+    def _query_to_cypher(self, query: str) -> str:
+        """Convert natural language query to Cypher query."""
+        # This is a simplified version - in production, you'd use an LLM to convert
+        query_lower = query.lower()
+        
+        if "connection" in query_lower or "connect" in query_lower:
+            return """
+            MATCH (src:IP)-[r:CONNECTED_TO]->(dst:IP)
+            RETURN src.address as source_ip, dst.address as dest_ip, 
+                   r.protocol, r.src_port, r.dst_port, r.timestamp
+            LIMIT 10
+            """
+        elif "path" in query_lower:
+            return """
+            MATCH path = (src:IP)-[:CONNECTED_TO*1..3]->(dst:IP)
+            RETURN path
+            LIMIT 5
+            """
+        elif "tag" in query_lower:
+            return """
+            MATCH (ip:IP)-[:HAS_TAG]->(tag:Tag)
+            RETURN ip.address, collect(tag.name) as tags
+            LIMIT 10
+            """
+        else:
+            # Default query
+            return """
+            MATCH (src:IP)-[r:CONNECTED_TO]->(dst:IP)
+            RETURN src.address as source_ip, dst.address as dest_ip, 
+                   r.protocol, r.timestamp
+            LIMIT 10
+            """
+    
+    def _format_neo4j_result(self, record) -> str:
+        """Format Neo4j record into readable text."""
+        try:
+            if hasattr(record, 'path'):
+                # Handle path results
+                nodes = [node['address'] for node in record.path.nodes if 'address' in node]
+                return f"Network path: {' -> '.join(nodes)}"
+            else:
+                # Handle regular results
+                return json.dumps(dict(record), indent=2)
+        except:
+            return str(record)
+    
+    async def _aget_relevant_documents(self, query: str, *, run_manager=None):
+        return self._get_relevant_documents(query, run_manager=run_manager)
+
+class MilvusRetriever(BaseRetriever):
+    """Retriever for Milvus vector database queries."""
+    
+    def __init__(self, vectorstore: Milvus, k: int = 5):
+        self.vectorstore = vectorstore
+        self.k = k
+    
+    def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
+        """Retrieve relevant documents from Milvus based on semantic similarity."""
+        try:
+            docs = self.vectorstore.similarity_search(query, k=self.k)
+            # Add metadata to indicate source
+            for doc in docs:
+                doc.metadata["source"] = "milvus"
+                doc.metadata["query_type"] = "semantic"
+            return docs
+        except Exception as e:
+            print(f"Error querying Milvus: {e}")
+            return []
+    
+    async def _aget_relevant_documents(self, query: str, *, run_manager=None):
+        return self._get_relevant_documents(query, run_manager=run_manager)
+
+class HybridRetriever(BaseRetriever):
+    """Retriever that combines both Neo4j and Milvus results."""
+    
+    def __init__(self, neo4j_retriever: Neo4jRetriever, milvus_retriever: MilvusRetriever):
+        self.neo4j_retriever = neo4j_retriever
+        self.milvus_retriever = milvus_retriever
+    
+    def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
+        """Get documents from both databases."""
+        neo4j_docs = self.neo4j_retriever._get_relevant_documents(query, run_manager=run_manager)
+        milvus_docs = self.milvus_retriever._get_relevant_documents(query, run_manager=run_manager)
+        
+        # Combine and add hybrid metadata
+        combined_docs = neo4j_docs + milvus_docs
+        for doc in combined_docs:
+            doc.metadata["query_type"] = "hybrid"
+        
+        return combined_docs
+    
+    async def _aget_relevant_documents(self, query: str, *, run_manager=None):
+        return self._get_relevant_documents(query, run_manager=run_manager)
+
+class IntelligentSecurityAgent:
+    """Main agent that intelligently routes queries to appropriate databases."""
+    
+    def __init__(self, 
+                 milvus_host: str = "standalone",
+                 milvus_port: int = 19530,
+                 neo4j_uri: str = "bolt://localhost:7687",
+                 neo4j_user: str = "neo4j",
+                 neo4j_password: str = "password123",
+                 collection_name: Optional[str] = None):
+        
+        # Initialize LLM
+        self.llm = OpenAI(
+            model="gpt-4",
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            openai_api_base=os.getenv("OPENAI_API_BASE")
+        )
+        
+        # Initialize query classifier
+        self.classifier = QueryClassifier(self.llm)
+        
+        # Initialize embeddings
+        model_name = os.getenv("EMB_MODEL", "BAAI/bge-base-en")
+        self.embeddings = HuggingFaceEmbeddings(model_name=model_name)
+        
+        # Connect to Milvus
+        self._connect_milvus(milvus_host, milvus_port)
+        
+        # Initialize Milvus retriever
+        if collection_name:
+            self.milvus_vectorstore = Milvus(
+                embedding_function=self.embeddings,
+                collection_name=collection_name,
+                connection_args={"uri": f"http://{milvus_host}:{milvus_port}"},
+            )
+            self.milvus_retriever = MilvusRetriever(self.milvus_vectorstore)
+        else:
+            self.milvus_retriever = None
+        
+        # Initialize Neo4j retriever
+        self.neo4j_retriever = Neo4jRetriever(neo4j_uri, neo4j_user, neo4j_password)
+        
+        # Initialize hybrid retriever
+        if self.milvus_retriever:
+            self.hybrid_retriever = HybridRetriever(self.neo4j_retriever, self.milvus_retriever)
+        else:
+            self.hybrid_retriever = None
+    
+    def _connect_milvus(self, host: str, port: int):
+        """Connect to Milvus with retry logic."""
+        print("Connecting to Milvus...")
+        for attempt in range(30):
+            try:
+                connections.connect("default", host=host, port=port)
+                break
+            except Exception as e:
+                print(f"Connection attempt {attempt + 1}/30 failed: {e}")
+                if attempt < 29:
+                    time.sleep(2)
+                else:
+                    print("Could not connect to Milvus")
+                    break
+    
+    def query(self, question: str) -> Dict[str, Any]:
+        """Main query method that routes to appropriate database."""
+        
+        # Classify the query
+        query_type = self.classifier.classify_query(question)
+        print(f"Query classified as: {query_type}")
+        
+        # Route to appropriate retriever
+        if query_type == "GRAPH_QUERY":
+            retriever = self.neo4j_retriever
+            print("Routing to Neo4j for graph analysis...")
+        elif query_type == "SEMANTIC_QUERY" and self.milvus_retriever:
+            retriever = self.milvus_retriever
+            print("Routing to Milvus for semantic similarity...")
+        elif query_type == "HYBRID_QUERY" and self.hybrid_retriever:
+            retriever = self.hybrid_retriever
+            print("Routing to both databases for hybrid analysis...")
+        else:
+            # Fallback to available retriever
+            if self.milvus_retriever:
+                retriever = self.milvus_retriever
+                print("Falling back to Milvus...")
+            else:
+                retriever = self.neo4j_retriever
+                print("Falling back to Neo4j...")
+        
+        # Create RAG chain
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=self.llm,
+            retriever=retriever,
+            return_source_documents=True,
+        )
+        
+        # Execute query
+        result = qa_chain.invoke({"query": question})
+        
+        # Add metadata about the routing decision
+        result["query_type"] = query_type
+        result["database_used"] = "neo4j" if query_type == "GRAPH_QUERY" else "milvus" if query_type == "SEMANTIC_QUERY" else "hybrid"
+        
+        return result
+    
+    def close(self):
+        """Clean up connections."""
+        if hasattr(self, 'neo4j_retriever'):
+            self.neo4j_retriever.driver.close()
+
+def main():
+    """Main function to run the intelligent agent."""
+    
+    # Initialize the agent
+    agent = IntelligentSecurityAgent(
+        collection_name="network_flows"  # Replace with your actual collection name
+    )
+    
+    print("Intelligent Security Agent initialized!")
+    print("Ask questions about network security. Type 'exit' to quit.")
+    print("\nExample queries:")
+    print("- 'Show me all connections from IP 192.168.1.1' (Graph query)")
+    print("- 'Find traffic similar to the Nmap scan' (Semantic query)")
+    print("- 'Show me the network path of suspicious traffic' (Hybrid query)")
+    
+    while True:
+        question = input("\nEnter your question: ")
+        if question.strip().lower() in ['exit', 'quit', 'stop']:
+            break
+        
+        try:
+            result = agent.query(question)
+            
+            print(f"\n=== Query Analysis ===")
+            print(f"Query Type: {result['query_type']}")
+            print(f"Database Used: {result['database_used']}")
+            
+            print(f"\n=== Answer ===")
+            print(result['result'])
+            
+            print(f"\n=== Source Documents ===")
+            for i, doc in enumerate(result['source_documents'], 1):
+                print(f"Document {i} (from {doc.metadata.get('source', 'unknown')}):")
+                print(doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content)
+                print("---")
+                
+        except Exception as e:
+            print(f"Error processing query: {e}")
+    
+    agent.close()
+    print("Agent closed.")
+
+if __name__ == "__main__":
+    main() 
