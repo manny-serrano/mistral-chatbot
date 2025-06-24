@@ -310,12 +310,19 @@ class IntelligentSecurityAgent:
     """Main agent that intelligently routes queries to appropriate databases."""
     
     def __init__(self, 
-                 milvus_host: str = "standalone",
-                 milvus_port: int = 19530,
-                 neo4j_uri: str = "bolt://localhost:7687",
-                 neo4j_user: str = "neo4j",
-                 neo4j_password: str = "password123",
+                 milvus_host: str = None,
+                 milvus_port: int = None,
+                 neo4j_uri: str = None,
+                 neo4j_user: str = None,
+                 neo4j_password: str = None,
                  collection_name: Optional[str] = None):
+        
+        # Use environment variables with fallbacks
+        milvus_host = milvus_host or os.getenv("MILVUS_HOST", "localhost")
+        milvus_port = milvus_port or int(os.getenv("MILVUS_PORT", "19530"))
+        neo4j_uri = neo4j_uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        neo4j_user = neo4j_user or os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = neo4j_password or os.getenv("NEO4J_PASSWORD", "password123")
         
         # Initialize LLM
         self.llm = OpenAI(
@@ -330,6 +337,10 @@ class IntelligentSecurityAgent:
         # Initialize embeddings - using same model as init_milvus_and_embed.py
         model_name = os.getenv("EMB_MODEL", "BAAI/bge-large-en-v1.5")
         self.embeddings = HuggingFaceEmbeddings(model_name=model_name)
+        
+        # Store connection details
+        self.milvus_host = milvus_host
+        self.milvus_port = milvus_port
         
         # Connect to Milvus
         self._connect_milvus(milvus_host, milvus_port)
