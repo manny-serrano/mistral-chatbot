@@ -1,0 +1,53 @@
+# Git and version control
+.git
+.gitignore
+*.md
+
+# Python cache and virtual environments
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv
+.env.local
+.env.*.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker files from subdirectories (we're using the root ones now)
+embedding_with_llm/Dockerfile
+embedding_with_llm/docker-compose.yml
+neo4j-graphdatabase/docker-compose.yml
+embedding_with_llm/.dockerignore
+
+# Logs and temporary files
+*.log
+logs/
+*.tmp
+temp/
+
+# Data volumes (using Docker named volumes, not bind mounts)
+embedding_with_llm/volumes/
+neo4j-graphdatabase/neo4j/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/ 

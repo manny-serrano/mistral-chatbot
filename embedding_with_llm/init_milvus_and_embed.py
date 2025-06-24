@@ -9,10 +9,13 @@ from tqdm import tqdm
 
 print("Starting Milvus connection attempts...")
 
+milvus_host = os.getenv("MILVUS_HOST", "localhost")
+milvus_port = int(os.getenv("MILVUS_PORT", "19530"))
+
 for attempt in range(60):  # Try for up to 60*2=120 seconds (2 minutes)
     try:
         print(f"Connection attempt {attempt + 1}/60...")
-        connections.connect("default", host="standalone", port="19530")
+        connections.connect("default", host=milvus_host, port=milvus_port)
         print("Connected to Milvus!")
         break
     except Exception as e:

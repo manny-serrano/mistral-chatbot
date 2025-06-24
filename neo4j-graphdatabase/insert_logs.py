@@ -1,13 +1,19 @@
 import json
+import os
 from pathlib import Path
 from neo4j import GraphDatabase
 from datetime import datetime
 
 class Neo4jLogIngester:
-    def __init__(self, uri="bolt://localhost:7687", user="neo4j", password="password123", batch_size=1000):
+    def __init__(self, uri=None, user=None, password=None, batch_size=1000):
         """
         Initialize Neo4j driver connection and batch settings.
         """
+        # Use environment variables with fallbacks
+        uri = uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        user = user or os.getenv("NEO4J_USER", "neo4j")
+        password = password or os.getenv("NEO4J_PASSWORD", "password123")
+        
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self.batch_size = batch_size
         self.skipped_logs = []  # Store logs that are invalid or failed processing

@@ -21,13 +21,8 @@ def main():
     print("  - Milvus: localhost:19530")
     print("  - Neo4j: localhost:7687")
     
-    # Initialize the agent with localhost settings - using BOTH Milvus collections
+    # Initialize the agent - will use environment variables from docker-compose
     agent = IntelligentSecurityAgent(
-        milvus_host="localhost",                    # Use localhost instead of "standalone"
-        milvus_port=19530,
-        neo4j_uri="bolt://localhost:7687",
-        neo4j_user="neo4j",
-        neo4j_password="password123",
         collection_name=None  # Use multi-collection retriever for both mistralData and honeypotData
     )
     

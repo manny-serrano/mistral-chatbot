@@ -3,3 +3,23 @@
 volumes/
 neo4j-graphdatabase/neo4j/data/
 neo4j-graphdatabase/neo4j/logs/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Database runtime files
+embedding_with_llm/volumes/
+neo4j-graphdatabase/neo4j/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
