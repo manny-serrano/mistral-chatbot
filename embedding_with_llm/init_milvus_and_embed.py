@@ -115,13 +115,13 @@ if True:
 
     # For each file, we will first check whether any embeddings with this source_file already exist.
 
-    # 🚀 OPTIMIZED BATCH CONFIGURATION
+    # OPTIMIZED BATCH CONFIGURATION
     # Based on benchmark results: optimized for your specific system
     EMBEDDING_BATCH_SIZE = 256     # Optimal batch size for maximum performance (40% faster than 64)
     EMBEDDING_INTERNAL_BATCH = 32  # Internal batch size for model.encode()
     INSERT_BATCH_SIZE = 100        # Keep same for Milvus insertion
     
-    print(f"🚀 Using optimized batch processing:")
+    print(f"Using optimized batch processing:")
     print(f"  - Embedding batch size: {EMBEDDING_BATCH_SIZE}")
     print(f"  - Model internal batch size: {EMBEDDING_INTERNAL_BATCH}")
     print(f"  - Milvus insert batch size: {INSERT_BATCH_SIZE}")
@@ -194,7 +194,7 @@ if True:
                 print(f"Warning: could not parse line -> skipping: {line_str[:80]}…")
                 return None
 
-    # 🚀 OPTIMIZED BATCH PROCESSING FUNCTION
+    # OPTIMIZED BATCH PROCESSING FUNCTION
     def process_batch_optimized(texts_batch, filename):
         """Process a batch of texts with optimal performance."""
         if not texts_batch:
@@ -205,7 +205,7 @@ if True:
         # Use optimized batch processing with internal batch size
         batch_embeddings = model.encode(
             texts_batch, 
-            batch_size=EMBEDDING_INTERNAL_BATCH,  # 🚀 OPTIMIZATION: Internal batching
+            batch_size=EMBEDDING_INTERNAL_BATCH,  # OPTIMIZATION: Internal batching
             show_progress_bar=False,              # We have our own progress bar
             convert_to_numpy=True                 # Slight performance gain
         )
@@ -233,7 +233,7 @@ if True:
 
     # Process files with progress tracking
     for filename in files_to_process:
-        print(f"\n📁 Processing file: {filename}")
+        print(f"\nProcessing file: {filename}")
 
         # Skip querying on a brand-new (empty) collection. For existing ones,
         # check whether this file was already embedded.
@@ -256,7 +256,7 @@ if True:
                 if line.strip():
                     total_lines += 1
         
-        print(f"📊 Total lines to process: {total_lines}")
+        print(f"Total lines to process: {total_lines}")
         
         batch_texts = []
         processed_lines = 0
@@ -284,7 +284,7 @@ if True:
                         processed_lines += 1
                         pbar.update(1)
 
-                        # 🚀 OPTIMIZED: Process batch when threshold reached
+                        # OPTIMIZED: Process batch when threshold reached
                         if len(batch_texts) >= EMBEDDING_BATCH_SIZE:
                             inserted = process_batch_optimized(batch_texts, filename)
                             total_inserted += inserted
@@ -292,22 +292,22 @@ if True:
 
         # Process remaining records for this file
         if batch_texts:
-            print(f"📝 Processing final batch of {len(batch_texts)} texts...")
+            print(f"Processing final batch of {len(batch_texts)} texts...")
             inserted = process_batch_optimized(batch_texts, filename)
             total_inserted += inserted
 
-        print(f"✅ Finished {filename}. Total embeddings inserted: {total_inserted}")
+        print(f"Finished {filename}. Total embeddings inserted: {total_inserted}")
 
     if total_inserted > 0:
-        print("\n🔧 Creating index...")
+        print("\nCreating index...")
         collection.create_index(
             field_name="vector",
             index_params={"index_type": "IVF_FLAT", "metric_type": "COSINE", "params": {"nlist": 128}}
         )
-        print("📥 Loading collection...")
+        print("Loading collection...")
         collection.load()
-        print(f"🎉 Successfully inserted {total_inserted} embeddings into Milvus collection '{collection_name}'.")
+        print(f"Successfully inserted {total_inserted} embeddings into Milvus collection '{collection_name}'.")
     else:
         print("No embeddings to insert.")
 
-print("🏁 Initialization complete!") 
+print("Initialization complete!") 

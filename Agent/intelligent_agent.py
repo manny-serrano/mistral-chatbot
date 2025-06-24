@@ -12,11 +12,27 @@ from langchain.schema import BaseOutputParser
 from dotenv import load_dotenv
 from pymilvus import connections, utility
 from neo4j import GraphDatabase
+from pydantic import Field, PrivateAttr
 import json
 import math
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from root directory
+load_dotenv('../.env')
+
+# Suppress gRPC and Milvus warnings
+import warnings
+import logging
+
+# Suppress gRPC warnings
+os.environ['GRPC_VERBOSITY'] = 'ERROR'
+os.environ['GRPC_TRACE'] = ''
+
+# Suppress absl logging warnings
+logging.getLogger('absl').setLevel(logging.ERROR)
+
+# Suppress other noisy loggers
+warnings.filterwarnings("ignore", category=UserWarning)
+logging.getLogger('pymilvus').setLevel(logging.WARNING)
 
 class QueryClassifier:
     """Classifies queries to determine which database to use."""
@@ -64,8 +80,16 @@ class QueryClassifier:
 class Neo4jRetriever(BaseRetriever):
     """Retriever for Neo4j graph database queries."""
     
-    def __init__(self, uri: str, user: str, password: str):
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+    # Use PrivateAttr for non-config attributes
+    _driver: Any = PrivateAttr()
+    
+    def __init__(self, uri: str, user: str, password: str, **kwargs):
+        super().__init__(**kwargs)
+        self._driver = GraphDatabase.driver(uri, auth=(user, password))
+    
+    @property
+    def driver(self):
+        return self._driver
         
     def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
         """Retrieve relevant documents from Neo4j based on the query."""
@@ -143,9 +167,22 @@ class Neo4jRetriever(BaseRetriever):
 class MilvusRetriever(BaseRetriever):
     """Retriever for Milvus vector database queries."""
     
-    def __init__(self, vectorstore: Milvus, k: int = 5):
-        self.vectorstore = vectorstore
-        self.k = k
+    # Use PrivateAttr for non-config attributes
+    _vectorstore: Any = PrivateAttr()
+    _k: int = PrivateAttr(default=5)
+    
+    def __init__(self, vectorstore: Milvus, k: int = 5, **kwargs):
+        super().__init__(**kwargs)
+        self._vectorstore = vectorstore
+        self._k = k
+    
+    @property
+    def vectorstore(self):
+        return self._vectorstore
+    
+    @property
+    def k(self):
+        return self._k
     
     def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
         """Retrieve relevant documents from Milvus based on semantic similarity."""
@@ -163,12 +200,96 @@ class MilvusRetriever(BaseRetriever):
     async def _aget_relevant_documents(self, query: str, *, run_manager=None):
         return self._get_relevant_documents(query, run_manager=run_manager)
 
+class MultiCollectionMilvusRetriever(BaseRetriever):
+    """Retriever that queries multiple Milvus collections and combines results."""
+    
+    # Use PrivateAttr for non-config attributes
+    _collections: Dict[str, Milvus] = PrivateAttr()
+    _k_per_collection: int = PrivateAttr(default=3)
+    _embeddings: Any = PrivateAttr()
+    
+    def __init__(self, embeddings, milvus_host: str = "localhost", milvus_port: int = 19530, 
+                 collections: List[str] = None, k_per_collection: int = 3, **kwargs):
+        super().__init__(**kwargs)
+        self._embeddings = embeddings
+        self._k_per_collection = k_per_collection
+        
+        # Initialize connections to multiple collections
+        self._collections = {}
+        if collections:
+            for collection_name in collections:
+                try:
+                    vectorstore = Milvus(
+                        embedding_function=embeddings,
+                        collection_name=collection_name,
+                        connection_args={"uri": f"http://{milvus_host}:{milvus_port}"},
+                    )
+                    self._collections[collection_name] = vectorstore
+                    print(f"Connected to Milvus collection: {collection_name}")
+                except Exception as e:
+                    print(f"Failed to connect to collection {collection_name}: {e}")
+    
+    @property
+    def collections(self):
+        return self._collections
+    
+    @property
+    def k_per_collection(self):
+        return self._k_per_collection
+    
+    def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
+        """Retrieve documents from all collections and combine results."""
+        all_docs = []
+        
+        for collection_name, vectorstore in self._collections.items():
+            try:
+                # Query each collection
+                docs = vectorstore.similarity_search(query, k=self._k_per_collection)
+                
+                # Add metadata to identify source collection
+                for doc in docs:
+                    doc.metadata["source"] = "milvus"
+                    doc.metadata["collection"] = collection_name
+                    doc.metadata["query_type"] = "semantic"
+                    
+                    # Add collection-specific context
+                    if collection_name == "honeypotData":
+                        doc.metadata["data_type"] = "honeypot_logs"
+                    elif collection_name == "mistralData":
+                        doc.metadata["data_type"] = "network_flows"
+                
+                all_docs.extend(docs)
+                print(f"Found {len(docs)} results from {collection_name}")
+                
+            except Exception as e:
+                print(f"Error querying collection {collection_name}: {e}")
+        
+        # Sort by relevance (assuming first results are most relevant)
+        # In a more sophisticated implementation, you could re-rank based on scores
+        return all_docs
+    
+    async def _aget_relevant_documents(self, query: str, *, run_manager=None):
+        return self._get_relevant_documents(query, run_manager=run_manager)
+
 class HybridRetriever(BaseRetriever):
     """Retriever that combines both Neo4j and Milvus results."""
     
-    def __init__(self, neo4j_retriever: Neo4jRetriever, milvus_retriever: MilvusRetriever):
-        self.neo4j_retriever = neo4j_retriever
-        self.milvus_retriever = milvus_retriever
+    # Use PrivateAttr for non-config attributes
+    _neo4j_retriever: Any = PrivateAttr()
+    _milvus_retriever: Any = PrivateAttr()
+    
+    def __init__(self, neo4j_retriever: Neo4jRetriever, milvus_retriever: MilvusRetriever, **kwargs):
+        super().__init__(**kwargs)
+        self._neo4j_retriever = neo4j_retriever
+        self._milvus_retriever = milvus_retriever
+    
+    @property
+    def neo4j_retriever(self):
+        return self._neo4j_retriever
+    
+    @property
+    def milvus_retriever(self):
+        return self._milvus_retriever
     
     def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
         """Get documents from both databases."""
@@ -198,7 +319,7 @@ class IntelligentSecurityAgent:
         
         # Initialize LLM
         self.llm = OpenAI(
-            model="gpt-4",
+            model="GPT 4.1",  # Using available model from your team
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             openai_api_base=os.getenv("OPENAI_API_BASE")
         )
@@ -206,15 +327,17 @@ class IntelligentSecurityAgent:
         # Initialize query classifier
         self.classifier = QueryClassifier(self.llm)
         
-        # Initialize embeddings
-        model_name = os.getenv("EMB_MODEL", "BAAI/bge-base-en")
+        # Initialize embeddings - using same model as init_milvus_and_embed.py
+        model_name = os.getenv("EMB_MODEL", "BAAI/bge-large-en-v1.5")
         self.embeddings = HuggingFaceEmbeddings(model_name=model_name)
         
         # Connect to Milvus
         self._connect_milvus(milvus_host, milvus_port)
         
-        # Initialize Milvus retriever
+        # Initialize Milvus retriever with multiple collections
+        available_collections = ["mistralData", "honeypotData"]  # Both collections
         if collection_name:
+            # If specific collection is requested, use single collection retriever
             self.milvus_vectorstore = Milvus(
                 embedding_function=self.embeddings,
                 collection_name=collection_name,
@@ -222,7 +345,14 @@ class IntelligentSecurityAgent:
             )
             self.milvus_retriever = MilvusRetriever(self.milvus_vectorstore)
         else:
-            self.milvus_retriever = None
+            # Use multi-collection retriever for comprehensive search
+            self.milvus_retriever = MultiCollectionMilvusRetriever(
+                embeddings=self.embeddings,
+                milvus_host=milvus_host,
+                milvus_port=milvus_port,
+                collections=available_collections,
+                k_per_collection=3  # Get 3 results from each collection
+            )
         
         # Initialize Neo4j retriever
         self.neo4j_retriever = Neo4jRetriever(neo4j_uri, neo4j_user, neo4j_password)
@@ -286,7 +416,21 @@ class IntelligentSecurityAgent:
         
         # Add metadata about the routing decision
         result["query_type"] = query_type
-        result["database_used"] = "neo4j" if query_type == "GRAPH_QUERY" else "milvus" if query_type == "SEMANTIC_QUERY" else "hybrid"
+        
+        # Determine which database was actually used based on the retriever
+        if retriever == self.neo4j_retriever:
+            result["database_used"] = "neo4j"
+        elif retriever == self.milvus_retriever:
+            # Check if it's multi-collection or single collection
+            if isinstance(retriever, MultiCollectionMilvusRetriever):
+                result["database_used"] = "milvus_multi_collection"
+                result["collections_used"] = list(retriever.collections.keys())
+            else:
+                result["database_used"] = "milvus"
+        elif retriever == self.hybrid_retriever:
+            result["database_used"] = "hybrid"
+        else:
+            result["database_used"] = "unknown"
         
         return result
     

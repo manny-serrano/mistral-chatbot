@@ -1,4 +1,5 @@
 # generated / runtime data – never commit
+.env
 volumes/
 neo4j-graphdatabase/neo4j/data/
 neo4j-graphdatabase/neo4j/logs/
