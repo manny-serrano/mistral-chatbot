@@ -2132,3 +2132,29 @@ io.netty.channel.StacklessClosedChannelException: null
 		at io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) [netty-common-4.1.100.Final.jar:4.1.100.Final]
 		at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) [netty-common-4.1.100.Final.jar:4.1.100.Final]
 		... 1 more
+2025-06-24 18:51:02.474+0000 INFO  [o.n.g.f.DatabaseManagementServiceFactory] Shutdown started
+2025-06-24 18:51:02.662+0000 INFO  [o.n.b.BoltServer] Requested Bolt server shutdown
+2025-06-24 18:51:02.664+0000 INFO  [o.n.b.p.c.c.ConnectionRegistry] Stopping remaining idle connections for connector bolt
+2025-06-24 18:51:02.668+0000 INFO  [o.n.b.p.c.c.ConnectionRegistry] Stopped 9 idling connections for connector bolt
+2025-06-24 18:51:02.685+0000 INFO  [o.n.d.d.DatabaseLifecycles] Stopping 'DatabaseId{7ae4164b[neo4j]}'.
+2025-06-24 18:51:02.713+0000 INFO  [o.n.k.a.DatabaseAvailabilityGuard] [neo4j/7ae4164b] Requirement `Database unavailable` makes database neo4j unavailable.
+2025-06-24 18:51:02.713+0000 INFO  [o.n.k.a.DatabaseAvailabilityGuard] [neo4j/7ae4164b] DatabaseId{7ae4164b[neo4j]} is unavailable.
+2025-06-24 18:51:02.725+0000 INFO  [o.n.k.d.Database] [neo4j/7ae4164b] Waiting for closing transactions.
+2025-06-24 18:51:02.730+0000 INFO  [o.n.k.d.Database] [neo4j/7ae4164b] All transactions are closed.
+2025-06-24 18:51:02.731+0000 INFO  [o.n.k.i.t.l.c.CheckPointerImpl] [neo4j/7ae4164b] Checkpoint triggered by "Database shutdown" @ txId: 177 checkpoint started...
+2025-06-24 18:51:02.797+0000 INFO  [o.n.k.i.t.l.c.CheckPointerImpl] [neo4j/7ae4164b] Checkpoint triggered by "Database shutdown" @ txId: 177 checkpoint completed in 65ms. Checkpoint flushed 30 pages (0% of total available pages), in 29 IOs. Checkpoint performed with IO limit: unlimited, paused in total 0 times( 0 millis).
+2025-06-24 18:51:02.797+0000 INFO  [o.n.k.i.t.l.p.LogPruningImpl] [neo4j/7ae4164b] No log version pruned. The strategy used was '2 days 2147483648 size'. 
+2025-06-24 18:51:02.852+0000 INFO  [o.n.d.d.DatabaseLifecycles] Stopped 'DatabaseId{7ae4164b[neo4j]}' successfully.
+2025-06-24 18:51:02.852+0000 INFO  [o.n.d.d.DatabaseLifecycles] Stopping 'DatabaseId{00000000[system]}'.
+2025-06-24 18:51:02.856+0000 INFO  [o.n.k.a.DatabaseAvailabilityGuard] [system/00000000] Requirement `Database unavailable` makes database system unavailable.
+2025-06-24 18:51:02.857+0000 INFO  [o.n.k.a.DatabaseAvailabilityGuard] [system/00000000] DatabaseId{00000000[system]} is unavailable.
+2025-06-24 18:51:02.857+0000 INFO  [o.n.k.d.Database] [system/00000000] Waiting for closing transactions.
+2025-06-24 18:51:02.857+0000 INFO  [o.n.k.d.Database] [system/00000000] All transactions are closed.
+2025-06-24 18:51:02.857+0000 INFO  [o.n.k.i.t.l.c.CheckPointerImpl] [system/00000000] Checkpoint triggered by "Database shutdown" @ txId: 37 checkpoint started...
+2025-06-24 18:51:02.888+0000 INFO  [o.n.k.i.t.l.c.CheckPointerImpl] [system/00000000] Checkpoint triggered by "Database shutdown" @ txId: 37 checkpoint completed in 30ms. Checkpoint flushed 27 pages (0% of total available pages), in 26 IOs. Checkpoint performed with IO limit: unlimited, paused in total 0 times( 0 millis).
+2025-06-24 18:51:02.888+0000 INFO  [o.n.k.i.t.l.p.LogPruningImpl] [system/00000000] No log version pruned. The strategy used was '2 days 2147483648 size'. 
+2025-06-24 18:51:02.911+0000 INFO  [o.n.d.d.DatabaseLifecycles] Stopped 'DatabaseId{00000000[system]}' successfully.
+2025-06-24 18:51:02.915+0000 INFO  [o.n.b.BoltServer] Shutting down Bolt server
+2025-06-24 18:51:02.916+0000 INFO  [o.n.b.p.c.c.ConnectionRegistry] Stopping 0 connections for connector bolt
+2025-06-24 18:51:02.916+0000 INFO  [o.n.b.p.c.c.ConnectionRegistry] Stopped all remaining connections for connector bolt
+2025-06-24 18:51:07.718+0000 INFO  [o.n.b.BoltServer] Bolt server has been shut down

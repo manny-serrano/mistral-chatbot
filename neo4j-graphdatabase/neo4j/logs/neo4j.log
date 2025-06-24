@@ -58,3 +58,6 @@ org.neo4j.bolt.protocol.error.streaming.BoltStreamingWriteException: Failed to t
 Caused by: io.netty.channel.StacklessClosedChannelException
 	at io.netty.channel.AbstractChannel$AbstractUnsafe.write(Object, ChannelPromise)(Unknown Source) ~[netty-transport-4.1.100.Final.jar:4.1.100.Final]
 2025-06-24 18:04:24.240+0000 ERROR Client triggered an unexpected error [Neo.DatabaseError.General.UnknownError]: Failed to transmit operation result: Response write failure, reference 497374eb-2499-4347-a9bf-ef595d2f3f84.
+2025-06-24 18:51:02.447+0000 INFO  Neo4j Server shutdown initiated by request
+2025-06-24 18:51:02.473+0000 INFO  Stopping...
+2025-06-24 18:51:07.762+0000 INFO  Stopped.
