@@ -29,3 +29,32 @@
 2025-06-23 19:20:35.096+0000 INFO  name: system
 2025-06-23 19:20:35.097+0000 INFO  creationDate: 2025-06-12T22:23:30.072Z
 2025-06-23 19:20:35.097+0000 INFO  Started.
+2025-06-24 17:44:00.303+0000 INFO  Logging config in use: File '/var/lib/neo4j/conf/user-logs.xml'
+2025-06-24 17:44:00.314+0000 WARN  Use of deprecated setting 'dbms.memory.pagecache.size'. It is replaced by 'server.memory.pagecache.size'.
+2025-06-24 17:44:00.315+0000 WARN  Use of deprecated setting 'dbms.memory.heap.max_size'. It is replaced by 'server.memory.heap.max_size'.
+2025-06-24 17:44:00.315+0000 WARN  Use of deprecated setting 'dbms.memory.heap.initial_size'. It is replaced by 'server.memory.heap.initial_size'.
+2025-06-24 17:44:00.324+0000 INFO  Starting...
+2025-06-24 17:44:01.105+0000 INFO  This instance is ServerId{7a53e75d} (7a53e75d-0014-45f4-8d58-445878bfe74b)
+2025-06-24 17:44:01.573+0000 INFO  ======== Neo4j 5.15.0 ========
+2025-06-24 17:44:02.618+0000 INFO  Bolt enabled on 0.0.0.0:7687.
+2025-06-24 17:44:03.079+0000 INFO  HTTP enabled on 0.0.0.0:7474.
+2025-06-24 17:44:03.080+0000 INFO  Remote interface available at http://localhost:7474/
+2025-06-24 17:44:03.081+0000 INFO  id: D9CD454C625B1E74383E1463E5342305D7EBA5E129EAC6B5E6331125B6C6F9F9
+2025-06-24 17:44:03.082+0000 INFO  name: system
+2025-06-24 17:44:03.082+0000 INFO  creationDate: 2025-06-12T22:23:30.072Z
+2025-06-24 17:44:03.082+0000 INFO  Started.
+2025-06-24 18:04:24.086+0000 WARN  [bolt-12] Terminating connection due to network error
+org.neo4j.bolt.protocol.error.streaming.BoltStreamingWriteException: Failed to transmit operation result: Response write failure
+	at org.neo4j.bolt.protocol.common.fsm.response.NetworkResponseHandler.onSuccess(NetworkResponseHandler.java:184) ~[neo4j-bolt-5.15.0.jar:5.15.0]
+	at org.neo4j.bolt.protocol.common.connector.connection.AtomicSchedulingConnection.lambda$interrupt$6(AtomicSchedulingConnection.java:462) ~[neo4j-bolt-5.15.0.jar:5.15.0]
+	at org.neo4j.bolt.protocol.common.connector.connection.AtomicSchedulingConnection.executeJob(AtomicSchedulingConnection.java:336) ~[neo4j-bolt-5.15.0.jar:5.15.0]
+	at org.neo4j.bolt.protocol.common.connector.connection.AtomicSchedulingConnection.doExecuteJobs(AtomicSchedulingConnection.java:315) ~[neo4j-bolt-5.15.0.jar:5.15.0]
+	at org.neo4j.bolt.protocol.common.connector.connection.AtomicSchedulingConnection.executeJobs(AtomicSchedulingConnection.java:221) ~[neo4j-bolt-5.15.0.jar:5.15.0]
+	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539) [?:?]
+	at java.util.concurrent.FutureTask.run(FutureTask.java:264) [?:?]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136) [?:?]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635) [?:?]
+	at java.lang.Thread.run(Thread.java:840) [?:?]
+Caused by: io.netty.channel.StacklessClosedChannelException
+	at io.netty.channel.AbstractChannel$AbstractUnsafe.write(Object, ChannelPromise)(Unknown Source) ~[netty-transport-4.1.100.Final.jar:4.1.100.Final]
+2025-06-24 18:04:24.240+0000 ERROR Client triggered an unexpected error [Neo.DatabaseError.General.UnknownError]: Failed to transmit operation result: Response write failure, reference 497374eb-2499-4347-a9bf-ef595d2f3f84.
