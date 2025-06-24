@@ -4,7 +4,7 @@ from pathlib import Path
 from neo4j import GraphDatabase
 
 
-class Neo4jLogIngester:
+class Neo4jFlowIngester:
     def __init__(self, uri=None, user=None, password=None, batch_size=1000):
         """
         Initialize Neo4j driver connection and batch settings.
