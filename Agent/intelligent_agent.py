@@ -458,12 +458,7 @@ def main():
         collection_name="network_flows"  # Replace with your actual collection name
     )
     
-    print("Intelligent Security Agent initialized!")
-    print("Ask questions about network security. Type 'exit' to quit.")
-    print("\nExample queries:")
-    print("- 'Show me all connections from IP 192.168.1.1' (Graph query)")
-    print("- 'Find traffic similar to the Nmap scan' (Semantic query)")
-    print("- 'Show me the network path of suspicious traffic' (Hybrid query)")
+
     
     while True:
         question = input("\nEnter your question: ")
@@ -472,20 +467,7 @@ def main():
         
         try:
             result = agent.query(question)
-            
-            print(f"\n=== Query Analysis ===")
-            print(f"Query Type: {result['query_type']}")
-            print(f"Database Used: {result['database_used']}")
-            
-            print(f"\n=== Answer ===")
-            print(result['result'])
-            
-            print(f"\n=== Source Documents ===")
-            for i, doc in enumerate(result['source_documents'], 1):
-                print(f"Document {i} (from {doc.metadata.get('source', 'unknown')}):")
-                print(doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content)
-                print("---")
-                
+            print("Query processed successfully")                
         except Exception as e:
             print(f"Error processing query: {e}")
     

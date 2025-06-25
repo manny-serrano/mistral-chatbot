@@ -84,7 +84,7 @@ show_logs() {
 
 # Function to enter application container
 enter_app() {
-    echo "🔧 Entering application container..."
+    echo "Entering application container..."
     docker-compose exec mistral-app bash
 }
 
