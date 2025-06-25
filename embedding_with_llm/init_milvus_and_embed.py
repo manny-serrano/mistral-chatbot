@@ -38,26 +38,23 @@ if existing_collections:
 else:
     print("No existing collections found.")
 
-# Ask whether the user wants to create a new collection first
-create_new_input = input("Would you like to create a new collection? (y/N): ").strip().lower()
+# Give user choice between predefined collection options
+print("Available collection options:")
+print("1. mistralData")
+print("2. honeypotData")
 
-if create_new_input == "y":
-    collection_name = input("Enter a name for the new collection: ").strip()
-    if not collection_name:
-        print("Collection name cannot be empty. Exiting.")
-        exit(1)
-    print(f"A new collection named '{collection_name}' will be created (if it does not already exist).")
-else:
-    collection_name = input("Enter the name of the collection you would like to embed the file into: ").strip()
-    if not collection_name:
-        print("Collection name cannot be empty. Exiting.")
-        exit(1)
+while True:
+    choice = input("Select collection (1 or 2): ").strip()
+    if choice == "1":
+        collection_name = "mistralData"
+        break
+    elif choice == "2":
+        collection_name = "honeypotData"
+        break
+    else:
+        print("Invalid choice. Please enter 1 or 2.")
 
-# If a new collection was just defined, optionally let the user override where to embed
-if create_new_input == "y":
-    embed_target = input(f"Enter the name of the collection you would like to embed the file into (default: {collection_name}): ").strip()
-    if embed_target:
-        collection_name = embed_target
+print(f"Selected collection: '{collection_name}'")
 
 # Pause before moving on to file selection
 input("Press Enter to continue to file selection…")
