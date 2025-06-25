@@ -1,7 +1,6 @@
 import ast
 import json
 from pathlib import Path
-
 file_path = Path("logs-json/sample_log.json")
 
 try:

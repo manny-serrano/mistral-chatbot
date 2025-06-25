@@ -3,27 +3,30 @@ import os
 import ast
 from pathlib import Path
 from neo4j import GraphDatabase
+# This script is used to insert the logs into the Neo4j database.
+
 
 class Neo4jFlowIngester:
-    def __init__(self, uri=None, user=None, password=None, batch_size=1000):
+    def __init__(self, uri=None, user=None, password=None, batch_size=1000): # This is the constructor for the Neo4jFlowIngester class.
         uri = uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
         user = user or os.getenv("NEO4J_USER", "neo4j")
         password = password or os.getenv("NEO4J_PASSWORD", "password123")
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self.batch_size = batch_size
         self.skipped_logs = []
+        #
 
     def close(self):
         self.driver.close()
 
-    def create_constraints(self):
+    def create_constraints(self):# This function is used to create the constraints for the Neo4j database.
         with self.driver.session() as session:
             session.run("CREATE CONSTRAINT host_ip IF NOT EXISTS FOR (h:Host) REQUIRE h.ip IS UNIQUE")
             session.run("CREATE CONSTRAINT port_num IF NOT EXISTS FOR (p:Port) REQUIRE p.port IS UNIQUE")
             session.run("CREATE CONSTRAINT flow_id IF NOT EXISTS FOR (f:Flow) REQUIRE f.flowId IS UNIQUE")
             session.run("CREATE CONSTRAINT file_name IF NOT EXISTS FOR (pf:ProcessedFile) REQUIRE pf.name IS UNIQUE")
 
-    def is_valid_flow(self, flow):
+    def is_valid_flow(self, flow):#Check if flow is valid by checking if all the required fields are present.
         honeypot_required = ["src_ip", "dst_ip", "src_port", "dst_port", "start_time"]
         netflow_required = ["sourceIPv4Address", "destinationIPv4Address", "sourceTransportPort", "destinationTransportPort", "flowStartMilliseconds"]
         return (
