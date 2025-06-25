@@ -1,236 +1,207 @@
 import json
 import os
+import ast
 from pathlib import Path
 from neo4j import GraphDatabase
-from datetime import datetime
 
-class Neo4jLogIngester:
+class Neo4jFlowIngester:
     def __init__(self, uri=None, user=None, password=None, batch_size=1000):
-        """
-        Initialize Neo4j driver connection and batch settings.
-        """
-        # Use environment variables with fallbacks
         uri = uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
         user = user or os.getenv("NEO4J_USER", "neo4j")
         password = password or os.getenv("NEO4J_PASSWORD", "password123")
-        
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self.batch_size = batch_size
-        self.skipped_logs = []  # Store logs that are invalid or failed processing
+        self.skipped_logs = []
 
     def close(self):
-        """
-        Close the Neo4j driver connection.
-        """
         self.driver.close()
 
     def create_constraints(self):
-        """
-        Create uniqueness constraints on IP addresses, tags, and log UUIDs.
-        These constraints help ensure data integrity and improve query performance.
-        """
         with self.driver.session() as session:
-            session.run("CREATE CONSTRAINT ip_address IF NOT EXISTS FOR (i:IP) REQUIRE i.address IS UNIQUE")
-            session.run("CREATE CONSTRAINT tag_name IF NOT EXISTS FOR (t:Tag) REQUIRE t.name IS UNIQUE")
-            session.run("CREATE CONSTRAINT log_uuid IF NOT EXISTS FOR (l:Log) REQUIRE l.uuid IS UNIQUE")
+            session.run("CREATE CONSTRAINT host_ip IF NOT EXISTS FOR (h:Host) REQUIRE h.ip IS UNIQUE")
+            session.run("CREATE CONSTRAINT port_num IF NOT EXISTS FOR (p:Port) REQUIRE p.port IS UNIQUE")
+            session.run("CREATE CONSTRAINT flow_id IF NOT EXISTS FOR (f:Flow) REQUIRE f.flowId IS UNIQUE")
+            session.run("CREATE CONSTRAINT file_name IF NOT EXISTS FOR (pf:ProcessedFile) REQUIRE pf.name IS UNIQUE")
 
-    def nested_get(self, d, keys, default=None):
+    def is_valid_flow(self, flow):
+        honeypot_required = ["src_ip", "dst_ip", "src_port", "dst_port", "start_time"]
+        netflow_required = ["sourceIPv4Address", "destinationIPv4Address", "sourceTransportPort", "destinationTransportPort", "flowStartMilliseconds"]
+        return (
+            all(flow.get(field) is not None for field in honeypot_required) or
+            all(flow.get(field) is not None for field in netflow_required)
+        )
+
+    def flatten_dict(self, d, parent_key='', sep='_'):
         """
-        Safely get a nested dictionary value.
-        Args:
-            d (dict): The dictionary to search.
-            keys (list): List of keys representing the path.
-            default: Default value if any key is missing.
-        Returns:
-            The nested value or default if not found.
+        Recursively flattens a nested dictionary for Neo4j property storage.
+        Lists of dicts or any list containing dicts are converted to JSON strings.
+        Lists of primitives are left as-is.
         """
-        for key in keys:
-            if isinstance(d, dict) and key in d:
-                d = d[key]
+        items = []
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if isinstance(v, dict):
+                items.extend(self.flatten_dict(v, new_key, sep=sep).items())
+            elif isinstance(v, list):
+                if len(v) > 0 and any(isinstance(i, dict) for i in v):
+                    items.append((new_key, json.dumps(v)))
+                else:
+                    items.append((new_key, v))
             else:
-                return default
-        return d
+                items.append((new_key, v))
+        return dict(items)
 
-    def extract_tags(self, log_data):
-        """
-        Extract tags from various potential fields in the log data.
-        Tags can come from 'tags' list, nested sensor tags, 'app', or 'protocol'.
-        Returns a list of unique tags.
-        """
-        tags = set()
-        if isinstance(log_data.get('tags'), list):
-            tags.update(log_data['tags'])
-        misc_tags = self.nested_get(log_data, ['sensor', 'tags', 'misc'], [])
-        if isinstance(misc_tags, list):
-            tags.update(misc_tags)
-        if log_data.get('app'):
-            tags.add(log_data['app'])
-        if log_data.get('protocol'):
-            tags.add(log_data['protocol'].lower())
-        return list(tags)
-
-    def extract_timestamp(self, log_data):
-        """
-        Extract timestamp from multiple possible fields in log data.
-        Falls back to current time if none are found.
-        """
-        return (log_data.get('@timestamp') or 
-                log_data.get('timestamp') or 
-                log_data.get('start_time') or 
-                log_data.get('time') or 
-                datetime.now().isoformat())
-
-    def is_valid_log(self, log):
-        """
-        Check if the log has all required fields.
-        Returns True if valid, False otherwise.
-        """
-        required_fields = ["src_ip", "dst_ip", "src_port", "dst_port", "protocol"]
-        return all(log.get(field) is not None for field in required_fields)
-
-    def process_log_batch(self, logs_batch):
-        """
-        Process a batch of logs:
-        - Extract and normalize necessary fields.
-        - Filter out invalid logs.
-        - Run a Cypher query to merge data into Neo4j.
-        """
+    def process_flow_batch(self, flows_batch):
         with self.driver.session() as session:
-            cypher_logs = []
-
-            for log_data in logs_batch:
-                try:
-                    # Extract normalized log fields with fallbacks for different key variants
-                    log = {
-                        "src_ip": (log_data.get("src_ip") or 
-                                   log_data.get("source_ip") or 
-                                   log_data.get("src")),
-                        "dst_ip": (log_data.get("dst_ip") or 
-                                   log_data.get("dest_ip") or 
-                                   log_data.get("dst")),
-                        "uuid": (self.nested_get(log_data, ["sensor", "uuid"]) or 
-                                 log_data.get("uuid") or 
-                                 log_data.get("id") or ""),
-                        "timestamp": self.extract_timestamp(log_data),
-                        "src_port": (log_data.get("src_port") or 
-                                     log_data.get("source_port")),
-                        "dst_port": (log_data.get("dst_port") or 
-                                     log_data.get("dest_port")),
-                        "protocol": log_data.get("protocol"),
-                        "con_type": (self.nested_get(log_data, ["hp_data", "con_type"]) or
-                                     log_data.get("connection_type")),
-                        "transport": (self.nested_get(log_data, ["hp_data", "transport"]) or
-                                      log_data.get("transport")),
-                        "tags": self.extract_tags(log_data)
-                    }
-
-                    if self.is_valid_log(log):
-                        cypher_logs.append(log)
-                    else:
-                        # Keep track of logs missing required fields
-                        self.skipped_logs.append(log)
-
-                except Exception as e:
-                    print(f"Error processing log entry: {str(e)}")
-                    self.skipped_logs.append(log_data)  # Append raw data on failure
+            cypher_flows = []
+            for flow in flows_batch:
+                # Determine which format this flow is
+                honeypot = all(flow.get(field) is not None for field in ["src_ip", "dst_ip", "src_port", "dst_port", "start_time"])
+                netflow = all(flow.get(field) is not None for field in ["sourceIPv4Address", "destinationIPv4Address", "sourceTransportPort", "destinationTransportPort", "flowStartMilliseconds"])
+                if not (honeypot or netflow):
+                    self.skipped_logs.append(flow)
                     continue
 
-            # If no valid logs, skip query execution
-            if not cypher_logs:
+                if honeypot:
+                    flow_id = (
+                        f"{flow['src_ip']}-{flow['src_port']}-"
+                        f"{flow['dst_ip']}-{flow['dst_port']}-"
+                        f"{flow.get('start_time', flow.get('@timestamp', ''))}"
+                    )
+                    src_ip = flow["src_ip"]
+                    dst_ip = flow["dst_ip"]
+                    src_port = flow["src_port"]
+                    dst_port = flow["dst_port"]
+                else:
+                    flow_id = (
+                        f"{flow['sourceIPv4Address']}-{flow['sourceTransportPort']}-"
+                        f"{flow['destinationIPv4Address']}-{flow['destinationTransportPort']}-"
+                        f"{flow.get('flowStartMilliseconds', '')}"
+                    )
+                    src_ip = flow["sourceIPv4Address"]
+                    dst_ip = flow["destinationIPv4Address"]
+                    src_port = flow["sourceTransportPort"]
+                    dst_port = flow["destinationTransportPort"]
+
+                # Flatten all properties (nested dicts and lists)
+                flow_props = {}
+                for k, v in flow.items():
+                    if isinstance(v, dict):
+                        flat = self.flatten_dict(v, parent_key=k)
+                        flow_props.update(flat)
+                    else:
+                        flow_props[k] = v
+
+                cypher_flows.append({
+                    "flowId": flow_id,
+                    "src_ip": src_ip,
+                    "dst_ip": dst_ip,
+                    "src_port": src_port,
+                    "dst_port": dst_port,
+                    "props": flow_props
+                })
+
+            if not cypher_flows:
                 return
 
-            # Cypher query merges IP nodes, connections, and tags, creating relationships
             query = """
-            UNWIND $logs AS log
-            MERGE (src:IP {address: log.src_ip})
-            MERGE (dst:IP {address: log.dst_ip})
-            WITH src, dst, log
-            MERGE (src)-[r:CONNECTED_TO {
-                uuid: log.uuid,
-                timestamp: datetime(log.timestamp),
-                src_port: log.src_port,
-                dst_port: log.dst_port,
-                protocol: log.protocol
-            }]->(dst)
-            WITH src, log
-            UNWIND log.tags AS tag
-            MERGE (t:Tag {name: tag})
-            MERGE (src)-[:HAS_TAG]->(t)
+            UNWIND $flows AS flow
+            MERGE (src:Host {ip: flow.src_ip})
+            MERGE (dst:Host {ip: flow.dst_ip})
+            MERGE (srcPort:Port {port: flow.src_port})
+            MERGE (dstPort:Port {port: flow.dst_port})
+            MERGE (f:Flow {flowId: flow.flowId})
+            SET f += flow.props
+            MERGE (src)-[:SENT]->(f)
+            MERGE (dst)-[:RECEIVED]->(f)
+            MERGE (f)-[:USES_SRC_PORT]->(srcPort)
+            MERGE (f)-[:USES_DST_PORT]->(dstPort)
             """
-
             try:
-                session.run(query, logs=cypher_logs)
-                print(f"Successfully processed batch of {len(cypher_logs)} logs")
+                session.run(query, flows=cypher_flows)
+                print(f"Successfully processed batch of {len(cypher_flows)} flows")
             except Exception as e:
                 print(f"Error processing batch: {str(e)}")
 
-    def process_logs_directory(self, directory_path):
-        """
-        Main processing loop:
-        - Walk through all JSON files in the directory.
-        - Parse logs, accumulate in batches.
-        - Process batches until all logs are ingested.
-        """
+    def has_been_processed(self, filename):
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (pf:ProcessedFile {name: $filename}) RETURN pf LIMIT 1",
+                filename=filename
+            )
+            return result.single() is not None
+
+    def mark_processed(self, filename):
+        with self.driver.session() as session:
+            session.run("MERGE (pf:ProcessedFile {name: $filename})", filename=filename)
+    
+    def process_flows_directory(self, directory_path):
+        self.create_constraints()
         log_dir = Path(directory_path)
         if not log_dir.exists():
             print(f"Directory {directory_path} does not exist")
             return
-
-        self.create_constraints()  # Ensure DB constraints exist before ingesting
-
         batch = []
         total_processed = 0
-
-        # Iterate over all JSON files in the directory
         for json_file in log_dir.glob("*.json"):
+            fname = str(json_file.resolve())
+            if self.has_been_processed(fname):
+                print(f"Skipping already processed file: {fname}")
+                continue
+            print(f"Processing file: {fname}")
             try:
                 with open(json_file, 'r') as f:
-                    try:
-                        log_data = json.load(f)
-                        if isinstance(log_data, list):
-                            batch.extend(log_data)  # Add all logs from list
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        flow_data = None
+                        try:
+                            flow_data = json.loads(line)
+                        except json.JSONDecodeError:
+                            try:
+                                flow_data = ast.literal_eval(line)
+                            except Exception as e2:
+                                print(f"Error parsing line in {json_file} (literal_eval): {e2}")
+                                continue
+                        except Exception as e:
+                            print(f"Unexpected error parsing line in {json_file}: {e}")
+                            continue
+
+                        # --- Robust logic for both formats ---
+                        if isinstance(flow_data, dict) and "flows" in flow_data and isinstance(flow_data["flows"], dict):
+                            batch.append(flow_data["flows"])    # NetFlow/IPFIX
+                        elif isinstance(flow_data, dict):
+                            batch.append(flow_data)             # Honeypot/STINGAR
                         else:
-                            batch.append(log_data)  # Single log dict
+                            self.skipped_logs.append(flow_data)
 
-                    except json.JSONDecodeError as e:
-                        print(f"Error decoding JSON in {json_file}: {str(e)}")
-                        continue
-
-                    # Process batch if batch size is reached
-                    if len(batch) >= self.batch_size:
-                        self.process_log_batch(batch)
-                        total_processed += len(batch)
-                        batch.clear()
-
+                        if len(batch) >= self.batch_size:
+                            self.process_flow_batch(batch)
+                            total_processed += len(batch)
+                            batch.clear()
+                self.mark_processed(fname)
             except Exception as e:
-                print(f"Error reading {json_file}: {str(e)}")
-
-        # Process remaining logs in batch if any
+                print(f"Error reading {json_file}: {e}")
         if batch:
-            self.process_log_batch(batch)
+            self.process_flow_batch(batch)
             total_processed += len(batch)
-
-        # Summary output
-        print(f"Final total logs processed: {total_processed}")
-        print(f"Skipped logs due to missing required fields: {len(self.skipped_logs)}")
-
-        # Save skipped logs for analysis if any
+        print(f"Final total flows processed: {total_processed}")
+        print(f"Skipped flows due to missing fields: {len(self.skipped_logs)}")
         if self.skipped_logs:
-            with open("skipped_logs.json", "w") as f:
+            with open("skipped_flows.json", "w") as f:
                 json.dump(self.skipped_logs, f, indent=2)
-            print("Skipped logs saved to skipped_logs.json")
+            print("Skipped flows saved to skipped_flows.json")
 
+
+    
 
 def main():
-    """
-    Entry point for running the log ingester.
-    """
-    ingester = Neo4jLogIngester(batch_size=1000)
+    ingester = Neo4jFlowIngester(batch_size=1000)
     try:
-        ingester.process_logs_directory("logs-json")
+        ingester.process_flows_directory("logs-json")
     finally:
         ingester.close()
-
 
 if __name__ == "__main__":
     main()
