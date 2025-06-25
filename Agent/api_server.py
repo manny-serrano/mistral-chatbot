@@ -61,7 +61,6 @@ class SecurityQueryResponse(BaseModel):
     collections_used: Optional[List[str]] = None
     source_documents: Optional[List[Dict[str, Any]]] = None
     processing_time: Optional[float] = None
-    confidence_score: Optional[float] = None
     error: Optional[str] = None
     timestamp: str
 
@@ -231,9 +230,6 @@ async def analyze_security_query(request: SecurityQueryRequest):
                     "metadata": serialized_metadata
                 })
         
-        # Calculate confidence score (mock for now)
-        confidence_score = 0.85 if result.get('result') else 0.1
-        
         return SecurityQueryResponse(
             result=result.get('result', 'No analysis result available.'),
             query_type=result.get('query_type', 'UNKNOWN'),
@@ -241,7 +237,6 @@ async def analyze_security_query(request: SecurityQueryRequest):
             collections_used=result.get('collections_used'),
             source_documents=source_docs if request.include_sources else None,
             processing_time=processing_time,
-            confidence_score=confidence_score,
             timestamp=datetime.now().isoformat()
         )
         
