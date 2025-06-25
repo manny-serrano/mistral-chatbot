@@ -168,11 +168,6 @@ class Pipe:
         if response.get('processing_time'):
             formatted += f"**Processing Time:** {response['processing_time']:.2f}s\n"
         
-        if response.get('confidence_score'):
-            confidence = response['confidence_score']
-            confidence_level = "HIGH" if confidence >= 0.8 else "MEDIUM" if confidence >= 0.6 else "LOW"
-            formatted += f"**Confidence:** {confidence_level} ({confidence:.0%})\n"
-        
         formatted += "\n---\n\n"
         
         # Main analysis result
