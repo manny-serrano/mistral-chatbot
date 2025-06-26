@@ -35,23 +35,44 @@ def load_field_definitions(xlsx_path):
 IP_DICTIONARY = load_ip_dictionary('enrichment_data/ip_dictionary.csv')
 FIELD_DEFINITIONS = load_field_definitions('enrichment_data/mistral_flow_fields.xlsx')
 
-# --- Protocol Map for Enrichment ---
-PROTOCOL_MAP = {
-    1: "ICMP", 2: "IGMP", 6: "TCP", 17: "UDP", 41: "IPv6", 47: "GRE",
-    50: "ESP", 51: "AH", 58: "ICMPv6", 89: "OSPF", 132: "SCTP"
-}
+def load_protocol_map(csv_path):
+    protocol_map = {}
+    try:
+        with open(csv_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                value = row.get('Decimal')
+                name = row.get('Keyword')
+                if value and name and name != '':
+                    try:
+                        protocol_map[int(value)] = name.lower()
+                    except Exception:
+                        continue
+    except Exception as e:
+        print(f"Could not load protocol map: {e}")
+    return protocol_map
+
+PROTOCOL_MAP = load_protocol_map('protocol-numbers.csv')
+
+
 
 def extract_protocol(flow):
     proto_id = flow.get("protocolIdentifier")
     if proto_id is not None:
         try:
-            return PROTOCOL_MAP.get(int(proto_id), f"Protocol_{proto_id}")
+            proto_int = int(proto_id)
+            proto_name = PROTOCOL_MAP.get(proto_int)
+            if proto_name:
+                return proto_name
+            else:
+                print(f"[INFO] Unknown protocol number: {proto_int}")  # Log new numbers!
+                return f"protocol_{proto_int}".lower()
         except Exception:
-            return str(proto_id)
+            return f"protocol_{proto_id}".lower()
     proto = flow.get("protocol")
     if proto:
-        return str(proto).upper()
-    return "UNKNOWN"
+        return str(proto).lower()
+    return "unknown"
 
 class Neo4jFlowIngester:
     def __init__(self, uri=None, user=None, password=None, batch_size=1000):
