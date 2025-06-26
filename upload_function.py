@@ -64,27 +64,31 @@ def format_function_for_api(function_content):
     }
 
 def upload_function_to_openwebui(function_data, api_key, openwebui_url="http://localhost:3000"):
-    """Upload the function to OpenWebUI via API."""
+    """Upload or update the function to OpenWebUI via API."""
     
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
-    endpoint = f"{openwebui_url}/api/v1/functions/create"
+    function_id = function_data['id']
+    
+    # First try to update existing function
+    update_endpoint = f"{openwebui_url}/api/v1/functions/id/{function_id}/update"
+    create_endpoint = f"{openwebui_url}/api/v1/functions/create"
     
     try:
-        print("UPLOADING: Uploading function to OpenWebUI...")
-        print(f"Endpoint: {endpoint}")
-        print(f"Function ID: {function_data['id']}")
+        print("UPLOADING: Trying to update existing function...")
+        print(f"Function ID: {function_id}")
         print()
         
-        response = requests.post(endpoint, json=function_data, headers=headers, timeout=30)
+        # Try update first
+        response = requests.post(update_endpoint, json=function_data, headers=headers, timeout=30)
         
         if response.status_code == 200:
             result = response.json()
-            print("SUCCESS: Function uploaded successfully!")
-            print("The Mistral Security Agent is now active in OpenWebUI")
+            print("SUCCESS: Function updated successfully!")
+            print("The Mistral Security Agent has been updated with conversation memory!")
             print()
             print("Function Details:")
             print(f"  Name: {result.get('name', 'N/A')}")
@@ -92,20 +96,46 @@ def upload_function_to_openwebui(function_data, api_key, openwebui_url="http://l
             print(f"  Active: {result.get('is_active', False)}")
             print(f"  Function ID: {result.get('id', 'N/A')}")
             return True
-        else:
-            print(f"ERROR: Upload failed: {response.status_code}")
-            print(f"Response: {response.text}")
+        
+        # If update fails, try create (for new installations)
+        elif response.status_code == 404:
+            print("Function not found, creating new...")
+            response = requests.post(create_endpoint, json=function_data, headers=headers, timeout=30)
             
-            # Try to parse error details
-            try:
-                error_data = response.json()
-                if 'detail' in error_data:
-                    print(f"Error details: {error_data['detail']}")
-            except:
-                pass
+            if response.status_code == 200:
+                result = response.json()
+                print("SUCCESS: Function created successfully!")
+                print("The Mistral Security Agent is now active in OpenWebUI")
+                print()
+                print("Function Details:")
+                print(f"  Name: {result.get('name', 'N/A')}")
+                print(f"  Type: {result.get('type', 'N/A')}")
+                print(f"  Active: {result.get('is_active', False)}")
+                print(f"  Function ID: {result.get('id', 'N/A')}")
+                return True
+        
+        # Handle other errors
+        print(f"ERROR: Upload/Update failed: {response.status_code}")
+        print(f"Response: {response.text}")
+        
+        # Try to parse error details
+        try:
+            error_data = response.json()
+            if 'detail' in error_data:
+                print(f"Error details: {error_data['detail']}")
                 
-            return False
+                # If it's a conflict, suggest manual deletion
+                if "already registered" in error_data['detail']:
+                    print()
+                    print("SOLUTION: The function already exists but cannot be updated.")
+                    print("You can either:")
+                    print("1. Delete the existing function in OpenWebUI and run this script again")
+                    print("2. Or manually update the function in OpenWebUI interface")
+        except:
+            pass
             
+        return False
+        
     except requests.exceptions.ConnectionError:
         print("ERROR: Could not connect to OpenWebUI. Is it running on http://localhost:3000?")
         return False

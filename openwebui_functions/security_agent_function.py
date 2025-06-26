@@ -1,12 +1,3 @@
-"""
-title: Mistral Security Agent
-author: Mistral Team
-author_url: https://github.com/mistralai
-funding_url: https://github.com/sponsors/mistralai
-version: 1.0.0
-license: MIT
-"""
-
 import requests
 import json
 import os
@@ -85,11 +76,11 @@ class Pipe:
         
         # Always route through the security agent - let it decide if it can provide security insights
         # This is much better than keyword matching!
-        return self._analyze_security_query(actual_message)
+        return self._analyze_security_query(actual_message, messages)
     
 
     
-    def _analyze_security_query(self, query: str) -> str:
+    def _analyze_security_query(self, query: str, conversation_history: List[Dict[str, Any]] = None) -> str:
         """Process the security query through the analysis agent."""
         
         try:
@@ -101,6 +92,20 @@ class Pipe:
                 "max_results": 10,
                 "user": "openwebui_user"
             }
+            
+            # Add conversation history if available
+            if conversation_history:
+                # Filter and format conversation history 
+                filtered_history = []
+                for msg in conversation_history[-10:]:  # Last 10 messages
+                    if isinstance(msg, dict) and msg.get("role") in ["user", "assistant"]:
+                        filtered_history.append({
+                            "role": msg.get("role"),
+                            "content": msg.get("content", "")
+                        })
+                
+                if filtered_history:
+                    payload["conversation_history"] = filtered_history
             
             # Make request to the security agent API
             response = self._make_agent_request(payload)
