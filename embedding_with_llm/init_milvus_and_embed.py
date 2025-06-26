@@ -1,143 +1,298 @@
-from sentence_transformers import SentenceTransformer
-from pymilvus import connections, FieldSchema, CollectionSchema, DataType, Collection, utility
+#!/usr/bin/env python3
+"""
+Milvus Embedding and Initialization Script
+Optimized for network security data with enhanced error handling and logging.
+"""
+
+import os
+import sys
+import time
 import json
 import ast
-import time
+import glob
+import logging
 from datetime import datetime
-import glob, os
+from typing import Dict, List, Optional, Tuple
+from sentence_transformers import SentenceTransformer
+from pymilvus import connections, FieldSchema, CollectionSchema, DataType, Collection, utility
 from tqdm import tqdm
 
-print("Starting Milvus connection attempts...")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-milvus_host = os.getenv("MILVUS_HOST", "localhost")
-milvus_port = int(os.getenv("MILVUS_PORT", "19530"))
-
-for attempt in range(60):  # Try for up to 60*2=120 seconds (2 minutes)
-    try:
-        print(f"Connection attempt {attempt + 1}/60...")
-        connections.connect("default", host=milvus_host, port=milvus_port)
-        print("Connected to Milvus!")
-        break
-    except Exception as e:
-        print(f"Milvus not ready (attempt {attempt + 1}): {str(e)}")
-        if attempt < 59:  # Don't sleep on the last attempt
-            print("Retrying in 2 seconds...")
-            time.sleep(2)
-else:
-    raise RuntimeError("Failed to connect to Milvus after 120 seconds. Check if Milvus service is running properly.")
-
-# Load embedding model early (needed for schema dim)
-print("Loading embedding model optimized for cybersecurity and numerical data...")
-model = SentenceTransformer('BAAI/bge-large-en-v1.5')
-print("Successfully loaded BAAI/bge-large-en-v1.5 - excellent for technical content and numbers!")
-
-# --- Step 1 – collection creation / selection ---
-existing_collections = utility.list_collections()
-if existing_collections:
-    print(f"Existing collections: {', '.join(existing_collections)}")
-else:
-    print("No existing collections found.")
-
-# Give user choice between predefined collection options
-print("Available collection options:")
-print("1. mistralData")
-print("2. honeypotData")
-
-while True:
-    choice = input("Select collection (1 or 2): ").strip()
-    if choice == "1":
-        collection_name = "mistralData"
-        break
-    elif choice == "2":
-        collection_name = "honeypotData"
-        break
-    else:
-        print("Invalid choice. Please enter 1 or 2.")
-
-print(f"Selected collection: '{collection_name}'")
-
-# Pause before moving on to file selection
-input("Press Enter to continue to file selection…")
-
-if True:
-    # Create collection if it doesn't exist
-    if collection_name not in utility.list_collections():
-        print("Creating new collection...")
-        # Define schema compatible with LangChain – vector dim equals embedding size
-        emb_dim = model.get_sentence_embedding_dimension()
-        fields = [
-            FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=emb_dim),
-            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=2048),
-            FieldSchema(name="source_file", dtype=DataType.VARCHAR, max_length=512)
-        ]
-        schema = CollectionSchema(fields, description="SBERT embeddings collection with text")
-        collection = Collection(collection_name, schema)
-    else:
-        # Use existing collection
-        collection = Collection(collection_name)
+class Config:
+    """Configuration management for the embedding script."""
     
-    # Determine whether this is a freshly-created collection (no data yet)
-    is_new_collection = collection.num_entities == 0
+    def __init__(self):
+        self.milvus_host = os.getenv("MILVUS_HOST", "localhost")
+        self.milvus_port = int(os.getenv("MILVUS_PORT", "19530"))
+        self.model_name = os.getenv("EMB_MODEL", "BAAI/bge-large-en-v1.5")
+        self.file_pattern = os.getenv("FLOW_LOG_PATTERN")
+        self.max_retries = int(os.getenv("MILVUS_MAX_RETRIES", "60"))
+        self.retry_delay = int(os.getenv("MILVUS_RETRY_DELAY", "2"))
+        
+        # Batch processing configuration
+        self.embedding_batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", "256"))
+        self.embedding_internal_batch = int(os.getenv("EMBEDDING_INTERNAL_BATCH", "32"))
+        self.insert_batch_size = int(os.getenv("INSERT_BATCH_SIZE", "100"))
+        
+        # Validate configuration
+        if self.milvus_port < 1 or self.milvus_port > 65535:
+            raise ValueError(f"Invalid Milvus port: {self.milvus_port}")
+        
+        if self.embedding_batch_size < 1 or self.embedding_batch_size > 1000:
+            logger.warning(f"Embedding batch size {self.embedding_batch_size} may not be optimal")
+        
+        logger.info(f"Configuration - Host: {self.milvus_host}:{self.milvus_port}, Model: {self.model_name}")
+        logger.info(f"Batch sizes - Embedding: {self.embedding_batch_size}, Internal: {self.embedding_internal_batch}, Insert: {self.insert_batch_size}")
 
-    # If it already contains data we must load it so queries don't fail with
-    # "collection not loaded" (Milvus error code 101).
-    if not is_new_collection:
+class MilvusEmbedder:
+    """Enhanced Milvus embedding manager with proper error handling."""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.model = None
+        self.collection = None
+        self.is_new_collection = False
+        
+    def initialize(self):
+        """Initialize connections and model."""
+        self._connect_to_milvus()
+        self._load_embedding_model()
+    
+    def _connect_to_milvus(self):
+        """Connect to Milvus with retry logic."""
+        logger.info(f"Connecting to Milvus at {self.config.milvus_host}:{self.config.milvus_port}")
+        
+        for attempt in range(self.config.max_retries):
+            try:
+                connections.connect("default", host=self.config.milvus_host, port=self.config.milvus_port)
+                logger.info("Successfully connected to Milvus!")
+                return
+            except Exception as e:
+                logger.warning(f"Connection attempt {attempt + 1}/{self.config.max_retries} failed: {e}")
+                if attempt < self.config.max_retries - 1:
+                    time.sleep(self.config.retry_delay)
+        
+        raise RuntimeError(f"Failed to connect to Milvus after {self.config.max_retries * self.config.retry_delay} seconds")
+    
+    def _load_embedding_model(self):
+        """Load the sentence transformer model."""
         try:
-            collection.load()
+            logger.info(f"Loading embedding model: {self.config.model_name}")
+            self.model = SentenceTransformer(self.config.model_name)
+            logger.info(f"Successfully loaded model with {self.model.get_sentence_embedding_dimension()} dimensions")
         except Exception as e:
-            # If loading fails (e.g. index missing) we'll continue, queries will
-            # be skipped and data re-inserted.
-            print(f"Warning: could not load collection: {e}")
-
-    # --- Determine which files to embed ---
-    env_pattern = os.getenv("FLOW_LOG_PATTERN")
-    if env_pattern:
-        FILE_GLOB = env_pattern
-    else:
-        # Interactive prompt – let user type a filename or glob
-        user_in = input("Enter the filename or glob pattern of JSON flow logs to embed (default: *.json): ").strip()
-        FILE_GLOB = user_in or "*.json"
-
-    files_to_process = sorted(glob.glob(FILE_GLOB))
-
-    if not files_to_process:
-        print(f"No files match pattern '{FILE_GLOB}'. Nothing to embed.")
-        exit(0)
-
-    print(f"Found {len(files_to_process)} file(s) matching pattern '{FILE_GLOB}'.\n")
-
-    # Ask the user which kind of log is being embedded so we can pick the right
-    # sentence-extraction routine.
-    data_type_in = input("What type of data are you embedding? Enter 'honeypot' or 'flow' (default: flow): ").strip().lower()
-    data_type = data_type_in if data_type_in in {"honeypot", "flow"} else "flow"
-    print(f"Embedding as {data_type} data…")
-
-    # For each file, we will first check whether any embeddings with this source_file already exist.
-
-    # OPTIMIZED BATCH CONFIGURATION
-    # Based on benchmark results: optimized for your specific system
-    EMBEDDING_BATCH_SIZE = 256     # Optimal batch size for maximum performance (40% faster than 64)
-    EMBEDDING_INTERNAL_BATCH = 32  # Internal batch size for model.encode()
-    INSERT_BATCH_SIZE = 100        # Keep same for Milvus insertion
+            logger.error(f"Failed to load embedding model: {e}")
+            raise
     
-    print(f"Using optimized batch processing:")
-    print(f"  - Embedding batch size: {EMBEDDING_BATCH_SIZE}")
-    print(f"  - Model internal batch size: {EMBEDDING_INTERNAL_BATCH}")
-    print(f"  - Milvus insert batch size: {INSERT_BATCH_SIZE}")
-
-    total_inserted = 0
-
-    # Helper to convert a single flow record into a natural-language sentence
-    def flow_to_sentence(flow: dict) -> str:
-        """Convert a YAF/Zeek flow dictionary to a readable sentence for embedding."""
+    def select_collection(self) -> str:
+        """Interactive collection selection with validation."""
+        existing_collections = utility.list_collections()
+        if existing_collections:
+            logger.info(f"Existing collections: {', '.join(existing_collections)}")
+        else:
+            logger.info("No existing collections found")
+        
+        print("\nAvailable collection options:")
+        print("1. mistralData (General network security data)")
+        print("2. honeypotData (Honeypot attack logs)")
+        
+        while True:
+            choice = input("Select collection (1 or 2): ").strip()
+            if choice == "1":
+                return "mistralData"
+            elif choice == "2":
+                return "honeypotData"
+            else:
+                print("Invalid choice. Please enter 1 or 2.")
+    
+    def setup_collection(self, collection_name: str):
+        """Set up the collection with proper schema."""
+        if collection_name not in utility.list_collections():
+            logger.info("Creating new collection...")
+            self._create_collection(collection_name)
+            self.is_new_collection = True
+        else:
+            logger.info(f"Using existing collection: {collection_name}")
+            self.collection = Collection(collection_name)
+            self.is_new_collection = self.collection.num_entities == 0
+        
+        # Load collection if it has data
+        if not self.is_new_collection:
+            try:
+                self.collection.load()
+                logger.info(f"Collection loaded with {self.collection.num_entities:,} entities")
+            except Exception as e:
+                logger.warning(f"Could not load collection: {e}")
+    
+    def _create_collection(self, collection_name: str):
+        """Create a new collection with optimized schema."""
+        try:
+            emb_dim = self.model.get_sentence_embedding_dimension()
+            fields = [
+                FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
+                FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=emb_dim),
+                FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=2048),
+                FieldSchema(name="source_file", dtype=DataType.VARCHAR, max_length=512)
+            ]
+            schema = CollectionSchema(fields, description="Network security embeddings collection")
+            self.collection = Collection(collection_name, schema)
+            logger.info(f"Created collection '{collection_name}' with {emb_dim}-dimensional vectors")
+        except Exception as e:
+            logger.error(f"Failed to create collection: {e}")
+            raise
+    
+    def get_files_to_process(self) -> List[str]:
+        """Get and validate files to process."""
+        if self.config.file_pattern:
+            file_pattern = self.config.file_pattern
+        else:
+            file_pattern = input("Enter filename or glob pattern (default: *.json): ").strip() or "*.json"
+        
+        files = sorted(glob.glob(file_pattern))
+        
+        if not files:
+            raise ValueError(f"No files match pattern '{file_pattern}'")
+        
+        logger.info(f"Found {len(files)} file(s) matching pattern '{file_pattern}'")
+        return files
+    
+    def get_data_type(self) -> str:
+        """Get the data type for processing."""
+        data_type = input("Data type - 'honeypot' or 'flow' (default: flow): ").strip().lower()
+        return data_type if data_type in {"honeypot", "flow"} else "flow"
+    
+    def check_file_already_processed(self, filename: str) -> bool:
+        """Check if a file has already been processed."""
+        if self.is_new_collection:
+            return False
+        
+        try:
+            result = self.collection.query(
+                expr=f'source_file == "{filename}"',
+                output_fields=["pk"],
+                limit=1
+            )
+            return bool(result)
+        except Exception as e:
+            logger.warning(f"Could not query existing data for {filename}: {e}")
+            return False
+    
+    def process_files(self, files: List[str], data_type: str) -> int:
+        """Process all files and return total embeddings inserted."""
+        total_inserted = 0
+        
+        for filename in files:
+            logger.info(f"Processing file: {filename}")
+            
+            if self.check_file_already_processed(filename):
+                logger.info(f"File {filename} already processed. Skipping.")
+                continue
+            
+            try:
+                inserted = self._process_single_file(filename, data_type)
+                total_inserted += inserted
+                logger.info(f"Processed {filename}: {inserted:,} embeddings inserted")
+            except Exception as e:
+                logger.error(f"Error processing {filename}: {e}")
+                continue
+        
+        return total_inserted
+    
+    def _process_single_file(self, filename: str, data_type: str) -> int:
+        """Process a single file and return number of embeddings inserted."""
+        # Count total lines for progress tracking
+        total_lines = self._count_lines(filename)
+        logger.info(f"Processing {total_lines:,} lines from {filename}")
+        
+        batch_texts = []
+        inserted_count = 0
+        
+        with open(filename, 'r', encoding='utf-8') as f:
+            with tqdm(total=total_lines, desc="Processing", unit=" lines") as pbar:
+                for line_num, line in enumerate(f, 1):
+                    if not line.strip():
+                        pbar.update(1)
+                        continue
+                    
+                    try:
+                        data = self._parse_line(line)
+                        if data is None:
+                            pbar.update(1)
+                            continue
+                        
+                        text = self._convert_to_text(data, data_type)
+                        if text:
+                            batch_texts.append(text)
+                        
+                        # Process batch when threshold reached
+                        if len(batch_texts) >= self.config.embedding_batch_size:
+                            inserted = self._process_batch(batch_texts, filename)
+                            inserted_count += inserted
+                            batch_texts = []
+                        
+                        pbar.update(1)
+                        
+                    except Exception as e:
+                        logger.warning(f"Error processing line {line_num}: {e}")
+                        pbar.update(1)
+                        continue
+        
+        # Process remaining texts
+        if batch_texts:
+            logger.info(f"Processing final batch of {len(batch_texts)} texts")
+            inserted = self._process_batch(batch_texts, filename)
+            inserted_count += inserted
+        
+        return inserted_count
+    
+    def _count_lines(self, filename: str) -> int:
+        """Count non-empty lines in a file."""
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                return sum(1 for line in f if line.strip())
+        except Exception as e:
+            logger.warning(f"Could not count lines in {filename}: {e}")
+            return 0
+    
+    def _parse_line(self, line: str) -> Optional[Dict]:
+        """Parse a line as JSON or Python literal."""
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            try:
+                return ast.literal_eval(line)
+            except Exception:
+                return None
+    
+    def _convert_to_text(self, data: Dict, data_type: str) -> Optional[str]:
+        """Convert structured data to natural language text."""
+        try:
+            if data_type == "flow":
+                if 'flows' in data:
+                    return self._flow_to_sentence(data['flows'])
+            else:  # honeypot
+                return self._honeypot_to_sentence(data)
+        except Exception as e:
+            logger.debug(f"Error converting data to text: {e}")
+        return None
+    
+    def _flow_to_sentence(self, flow: Dict) -> str:
+        """Convert flow data to readable sentence."""
         protocol_map = {6: "TCP", 17: "UDP", 1: "ICMP"}
+        
         src_ip = flow.get("sourceIPv4Address") or flow.get("id.orig_h") or "unknown"
         dst_ip = flow.get("destinationIPv4Address") or flow.get("id.resp_h") or "unknown"
         src_port = flow.get("sourceTransportPort") or flow.get("id.orig_p") or "?"
         dst_port = flow.get("destinationTransportPort") or flow.get("id.resp_p") or "?"
         proto = protocol_map.get(flow.get("protocolIdentifier"), flow.get("proto", "?"))
-        # Timestamp handling
+        
+        # Handle timestamp
         ts_raw = flow.get("flowStartMilliseconds") or flow.get("ts")
         if ts_raw is not None:
             try:
@@ -146,25 +301,27 @@ if True:
                 ts_readable = str(ts_raw)
         else:
             ts_readable = "unknown_time"
+        
         bytes_total = flow.get("octetTotalCount", "?")
         packets_total = flow.get("packetTotalCount", "?")
-
+        
         return (
             f"Flow from {src_ip}:{src_port} to {dst_ip}:{dst_port} "
             f"using {proto} at {ts_readable}. "
             f"Bytes: {bytes_total}, Packets: {packets_total}."
         )
-
-    # Helper to convert a honeypot log entry into a readable sentence
-    def honeypot_to_sentence(evt: dict) -> str:
-        """Convert a STINGAR honeypot event dictionary to a sentence suitable for embedding."""
+    
+    def _honeypot_to_sentence(self, evt: Dict) -> str:
+        """Convert honeypot event to readable sentence."""
         app = evt.get("app", "unknown_app")
         protocol = evt.get("protocol", "unknown_proto")
         sensor_host = evt.get("sensor", {}).get("hostname", "unknown_sensor")
-        src_ip, src_port = evt.get("src_ip", "?"), evt.get("src_port", "?")
-        dst_ip, dst_port = evt.get("dst_ip", "?"), evt.get("dst_port", "?")
-
-        # Attempt to derive an event description
+        src_ip = evt.get("src_ip", "?")
+        src_port = evt.get("src_port", "?")
+        dst_ip = evt.get("dst_ip", "?")
+        dst_port = evt.get("dst_port", "?")
+        
+        # Get event description
         hp_data = evt.get("hp_data", {}) or {}
         event_desc = (
             hp_data.get("event_type") or
@@ -172,142 +329,118 @@ if True:
             hp_data.get("mqtt_action") or
             "activity"
         )
-
+        
         ts = evt.get("start_time") or evt.get("@timestamp") or evt.get("end_time") or "unknown_time"
-
+        
         return (
             f"Honeypot {app} on {sensor_host} observed {event_desc} using {protocol} "
             f"from {src_ip}:{src_port} to {dst_ip}:{dst_port} at {ts}."
         )
-
-    # Generic parser that tolerates both strict JSON and Python-literal style dicts (such as STINGAR samples)
-    def parse_event_line(line_str: str):
-        """Parse a single-line JSON or Python-dict string into a dictionary.
-
-        Returns None if the line cannot be parsed."""
-        try:
-            return json.loads(line_str)
-        except json.JSONDecodeError:
-            try:
-                return ast.literal_eval(line_str)
-            except Exception:
-                print(f"Warning: could not parse line -> skipping: {line_str[:80]}…")
-                return None
-
-    # OPTIMIZED BATCH PROCESSING FUNCTION
-    def process_batch_optimized(texts_batch, filename):
-        """Process a batch of texts with optimal performance."""
-        if not texts_batch:
+    
+    def _process_batch(self, texts: List[str], filename: str) -> int:
+        """Process a batch of texts with optimized performance."""
+        if not texts:
             return 0
         
-        start_time = time.time()
-        
-        # Use optimized batch processing with internal batch size
-        batch_embeddings = model.encode(
-            texts_batch, 
-            batch_size=EMBEDDING_INTERNAL_BATCH,  # OPTIMIZATION: Internal batching
-            show_progress_bar=False,              # We have our own progress bar
-            convert_to_numpy=True                 # Slight performance gain
-        )
-        
-        embedding_time = time.time() - start_time
-        
-        # Convert to list format for Milvus
-        embeddings_list = [emb.tolist() for emb in batch_embeddings]
-        src_list = [filename] * len(embeddings_list)
-        
-        # Insert in chunks to Milvus
-        inserted_count = 0
-        for i in range(0, len(embeddings_list), INSERT_BATCH_SIZE):
-            chunk_embeddings = embeddings_list[i:i+INSERT_BATCH_SIZE]
-            chunk_texts = texts_batch[i:i+INSERT_BATCH_SIZE]
-            chunk_src = src_list[i:i+INSERT_BATCH_SIZE]
-            collection.insert([chunk_embeddings, chunk_texts, chunk_src])
-            inserted_count += len(chunk_embeddings)
-        
-        # Performance reporting
-        texts_per_sec = len(texts_batch) / embedding_time
-        print(f"    Processed {len(texts_batch)} texts in {embedding_time:.2f}s ({texts_per_sec:.1f} texts/sec)")
-        
-        return inserted_count
-
-    # Process files with progress tracking
-    for filename in files_to_process:
-        print(f"\nProcessing file: {filename}")
-
-        # Skip querying on a brand-new (empty) collection. For existing ones,
-        # check whether this file was already embedded.
-        if not is_new_collection:
+        try:
+            start_time = time.time()
+            
+            # Generate embeddings
+            embeddings = self.model.encode(
+                texts,
+                batch_size=self.config.embedding_internal_batch,
+                show_progress_bar=False,
+                convert_to_numpy=True
+            )
+            
+            embedding_time = time.time() - start_time
+            
+            # Convert to list format for Milvus
+            embeddings_list = [emb.tolist() for emb in embeddings]
+            src_list = [filename] * len(embeddings_list)
+            
+            # Insert in chunks
+            inserted_count = 0
+            for i in range(0, len(embeddings_list), self.config.insert_batch_size):
+                chunk_embeddings = embeddings_list[i:i+self.config.insert_batch_size]
+                chunk_texts = texts[i:i+self.config.insert_batch_size]
+                chunk_src = src_list[i:i+self.config.insert_batch_size]
+                
+                self.collection.insert([chunk_embeddings, chunk_texts, chunk_src])
+                inserted_count += len(chunk_embeddings)
+            
+            # Performance logging
+            texts_per_sec = len(texts) / embedding_time if embedding_time > 0 else 0
+            logger.debug(f"Batch processed: {len(texts)} texts in {embedding_time:.2f}s ({texts_per_sec:.1f} texts/sec)")
+            
+            return inserted_count
+            
+        except Exception as e:
+            logger.error(f"Error processing batch: {e}")
+            return 0
+    
+    def finalize_collection(self, total_inserted: int):
+        """Finalize the collection with indexing."""
+        if total_inserted > 0:
             try:
-                already = collection.query(expr=f"source_file == \"{filename}\"", output_fields=["pk"], limit=1)
-                if already:
-                    print(" – already embedded. Skipping.")
-                    continue
+                logger.info("Creating index...")
+                self.collection.create_index(
+                    field_name="vector",
+                    index_params={
+                        "index_type": "IVF_FLAT",
+                        "metric_type": "COSINE",
+                        "params": {"nlist": 128}
+                    }
+                )
+                
+                logger.info("Loading collection...")
+                self.collection.load()
+                
+                logger.info(f"Successfully processed {total_inserted:,} embeddings")
+                
             except Exception as e:
-                # If the field does not exist in an older collection schema or the
-                # collection isn't loaded, just warn and continue embedding.
-                print("Warning: could not query by source_file; proceeding anyway.")
-                print(str(e))
+                logger.error(f"Error finalizing collection: {e}")
+        else:
+            logger.warning("No embeddings were inserted")
 
-        # First pass: count total lines for progress bar
-        total_lines = 0
-        with open(filename, 'r') as f:
-            for line in f:
-                if line.strip():
-                    total_lines += 1
+def main():
+    """Main function with comprehensive error handling."""
+    try:
+        # Initialize configuration
+        config = Config()
         
-        print(f"Total lines to process: {total_lines}")
+        # Initialize embedder
+        embedder = MilvusEmbedder(config)
+        embedder.initialize()
         
-        batch_texts = []
-        processed_lines = 0
+        # Interactive setup
+        collection_name = embedder.select_collection()
+        logger.info(f"Selected collection: {collection_name}")
         
-        # Second pass: process with progress bar
-        with open(filename, 'r') as f:
-            with tqdm(total=total_lines, desc="Processing", unit=" lines") as pbar:
-                for line_num, line in enumerate(f, 1):
-                    if line.strip():
-                        data = parse_event_line(line)
-                        if data is None:
-                            pbar.update(1)
-                            continue
-                            
-                        log_text = None
-                        if data_type == "flow":
-                            if 'flows' in data:
-                                log_text = flow_to_sentence(data['flows'])
-                        else:  # honeypot mode
-                            log_text = honeypot_to_sentence(data)
+        embedder.setup_collection(collection_name)
+        
+        input("Press Enter to continue to file selection...")
+        
+        files = embedder.get_files_to_process()
+        data_type = embedder.get_data_type()
+        
+        logger.info(f"Processing {len(files)} files as {data_type} data")
+        
+        # Process files
+        total_inserted = embedder.process_files(files, data_type)
+        
+        # Finalize
+        embedder.finalize_collection(total_inserted)
+        
+        logger.info("Embedding process completed successfully!")
+        return 0
+        
+    except KeyboardInterrupt:
+        logger.info("Process interrupted by user")
+        return 1
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        return 1
 
-                        if log_text:
-                            batch_texts.append(log_text)
-
-                        processed_lines += 1
-                        pbar.update(1)
-
-                        # OPTIMIZED: Process batch when threshold reached
-                        if len(batch_texts) >= EMBEDDING_BATCH_SIZE:
-                            inserted = process_batch_optimized(batch_texts, filename)
-                            total_inserted += inserted
-                            batch_texts = []
-
-        # Process remaining records for this file
-        if batch_texts:
-            print(f"Processing final batch of {len(batch_texts)} texts...")
-            inserted = process_batch_optimized(batch_texts, filename)
-            total_inserted += inserted
-
-        print(f"Finished {filename}. Total embeddings inserted: {total_inserted}")
-
-    if total_inserted > 0:
-        print("\nCreating index...")
-        collection.create_index(
-            field_name="vector",
-            index_params={"index_type": "IVF_FLAT", "metric_type": "COSINE", "params": {"nlist": 128}}
-        )
-        print("Loading collection...")
-        collection.load()
-        print(f"Successfully inserted {total_inserted} embeddings into Milvus collection '{collection_name}'.")
-    else:
-        print("No embeddings to insert.")
-
-print("Initialization complete!") 
+if __name__ == "__main__":
+    sys.exit(main()) 

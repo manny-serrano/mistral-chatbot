@@ -1,16 +1,16 @@
 # =============================================================================
 # MISTRAL NETWORK SECURITY ANALYSIS - CONSOLIDATED REQUIREMENTS
 # =============================================================================
-# This file consolidates all dependencies from all project directories
+# This file consolidates all dependencies with pinned versions for stability
 
 # -----------------------------------------------------------------------------
 # Core Machine Learning & NLP
 # -----------------------------------------------------------------------------
-sentence-transformers==4.1.0
-transformers>=4.30.0
-tokenizers
-torch
-numpy
+sentence-transformers==3.0.1
+transformers>=4.35.0,<5.0.0
+tokenizers>=0.15.0
+torch>=2.0.0
+numpy>=1.24.0,<2.0.0
 scikit-learn==1.4.0
 
 # -----------------------------------------------------------------------------
@@ -29,15 +29,15 @@ neo4j==5.15.0
 langchain==0.3.25
 langchain-community==0.3.25
 langchain-core==0.3.65
-langchain-milvus
-langchain-openai
-langchain-huggingface
+langchain-milvus>=0.1.0
+langchain-openai>=0.2.0
+langchain-huggingface>=0.1.0
 
 # -----------------------------------------------------------------------------
 # AI/LLM APIs
 # -----------------------------------------------------------------------------
 openai==1.84.0
-huggingface-hub
+huggingface-hub>=0.20.0
 
 # -----------------------------------------------------------------------------
 # Data Processing & Analysis
@@ -54,19 +54,32 @@ python-dotenv>=1.0.0
 # -----------------------------------------------------------------------------
 # Web API Framework (for OpenWebUI integration)
 # -----------------------------------------------------------------------------
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-pydantic>=2.0.0
+fastapi>=0.104.0,<1.0.0
+uvicorn[standard]>=0.24.0,<1.0.0
+pydantic>=2.0.0,<3.0.0
+
+# -----------------------------------------------------------------------------
+# HTTP Requests
+# -----------------------------------------------------------------------------
+requests>=2.31.0,<3.0.0
 
 # -----------------------------------------------------------------------------
 # System & Utilities
 # -----------------------------------------------------------------------------
 psutil==5.9.8
-requests
 
 # -----------------------------------------------------------------------------
-# Development & Testing (Optional)
+# Development & Testing (Optional - uncomment if needed)
 # -----------------------------------------------------------------------------
-# jupyter
-# matplotlib
-# seaborn
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0
+# black>=23.0.0
+# flake8>=6.0.0
+# mypy>=1.0.0
+
+# -----------------------------------------------------------------------------
+# Security & Validation
+# -----------------------------------------------------------------------------
+# Add security-focused dependencies if needed
+# validators>=0.22.0
+# cryptography>=41.0.0
