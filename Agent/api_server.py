@@ -274,7 +274,7 @@ async def analyze_security_query(request: SecurityQueryRequest):
         # Prepare context from conversation history
         context = ""
         if request.conversation_history:
-            logger.debug(f"Processing conversation history with {len(request.conversation_history)} messages")
+            logger.info(f"Processing conversation history with {len(request.conversation_history)} messages")
             context_messages = []
             for msg in request.conversation_history[-5:]:  # Last 5 messages for context
                 if msg.get("role") in ["user", "assistant"]:
@@ -285,9 +285,11 @@ async def analyze_security_query(request: SecurityQueryRequest):
             
             if context_messages:
                 context = "Previous conversation context:\n" + "\n".join(context_messages) + "\n\nCurrent question: "
+                logger.info(f"Created conversation context: {context[:200]}...")
         
         # Combine context with current query
         full_query = context + request.query if context else request.query
+        logger.info(f"Full query being sent to agent: {full_query[:300]}...")
         
         # Route query based on analysis type
         result = None

@@ -40,6 +40,13 @@ class Pipe:
         through the security analysis agent.
         """
         
+        # Debug logging to see what OpenWebUI is sending
+        print(f"[DEBUG] Pipe called with:")
+        print(f"  user_message: {repr(user_message)}")
+        print(f"  messages count: {len(messages) if messages else 0}")
+        if messages:
+            print(f"  messages sample: {messages[-2:] if len(messages) >= 2 else messages}")
+        print(f"  body keys: {list(body.keys()) if body else 'None'}")
 
         # Handle different calling patterns from OpenWebUI
         if messages is None:
@@ -74,14 +81,33 @@ class Pipe:
         if not actual_message:
             return "Please provide a question to analyze."
         
+        # Extract conversation history from the correct source
+        conversation_for_analysis = messages  # Default to messages parameter
+        
+        # If OpenWebUI passed conversation in body, use that instead
+        if body and isinstance(body, dict) and body.get('messages'):
+            conversation_for_analysis = body['messages']
+            print(f"[DEBUG] Using conversation from body: {len(conversation_for_analysis)} messages")
+        elif messages:
+            print(f"[DEBUG] Using conversation from messages parameter: {len(messages)} messages")
+        else:
+            print(f"[DEBUG] No conversation history found in either location")
+        
         # Always route through the security agent - let it decide if it can provide security insights
         # This is much better than keyword matching!
-        return self._analyze_security_query(actual_message, messages)
+        return self._analyze_security_query(actual_message, conversation_for_analysis)
     
 
     
     def _analyze_security_query(self, query: str, conversation_history: List[Dict[str, Any]] = None) -> str:
         """Process the security query through the analysis agent."""
+        
+        # Debug logging for conversation history
+        print(f"[DEBUG] _analyze_security_query called with:")
+        print(f"  query: {repr(query)}")
+        print(f"  conversation_history count: {len(conversation_history) if conversation_history else 0}")
+        if conversation_history:
+            print(f"  conversation_history sample: {conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history}")
         
         try:
             # Prepare the request
@@ -106,6 +132,11 @@ class Pipe:
                 
                 if filtered_history:
                     payload["conversation_history"] = filtered_history
+                    print(f"[DEBUG] Added {len(filtered_history)} messages to payload")
+                else:
+                    print(f"[DEBUG] No valid messages found in conversation history")
+            else:
+                print(f"[DEBUG] No conversation history provided")
             
             # Make request to the security agent API
             response = self._make_agent_request(payload)
