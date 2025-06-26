@@ -52,7 +52,7 @@ def load_protocol_map(csv_path):
         print(f"Could not load protocol map: {e}")
     return protocol_map
 
-PROTOCOL_MAP = load_protocol_map('protocol-numbers.csv')
+PROTOCOL_MAP = load_protocol_map('enrichment_data/protocol-numbers.csv')
 
 
 
@@ -101,7 +101,7 @@ class Neo4jFlowIngester:
         return (
             all(flow.get(field) is not None for field in honeypot_required) or
             all(flow.get(field) is not None for field in netflow_required)
-        )
+        ) 
 
     def flatten_dict(self, d, parent_key='', sep='_'):
         items = []
