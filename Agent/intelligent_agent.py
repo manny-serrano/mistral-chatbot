@@ -66,30 +66,52 @@ Provide a detailed security analysis based on the available data. If the questio
 Answer:"""
 )
 
+# Simple conversational prompt for non-security queries
+CONVERSATIONAL_PROMPT = PromptTemplate(
+    input_variables=["question"],
+    template="""You are a Mistral Security Agent. You can analyze network security data, but you also maintain normal conversation.
+
+IMPORTANT CONVERSATION MEMORY INSTRUCTIONS:
+- Pay careful attention to any conversation context included in the question
+- Remember user preferences, names, and details mentioned in previous messages
+- If a user tells you their name or asks you to call them something, remember it for future responses
+- Maintain conversational continuity and refer back to earlier parts of the conversation when relevant
+- If asked about previous conversation details (like "what is my name"), use information from the conversation context
+
+Question (may include conversation context): {question}
+
+If this is a simple conversational question, respond naturally. If it's about security analysis, let them know you can help with that too.
+
+Answer:"""
+)
+
 class QueryClassifier:
-    """Classifies queries to determine which database to use."""
+    """Classifies queries to determine which database to use and whether they need database retrieval at all."""
     
     def __init__(self, llm: OpenAI):
         self.llm = llm
         self.classification_prompt = PromptTemplate(
             input_variables=["query"],
             template="""
-            Analyze the following security query and classify it into one of these categories:
+            Analyze the following query and classify it into one of these categories:
             
-            1. GRAPH_QUERY - For queries about relationships, connections, paths, network topology, 
+            1. CONVERSATIONAL - For greetings, personal questions, names, general chat that doesn't need security data
+               Examples: "hi", "hello", "what is my name", "my name is X", "thank you", "how are you"
+            
+            2. GRAPH_QUERY - For queries about relationships, connections, paths, network topology, 
                "who connected to whom", "show me the path", "find connections between", 
                "network relationships", "communication patterns", counting entities
             
-            2. SEMANTIC_QUERY - For queries about finding similar patterns, behaviors, 
+            3. SEMANTIC_QUERY - For queries about finding similar patterns, behaviors, 
                "find similar to", "show me traffic like", "detect patterns similar to", 
                "find flows that look like", "semantic similarity", "behavioral analysis"
             
-            3. HYBRID_QUERY - For queries that need both relationship analysis AND semantic similarity,
+            4. HYBRID_QUERY - For queries that need both relationship analysis AND semantic similarity,
                "find similar attacks and their network paths", "show me connections of similar traffic"
             
             Query: {query}
             
-            Respond with only: GRAPH_QUERY, SEMANTIC_QUERY, or HYBRID_QUERY
+            Respond with only: CONVERSATIONAL, GRAPH_QUERY, SEMANTIC_QUERY, or HYBRID_QUERY
             """
         )
     
@@ -100,7 +122,7 @@ class QueryClassifier:
                 self.classification_prompt.format(query=query)
             )
             classification = response.strip().upper()
-            if classification in ["GRAPH_QUERY", "SEMANTIC_QUERY", "HYBRID_QUERY"]:
+            if classification in ["CONVERSATIONAL", "GRAPH_QUERY", "SEMANTIC_QUERY", "HYBRID_QUERY"]:
                 logger.debug(f"Query classified as: {classification}")
                 return classification
             else:
@@ -713,7 +735,30 @@ class IntelligentSecurityAgent:
             logger.error(f"Error in query classification: {e}")
             query_type = "SEMANTIC_QUERY"
         
-        # Route to appropriate retriever with fallback logic
+        # Handle conversational queries without database retrieval
+        if query_type == "CONVERSATIONAL":
+            try:
+                logger.info("Processing conversational query without database retrieval")
+                response = self.llm.invoke(
+                    CONVERSATIONAL_PROMPT.format(question=question)
+                )
+                
+                return {
+                    "result": response,
+                    "query_type": query_type,
+                    "database_used": "none",
+                    "source_documents": []  # No documents for conversational queries
+                }
+            except Exception as e:
+                logger.error(f"Error processing conversational query: {e}")
+                return {
+                    "result": f"Error processing conversational query: {str(e)}",
+                    "query_type": query_type,
+                    "database_used": "none",
+                    "error": str(e)
+                }
+        
+        # Route to appropriate retriever with fallback logic for security queries
         retriever = None
         retriever_name = "none"
         
@@ -747,7 +792,7 @@ class IntelligentSecurityAgent:
                     "error": "No available retrievers"
                 }
         
-        # Execute query with error handling
+        # Execute security query with database retrieval
         try:
             # Use custom conversation-aware prompt for better memory
             qa_chain = RetrievalQA.from_chain_type(
