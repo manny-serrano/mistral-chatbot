@@ -42,6 +42,30 @@ logging.getLogger('absl').setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", category=UserWarning)
 logging.getLogger('pymilvus').setLevel(logging.WARNING)
 
+# Custom prompt template for conversation memory
+CONVERSATION_AWARE_PROMPT = PromptTemplate(
+    input_variables=["context", "question"],
+    template="""You are a Mistral Security Agent designed to analyze network security data and maintain conversation context.
+
+IMPORTANT CONVERSATION MEMORY INSTRUCTIONS:
+- Pay careful attention to any conversation context included in the question
+- Remember user preferences, names, and details mentioned in previous messages
+- If a user tells you their name or asks you to call them something, remember it for future responses
+- Maintain conversational continuity and refer back to earlier parts of the conversation when relevant
+- If asked about previous conversation details (like "what is my name"), use information from the conversation context
+
+Use the following pieces of retrieved context to answer the security question. If the question includes conversation history or context, make sure to consider that information in your response.
+
+Context from Security Database:
+{context}
+
+Question (may include conversation context): {question}
+
+Provide a detailed security analysis based on the available data. If the question is about conversation history or personal details mentioned earlier, respond appropriately using that context.
+
+Answer:"""
+)
+
 class QueryClassifier:
     """Classifies queries to determine which database to use."""
     
@@ -725,10 +749,12 @@ class IntelligentSecurityAgent:
         
         # Execute query with error handling
         try:
+            # Use custom conversation-aware prompt for better memory
             qa_chain = RetrievalQA.from_chain_type(
                 llm=self.llm,
                 retriever=retriever,
                 return_source_documents=True,
+                chain_type_kwargs={"prompt": CONVERSATION_AWARE_PROMPT}
             )
             
             result = qa_chain.invoke({"query": question})
