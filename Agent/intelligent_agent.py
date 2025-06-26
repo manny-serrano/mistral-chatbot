@@ -120,46 +120,220 @@ class Neo4jRetriever(BaseRetriever):
         # This is a simplified version - in production, you'd use an LLM to convert
         query_lower = query.lower()
         
-        if "connection" in query_lower or "connect" in query_lower:
+        # COUNT/NUMERICAL QUERIES - No limits needed for aggregations
+        if any(word in query_lower for word in ["how many", "count", "total", "number of"]):
+            if "ip" in query_lower and ("address" in query_lower or "ips" in query_lower):
+                return """
+                MATCH (ip:Host)
+                RETURN COUNT(DISTINCT ip.ip) as total_ips,
+                       collect(DISTINCT ip.ip)[0..8] as sample_ips
+                """
+            elif "connection" in query_lower:
+                return """
+                MATCH (src:Host)-[r:SENT]->(f:Flow)
+                RETURN COUNT(r) as total_connections,
+                       COUNT(DISTINCT src.ip) as unique_source_ips,
+                       COUNT(DISTINCT f) as unique_flows
+                """
+            elif "flow" in query_lower:
+                return """
+                MATCH (f:Flow)
+                RETURN COUNT(f) as total_flows,
+                       COUNT(DISTINCT f.flowId) as unique_flow_ids
+                """
+            elif "host" in query_lower:
+                return """
+                MATCH (h:Host)
+                RETURN COUNT(DISTINCT h.ip) as total_hosts,
+                       collect(DISTINCT h.ip)[0..8] as sample_hosts
+                """
+        
+        # STATISTICAL/ANALYTICAL QUERIES - No limits for aggregations
+        elif any(word in query_lower for word in ["average", "sum", "min", "max", "stats", "statistics"]):
             return """
-            MATCH (src:IP)-[r:CONNECTED_TO]->(dst:IP)
-            RETURN src.address as source_ip, dst.address as dest_ip, 
-                   r.protocol, r.src_port, r.dst_port, r.timestamp
-            LIMIT 10
+            MATCH (src:Host)-[r:SENT]->(f:Flow)-[:USES_SRC_PORT]->(sp:Port),
+                  (f)-[:USES_DST_PORT]->(dp:Port)
+            RETURN COUNT(f) as total_flows,
+                   COUNT(DISTINCT src.ip) as unique_sources,
+                   COUNT(DISTINCT dp.port) as unique_dest_ports,
+                   AVG(toInteger(dp.port)) as avg_dest_port,
+                   MIN(toInteger(dp.port)) as min_dest_port,
+                   MAX(toInteger(dp.port)) as max_dest_port
             """
+        
+        # SPECIFIC IP/HOST QUERIES - Moderate limits for detailed results
+        elif "from ip" in query_lower or "ip " in query_lower and any(op in query_lower for op in ["192.", "10.", "172.", "127."]):
+            # Extract IP from query (simple regex would be better in production)
+            import re
+            ip_match = re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', query)
+            if ip_match:
+                target_ip = ip_match.group()
+                return f"""
+                MATCH (src:Host {{ip: '{target_ip}'}})-[r:SENT]->(f:Flow),
+                      (f)-[:USES_DST_PORT]->(dp:Port),
+                      (dst:Host)-[:RECEIVED]->(f)
+                RETURN src.ip as source_ip, dst.ip as dest_ip, 
+                       dp.port as dest_port, f.flowId as flow_id,
+                       f.protocolIdentifier as protocol
+                ORDER BY f.flowStartMilliseconds DESC
+                LIMIT 50
+                """
+        
+        # CONNECTION/RELATIONSHIP QUERIES - Reasonable limits for readability
+        elif "connection" in query_lower or "connect" in query_lower:
+            return """
+            MATCH (src:Host)-[r:SENT]->(f:Flow),
+                  (dst:Host)-[:RECEIVED]->(f),
+                  (f)-[:USES_SRC_PORT]->(sp:Port),
+                  (f)-[:USES_DST_PORT]->(dp:Port)
+            RETURN src.ip as source_ip, dst.ip as dest_ip, 
+                   sp.port as src_port, dp.port as dst_port,
+                   f.protocolIdentifier as protocol,
+                   f.flowStartMilliseconds as timestamp
+            ORDER BY f.flowStartMilliseconds DESC
+            LIMIT 25
+            """
+        
+        # PATH QUERIES - Reasonable limits to prevent exponential explosion
         elif "path" in query_lower:
             return """
-            MATCH path = (src:IP)-[:CONNECTED_TO*1..3]->(dst:IP)
-            RETURN path
-            LIMIT 5
+            MATCH path = (src:Host)-[:SENT]->(:Flow)<-[:RECEIVED]-(dst:Host)
+            WHERE src.ip <> dst.ip
+            RETURN DISTINCT src.ip as source, dst.ip as destination
+            LIMIT 20
             """
-        elif "tag" in query_lower:
+        
+        # PORT/SERVICE QUERIES - No limits for port analysis
+        elif "port" in query_lower:
+            if any(word in query_lower for word in ["common", "popular", "top"]):
+                return """
+                MATCH (f:Flow)-[:USES_DST_PORT]->(dp:Port)
+                RETURN dp.port as port, COUNT(f) as connection_count
+                ORDER BY connection_count DESC
+                LIMIT 20
+                """
+            else:
+                return """
+                MATCH (f:Flow)-[:USES_DST_PORT]->(dp:Port),
+                      (src:Host)-[:SENT]->(f),
+                      (dst:Host)-[:RECEIVED]->(f)
+                RETURN DISTINCT dp.port as dest_port,
+                       COUNT(f) as flow_count,
+                       COUNT(DISTINCT src.ip) as unique_sources
+                ORDER BY flow_count DESC
+                """
+        
+        # PROTOCOL QUERIES - No limits for protocol analysis
+        elif "protocol" in query_lower:
             return """
-            MATCH (ip:IP)-[:HAS_TAG]->(tag:Tag)
-            RETURN ip.address, collect(tag.name) as tags
-            LIMIT 10
+            MATCH (f:Flow)
+            WHERE f.protocolIdentifier IS NOT NULL
+            RETURN f.protocolIdentifier as protocol,
+                   COUNT(f) as flow_count,
+                   COUNT(DISTINCT f.flowId) as unique_flows
+            ORDER BY flow_count DESC
             """
+        
+        # DEFAULT QUERY - Comprehensive overview with reasonable limit
         else:
-            # Default query
             return """
-            MATCH (src:IP)-[r:CONNECTED_TO]->(dst:IP)
-            RETURN src.address as source_ip, dst.address as dest_ip, 
-                   r.protocol, r.timestamp
-            LIMIT 10
+            MATCH (src:Host)-[r:SENT]->(f:Flow),
+                  (dst:Host)-[:RECEIVED]->(f),
+                  (f)-[:USES_DST_PORT]->(dp:Port)
+            RETURN src.ip as source_ip, dst.ip as dest_ip, 
+                   dp.port as dest_port,
+                   f.protocolIdentifier as protocol,
+                   f.flowStartMilliseconds as timestamp
+            ORDER BY f.flowStartMilliseconds DESC
+            LIMIT 15
             """
     
     def _format_neo4j_result(self, record) -> str:
         """Format Neo4j record into readable text."""
         try:
-            if hasattr(record, 'path'):
-                # Handle path results
+            record_dict = dict(record)
+            
+            # Handle COUNT/NUMERICAL results
+            if 'total_ips' in record_dict:
+                total = record_dict.get('total_ips', 0)
+                samples = record_dict.get('sample_ips', [])
+                sample_text = f"\nSample IPs: {', '.join(samples[:5])}" if samples else ""
+                return f"Total unique IP addresses: {total}{sample_text}"
+            
+            elif 'total_connections' in record_dict:
+                return f"Connections: {record_dict.get('total_connections', 0)}, " \
+                       f"Unique sources: {record_dict.get('unique_source_ips', 0)}, " \
+                       f"Unique flows: {record_dict.get('unique_flows', 0)}"
+            
+            elif 'total_flows' in record_dict:
+                return f"Total flows: {record_dict.get('total_flows', 0)}, " \
+                       f"Unique flow IDs: {record_dict.get('unique_flow_ids', 0)}"
+            
+            elif 'total_hosts' in record_dict:
+                total = record_dict.get('total_hosts', 0)
+                samples = record_dict.get('sample_hosts', [])
+                sample_text = f"\nSample hosts: {', '.join(samples[:5])}" if samples else ""
+                return f"Total unique hosts: {total}{sample_text}"
+            
+            # Handle STATISTICAL results
+            elif 'avg_dest_port' in record_dict:
+                return f"Port statistics: Flows: {record_dict.get('total_flows', 0)}, " \
+                       f"Unique sources: {record_dict.get('unique_sources', 0)}, " \
+                       f"Unique dest ports: {record_dict.get('unique_dest_ports', 0)}, " \
+                       f"Avg port: {record_dict.get('avg_dest_port', 0):.1f}, " \
+                       f"Port range: {record_dict.get('min_dest_port', 0)}-{record_dict.get('max_dest_port', 0)}"
+            
+            # Handle PORT analysis
+            elif 'port' in record_dict and 'connection_count' in record_dict:
+                return f"Port {record_dict.get('port')}: {record_dict.get('connection_count')} connections"
+            
+            elif 'dest_port' in record_dict and 'flow_count' in record_dict:
+                return f"Port {record_dict.get('dest_port')}: {record_dict.get('flow_count')} flows, " \
+                       f"{record_dict.get('unique_sources', 0)} unique sources"
+            
+            # Handle PROTOCOL analysis
+            elif 'protocol' in record_dict and 'flow_count' in record_dict:
+                return f"Protocol {record_dict.get('protocol')}: {record_dict.get('flow_count')} flows"
+            
+            # Handle CONNECTION results
+            elif all(key in record_dict for key in ['source_ip', 'dest_ip']):
+                src = record_dict.get('source_ip', 'unknown')
+                dst = record_dict.get('dest_ip', 'unknown')
+                port = record_dict.get('dest_port', record_dict.get('dst_port', '?'))
+                protocol = record_dict.get('protocol', '?')
+                
+                base = f"{src} → {dst}:{port}"
+                if protocol != '?' and protocol is not None:
+                    base += f" ({protocol})"
+                
+                if 'timestamp' in record_dict:
+                    ts = record_dict.get('timestamp')
+                    if ts:
+                        try:
+                            from datetime import datetime
+                            dt = datetime.fromtimestamp(int(ts) / 1000)
+                            base += f" at {dt.strftime('%Y-%m-%d %H:%M:%S')}"
+                        except:
+                            base += f" at {ts}"
+                
+                return base
+            
+            # Handle PATH results
+            elif hasattr(record, 'path'):
                 nodes = [node['address'] for node in record.path.nodes if 'address' in node]
                 return f"Network path: {' -> '.join(nodes)}"
+            
+            # Handle simple key-value pairs
+            elif len(record_dict) <= 3:
+                pairs = [f"{k}: {v}" for k, v in record_dict.items() if v is not None]
+                return ", ".join(pairs)
+            
+            # Default JSON formatting for complex results
             else:
-                # Handle regular results
-                return json.dumps(dict(record), indent=2)
-        except:
-            return str(record)
+                return json.dumps(record_dict, indent=2)
+                
+        except Exception as e:
+            return f"Record formatting error: {str(record)} (Error: {e})"
     
     async def _aget_relevant_documents(self, query: str, *, run_manager=None):
         return self._get_relevant_documents(query, run_manager=run_manager)
