@@ -1,32 +1,101 @@
+import pandas as pd
 import json
 import os
 import ast
+import csv
 from pathlib import Path
 from neo4j import GraphDatabase
-# This script is used to insert the logs into the Neo4j database.
 
+# ---- Load IP Dictionary ----
+def load_ip_dictionary(csv_path):
+    ip_dict = {}
+    try:
+        with open(csv_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                ip = row.get('ip') or row.get('IP')
+                if ip:
+                    ip_dict[ip] = row
+    except Exception as e:
+        print(f"Could not load IP dictionary: {e}")
+    return ip_dict
+
+# ---- Load Flow Field Definitions ----
+def load_field_definitions(xlsx_path):
+   
+    try:
+        df = pd.read_excel(xlsx_path)
+        # Assume columns: "Field" and "Definition"
+        field_map = dict(zip(df.iloc[:, 0], df.iloc[:, 1]))
+        return field_map
+    except Exception as e:
+        print(f"Could not load field definitions: {e}")
+        return {}
+
+IP_DICTIONARY = load_ip_dictionary('enrichment_data/ip_dictionary.csv')
+FIELD_DEFINITIONS = load_field_definitions('enrichment_data/mistral_flow_fields.xlsx')
+
+def load_protocol_map(csv_path):
+    protocol_map = {}
+    try:
+        with open(csv_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                value = row.get('Decimal')
+                name = row.get('Keyword')
+                if value and name and name != '':
+                    try:
+                        protocol_map[int(value)] = name.lower()
+                    except Exception:
+                        continue
+    except Exception as e:
+        print(f"Could not load protocol map: {e}")
+    return protocol_map
+
+PROTOCOL_MAP = load_protocol_map('protocol-numbers.csv')
+
+
+
+def extract_protocol(flow):
+    proto_id = flow.get("protocolIdentifier")
+    if proto_id is not None:
+        try:
+            proto_int = int(proto_id)
+            proto_name = PROTOCOL_MAP.get(proto_int)
+            if proto_name:
+                return proto_name
+            else:
+                print(f"[INFO] Unknown protocol number: {proto_int}")  # Log new numbers!
+                return f"protocol_{proto_int}".lower()
+        except Exception:
+            return f"protocol_{proto_id}".lower()
+    proto = flow.get("protocol")
+    if proto:
+        return str(proto).lower()
+    return "unknown"
 
 class Neo4jFlowIngester:
-    def __init__(self, uri=None, user=None, password=None, batch_size=1000): # This is the constructor for the Neo4jFlowIngester class.
+    def __init__(self, uri=None, user=None, password=None, batch_size=1000):
         uri = uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
         user = user or os.getenv("NEO4J_USER", "neo4j")
         password = password or os.getenv("NEO4J_PASSWORD", "password123")
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self.batch_size = batch_size
         self.skipped_logs = []
-        #
+        self.seen_fields = set()  # For audit
 
     def close(self):
         self.driver.close()
 
-    def create_constraints(self):# This function is used to create the constraints for the Neo4j database.
+    def create_constraints(self):
         with self.driver.session() as session:
             session.run("CREATE CONSTRAINT host_ip IF NOT EXISTS FOR (h:Host) REQUIRE h.ip IS UNIQUE")
             session.run("CREATE CONSTRAINT port_num IF NOT EXISTS FOR (p:Port) REQUIRE p.port IS UNIQUE")
             session.run("CREATE CONSTRAINT flow_id IF NOT EXISTS FOR (f:Flow) REQUIRE f.flowId IS UNIQUE")
             session.run("CREATE CONSTRAINT file_name IF NOT EXISTS FOR (pf:ProcessedFile) REQUIRE pf.name IS UNIQUE")
+            session.run("CREATE CONSTRAINT proto_name IF NOT EXISTS FOR (proto:Protocol) REQUIRE proto.name IS UNIQUE")
 
-    def is_valid_flow(self, flow):#Check if flow is valid by checking if all the required fields are present.
+    def is_valid_flow(self, flow):
         honeypot_required = ["src_ip", "dst_ip", "src_port", "dst_port", "start_time"]
         netflow_required = ["sourceIPv4Address", "destinationIPv4Address", "sourceTransportPort", "destinationTransportPort", "flowStartMilliseconds"]
         return (
@@ -35,11 +104,6 @@ class Neo4jFlowIngester:
         )
 
     def flatten_dict(self, d, parent_key='', sep='_'):
-        """
-        Recursively flattens a nested dictionary for Neo4j property storage.
-        Lists of dicts or any list containing dicts are converted to JSON strings.
-        Lists of primitives are left as-is.
-        """
         items = []
         for k, v in d.items():
             new_key = f"{parent_key}{sep}{k}" if parent_key else k
@@ -58,7 +122,6 @@ class Neo4jFlowIngester:
         with self.driver.session() as session:
             cypher_flows = []
             for flow in flows_batch:
-                # Determine which format this flow is
                 honeypot = all(flow.get(field) is not None for field in ["src_ip", "dst_ip", "src_port", "dst_port", "start_time"])
                 netflow = all(flow.get(field) is not None for field in ["sourceIPv4Address", "destinationIPv4Address", "sourceTransportPort", "destinationTransportPort", "flowStartMilliseconds"])
                 if not (honeypot or netflow):
@@ -86,14 +149,14 @@ class Neo4jFlowIngester:
                     src_port = flow["sourceTransportPort"]
                     dst_port = flow["destinationTransportPort"]
 
-                # Flatten all properties (nested dicts and lists)
-                flow_props = {}
-                for k, v in flow.items():
-                    if isinstance(v, dict):
-                        flat = self.flatten_dict(v, parent_key=k)
-                        flow_props.update(flat)
-                    else:
-                        flow_props[k] = v
+                # Flatten and record seen fields for audit
+                flow_props = self.flatten_dict(flow)
+                for k in flow_props:
+                    self.seen_fields.add(k)
+
+                protocol_name = extract_protocol(flow)
+                src_info = IP_DICTIONARY.get(src_ip, {})
+                dst_info = IP_DICTIONARY.get(dst_ip, {})
 
                 cypher_flows.append({
                     "flowId": flow_id,
@@ -101,7 +164,10 @@ class Neo4jFlowIngester:
                     "dst_ip": dst_ip,
                     "src_port": src_port,
                     "dst_port": dst_port,
-                    "props": flow_props
+                    "props": flow_props,
+                    "protocol": protocol_name,
+                    "src_info": src_info,
+                    "dst_info": dst_info
                 })
 
             if not cypher_flows:
@@ -110,15 +176,19 @@ class Neo4jFlowIngester:
             query = """
             UNWIND $flows AS flow
             MERGE (src:Host {ip: flow.src_ip})
+            SET src += flow.src_info
             MERGE (dst:Host {ip: flow.dst_ip})
+            SET dst += flow.dst_info
             MERGE (srcPort:Port {port: flow.src_port})
             MERGE (dstPort:Port {port: flow.dst_port})
             MERGE (f:Flow {flowId: flow.flowId})
             SET f += flow.props
-            MERGE (src)-[:SENT]->(f)
-            MERGE (dst)-[:RECEIVED]->(f)
+            MERGE (proto:Protocol {name: flow.protocol})
+            MERGE (f)-[:USES_PROTOCOL]->(proto)
             MERGE (f)-[:USES_SRC_PORT]->(srcPort)
             MERGE (f)-[:USES_DST_PORT]->(dstPort)
+            MERGE (src)-[:SENT]->(f)
+            MERGE (dst)-[:RECEIVED]->(f)
             """
             try:
                 session.run(query, flows=cypher_flows)
@@ -147,7 +217,7 @@ class Neo4jFlowIngester:
         batch = []
         total_processed = 0
         for json_file in log_dir.glob("*.json"):
-            fname = str(json_file.resolve())
+            fname = os.path.basename(str(json_file.resolve()))   # <--- FIXED: only use the file name!
             if self.has_been_processed(fname):
                 print(f"Skipping already processed file: {fname}")
                 continue
@@ -171,11 +241,10 @@ class Neo4jFlowIngester:
                             print(f"Unexpected error parsing line in {json_file}: {e}")
                             continue
 
-                        # --- Robust logic for both formats ---
                         if isinstance(flow_data, dict) and "flows" in flow_data and isinstance(flow_data["flows"], dict):
-                            batch.append(flow_data["flows"])    # NetFlow/IPFIX
+                            batch.append(flow_data["flows"])
                         elif isinstance(flow_data, dict):
-                            batch.append(flow_data)             # Honeypot/STINGAR
+                            batch.append(flow_data)
                         else:
                             self.skipped_logs.append(flow_data)
 
@@ -183,12 +252,14 @@ class Neo4jFlowIngester:
                             self.process_flow_batch(batch)
                             total_processed += len(batch)
                             batch.clear()
-                self.mark_processed(fname)
+                self.mark_processed(fname)   # <--- FIXED: also use only the file name here!
             except Exception as e:
                 print(f"Error reading {json_file}: {e}")
         if batch:
             self.process_flow_batch(batch)
             total_processed += len(batch)
+
+        # --- Print all fields seen and (optionally) definitions for LLM context ---
         print(f"Final total flows processed: {total_processed}")
         print(f"Skipped flows due to missing fields: {len(self.skipped_logs)}")
         if self.skipped_logs:
@@ -196,8 +267,10 @@ class Neo4jFlowIngester:
                 json.dump(self.skipped_logs, f, indent=2)
             print("Skipped flows saved to skipped_flows.json")
 
-
-    
+        print("\n=== Audit: All flow property fields seen ===")
+        for field in sorted(self.seen_fields):
+            definition = FIELD_DEFINITIONS.get(field, "")
+            print(f"{field}: {definition}")
 
 def main():
     ingester = Neo4jFlowIngester(batch_size=1000)
