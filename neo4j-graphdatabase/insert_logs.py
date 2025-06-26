@@ -1,3 +1,4 @@
+import pandas as pd
 import json
 import os
 import ast
@@ -21,7 +22,7 @@ def load_ip_dictionary(csv_path):
 
 # ---- Load Flow Field Definitions ----
 def load_field_definitions(xlsx_path):
-    import pandas as pd
+   
     try:
         df = pd.read_excel(xlsx_path)
         # Assume columns: "Field" and "Definition"
@@ -31,8 +32,8 @@ def load_field_definitions(xlsx_path):
         print(f"Could not load field definitions: {e}")
         return {}
 
-IP_DICTIONARY = load_ip_dictionary('/mnt/data/ip_dictionary (1).csv')
-FIELD_DEFINITIONS = load_field_definitions('/mnt/data/mistral_flow_fields (1).xlsx')
+IP_DICTIONARY = load_ip_dictionary('enrichment_data/ip_dictionary.csv')
+FIELD_DEFINITIONS = load_field_definitions('enrichment_data/mistral_flow_fields.xlsx')
 
 # --- Protocol Map for Enrichment ---
 PROTOCOL_MAP = {
@@ -195,7 +196,7 @@ class Neo4jFlowIngester:
         batch = []
         total_processed = 0
         for json_file in log_dir.glob("*.json"):
-            fname = str(json_file.resolve())
+            fname = os.path.basename(str(json_file.resolve()))   # <--- FIXED: only use the file name!
             if self.has_been_processed(fname):
                 print(f"Skipping already processed file: {fname}")
                 continue
@@ -230,7 +231,7 @@ class Neo4jFlowIngester:
                             self.process_flow_batch(batch)
                             total_processed += len(batch)
                             batch.clear()
-                self.mark_processed(fname)
+                self.mark_processed(fname)   # <--- FIXED: also use only the file name here!
             except Exception as e:
                 print(f"Error reading {json_file}: {e}")
         if batch:
