@@ -6,7 +6,6 @@ import csv
 from pathlib import Path
 from neo4j import GraphDatabase
 
-# ---- Load IP Dictionary ----
 def load_ip_dictionary(csv_path):
     ip_dict = {}
     try:
@@ -20,7 +19,6 @@ def load_ip_dictionary(csv_path):
         print(f"Could not load IP dictionary: {e}")
     return ip_dict
 
-# ---- Load Flow Field Definitions ----
 def load_field_definitions(xlsx_path):
     try:
         df = pd.read_excel(xlsx_path)
@@ -29,9 +27,6 @@ def load_field_definitions(xlsx_path):
     except Exception as e:
         print(f"Could not load field definitions: {e}")
         return {}
-
-IP_DICTIONARY = load_ip_dictionary('enrichment_data/ip_dictionary.csv')
-FIELD_DEFINITIONS = load_field_definitions('enrichment_data/mistral_flow_fields.xlsx')
 
 def load_protocol_map(csv_path):
     protocol_map = {}
@@ -50,6 +45,8 @@ def load_protocol_map(csv_path):
         print(f"Could not load protocol map: {e}")
     return protocol_map
 
+IP_DICTIONARY = load_ip_dictionary('enrichment_data/ip_dictionary.csv')
+FIELD_DEFINITIONS = load_field_definitions('enrichment_data/mistral_flow_fields.xlsx')
 PROTOCOL_MAP = load_protocol_map('enrichment_data/protocol-numbers.csv')
 
 def extract_protocol(flow):
@@ -78,7 +75,7 @@ class Neo4jFlowIngester:
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self.batch_size = batch_size
         self.skipped_logs = []
-        self.seen_fields = set()  # For audit
+        self.seen_fields = set()
 
     def close(self):
         self.driver.close()
@@ -145,7 +142,6 @@ class Neo4jFlowIngester:
                     src_port = flow["sourceTransportPort"]
                     dst_port = flow["destinationTransportPort"]
 
-                # Determine properties
                 flow_props = self.flatten_dict(flow)
                 for k in flow_props:
                     self.seen_fields.add(k)
@@ -154,7 +150,7 @@ class Neo4jFlowIngester:
                 src_info = IP_DICTIONARY.get(src_ip, {})
                 dst_info = IP_DICTIONARY.get(dst_ip, {})
 
-                # Set malicious/honeypot properties for all, True only for sampleSTINGAR
+                # Set malicious/honeypot properties and set node labels
                 flow_props['malicious'] = bool(malicious_honeypot)
                 flow_props['honeypot'] = bool(malicious_honeypot)
 
@@ -173,7 +169,7 @@ class Neo4jFlowIngester:
             if not cypher_flows:
                 return
 
-            # Choose labels based on flag
+            # Choose node labels based on flag
             if malicious_honeypot:
                 labels = ":Flow:Malicious:Honeypot"
             else:
@@ -220,7 +216,6 @@ class Neo4jFlowIngester:
         if not log_dir.exists():
             print(f"Directory {directory_path} does not exist")
             return
-        batch = []
         total_processed = 0
         for json_file in log_dir.glob("*.json"):
             fname = os.path.basename(str(json_file.resolve()))
@@ -229,8 +224,8 @@ class Neo4jFlowIngester:
                 continue
             print(f"Processing file: {fname}")
 
-            # Check if this file should mark flows as malicious/honeypot
             is_malicious_honeypot = (fname == "sampleSTINGAR.json")
+            batch = []  # <<< move batch initialization inside file loop
 
             try:
                 with open(json_file, 'r') as f:
@@ -262,14 +257,13 @@ class Neo4jFlowIngester:
                             self.process_flow_batch(batch, malicious_honeypot=is_malicious_honeypot)
                             total_processed += len(batch)
                             batch.clear()
+                # <<< process remaining flows for this file with the correct label
+                if batch:
+                    self.process_flow_batch(batch, malicious_honeypot=is_malicious_honeypot)
+                    total_processed += len(batch)
                 self.mark_processed(fname)
             except Exception as e:
                 print(f"Error reading {json_file}: {e}")
-        if batch:
-            # If the last batch is left, use the right label
-            is_malicious_honeypot = (fname == "sampleSTINGAR.json")
-            self.process_flow_batch(batch, malicious_honeypot=is_malicious_honeypot)
-            total_processed += len(batch)
 
         print(f"Final total flows processed: {total_processed}")
         print(f"Skipped flows due to missing fields: {len(self.skipped_logs)}")
