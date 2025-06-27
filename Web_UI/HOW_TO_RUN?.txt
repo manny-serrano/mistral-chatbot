@@ -1,0 +1,9 @@
+cd mistral-enhancing-network-security-analysis/Web_UI
+
+npm install --legacy-peer-deps 
+or
+pnpm install
+
+npm run dev
+or
+pnpm dev
