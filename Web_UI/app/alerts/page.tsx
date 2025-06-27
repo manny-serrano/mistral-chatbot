@@ -1,0 +1,1014 @@
+"use client"
+import { useState, useMemo } from "react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  ShieldCheck,
+  AlertTriangle,
+  Search,
+  Filter,
+  RotateCcw,
+  Clock,
+  Eye,
+  CheckCircle,
+  AlertCircle,
+  Zap,
+  Globe,
+  Users,
+  Database,
+  Activity,
+  MoreHorizontal,
+  Archive,
+  Flag,
+  MessageSquare,
+  ExternalLink,
+  Download,
+  Trash2,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  MapPin,
+  Shield,
+  Wifi,
+  Server,
+} from "lucide-react"
+import { ProfileDropdown } from "@/components/profile-dropdown"
+
+// Enhanced alert data with more detailed information
+const alertsData = [
+  {
+    id: "ALT-2024-001247",
+    severity: "critical" as const,
+    type: "malware",
+    title: "Ransomware Activity Detected",
+    description: "WannaCry variant detected attempting to encrypt files on multiple endpoints",
+    timestamp: "2 minutes ago",
+    timeValue: 2,
+    source: "192.168.1.87",
+    destination: "Multiple endpoints",
+    status: "active" as const,
+    assignee: "Sarah Chen",
+    tags: ["ransomware", "encryption", "critical-infrastructure"],
+    affectedAssets: 15,
+    confidence: 95,
+    location: "San Francisco, CA",
+    firstSeen: "2024-12-26 14:32:15",
+    lastSeen: "2024-12-26 14:34:22",
+    riskScore: 9.8,
+  },
+  {
+    id: "ALT-2024-001246",
+    severity: "high" as const,
+    type: "network",
+    title: "Suspicious Outbound Traffic",
+    description: "Large data transfer to known command & control server detected",
+    timestamp: "8 minutes ago",
+    timeValue: 8,
+    source: "10.0.0.45",
+    destination: "185.143.223.12",
+    status: "investigating" as const,
+    assignee: "Mike Rodriguez",
+    tags: ["data-exfiltration", "c2-communication"],
+    affectedAssets: 1,
+    confidence: 87,
+    location: "New York, NY",
+    firstSeen: "2024-12-26 14:26:33",
+    lastSeen: "2024-12-26 14:34:15",
+    riskScore: 8.5,
+  },
+  {
+    id: "ALT-2024-001245",
+    severity: "high" as const,
+    type: "authentication",
+    title: "Brute Force Attack",
+    description: "Multiple failed SSH login attempts from external IP address",
+    timestamp: "15 minutes ago",
+    timeValue: 15,
+    source: "203.0.113.42",
+    destination: "ssh-server-01",
+    status: "resolved" as const,
+    assignee: "Alex Thompson",
+    tags: ["brute-force", "ssh", "external-threat"],
+    affectedAssets: 1,
+    confidence: 92,
+    location: "Moscow, Russia",
+    firstSeen: "2024-12-26 14:19:45",
+    lastSeen: "2024-12-26 14:27:12",
+    riskScore: 7.8,
+  },
+  {
+    id: "ALT-2024-001244",
+    severity: "medium" as const,
+    type: "network",
+    title: "Port Scan Activity",
+    description: "Systematic port scanning detected from internal network",
+    timestamp: "23 minutes ago",
+    timeValue: 23,
+    source: "192.168.1.200",
+    destination: "192.168.1.0/24",
+    status: "active" as const,
+    assignee: "Lisa Park",
+    tags: ["port-scan", "reconnaissance", "internal"],
+    affectedAssets: 254,
+    confidence: 78,
+    location: "Internal Network",
+    firstSeen: "2024-12-26 14:11:33",
+    lastSeen: "2024-12-26 14:34:01",
+    riskScore: 6.2,
+  },
+  {
+    id: "ALT-2024-001243",
+    severity: "medium" as const,
+    type: "data",
+    title: "Unusual Database Access",
+    description: "Abnormal database query patterns detected outside business hours",
+    timestamp: "35 minutes ago",
+    timeValue: 35,
+    source: "db-user-analytics",
+    destination: "customer-db-01",
+    status: "investigating" as const,
+    assignee: "David Kim",
+    tags: ["database", "anomaly", "after-hours"],
+    affectedAssets: 1,
+    confidence: 65,
+    location: "Data Center A",
+    firstSeen: "2024-12-26 13:59:22",
+    lastSeen: "2024-12-26 14:32:45",
+    riskScore: 5.8,
+  },
+  {
+    id: "ALT-2024-001242",
+    severity: "low" as const,
+    type: "system",
+    title: "Certificate Expiry Warning",
+    description: "SSL certificate for web-server-03 expires in 7 days",
+    timestamp: "1 hour ago",
+    timeValue: 60,
+    source: "web-server-03",
+    destination: "N/A",
+    status: "acknowledged" as const,
+    assignee: "Emma Wilson",
+    tags: ["certificate", "expiry", "maintenance"],
+    affectedAssets: 1,
+    confidence: 100,
+    location: "DMZ",
+    firstSeen: "2024-12-26 13:34:15",
+    lastSeen: "2024-12-26 13:34:15",
+    riskScore: 2.1,
+  },
+  {
+    id: "ALT-2024-001241",
+    severity: "critical" as const,
+    type: "malware",
+    title: "Advanced Persistent Threat",
+    description: "APT group indicators detected in network traffic and system logs",
+    timestamp: "45 minutes ago",
+    timeValue: 45,
+    source: "Multiple sources",
+    destination: "Multiple targets",
+    status: "escalated" as const,
+    assignee: "Security Team Lead",
+    tags: ["apt", "advanced-threat", "nation-state"],
+    affectedAssets: 8,
+    confidence: 89,
+    location: "Multiple locations",
+    firstSeen: "2024-12-26 13:49:33",
+    lastSeen: "2024-12-26 14:33:12",
+    riskScore: 9.5,
+  },
+  {
+    id: "ALT-2024-001240",
+    severity: "high" as const,
+    type: "network",
+    title: "DDoS Attack Detected",
+    description: "Distributed denial of service attack targeting web infrastructure",
+    timestamp: "1.2 hours ago",
+    timeValue: 72,
+    source: "Multiple botnets",
+    destination: "web-cluster-01",
+    status: "mitigated" as const,
+    assignee: "Network Team",
+    tags: ["ddos", "botnet", "infrastructure"],
+    affectedAssets: 5,
+    confidence: 94,
+    location: "Global",
+    firstSeen: "2024-12-26 13:22:15",
+    lastSeen: "2024-12-26 14:15:33",
+    riskScore: 8.2,
+  },
+]
+
+export default function AlertsPage() {
+  // Filter states
+  const [severityFilter, setSeverityFilter] = useState<string>("all")
+  const [typeFilter, setTypeFilter] = useState<string>("all")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [timeRangeFilter, setTimeRangeFilter] = useState<string>("all")
+  const [searchQuery, setSearchQuery] = useState<string>("")
+  const [selectedAlerts, setSelectedAlerts] = useState<string[]>([])
+  const [sortBy, setSortBy] = useState<string>("timestamp")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+
+  // Filter alerts based on current filters
+  const filteredAlerts = useMemo(() => {
+    const filtered = alertsData.filter((alert) => {
+      // Severity filter
+      if (severityFilter !== "all" && alert.severity !== severityFilter) {
+        return false
+      }
+
+      // Type filter
+      if (typeFilter !== "all" && alert.type !== typeFilter) {
+        return false
+      }
+
+      // Status filter
+      if (statusFilter !== "all" && alert.status !== statusFilter) {
+        return false
+      }
+
+      // Time range filter
+      if (timeRangeFilter !== "all") {
+        const timeLimit = Number.parseInt(timeRangeFilter)
+        if (alert.timeValue > timeLimit) {
+          return false
+        }
+      }
+
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        return (
+          alert.title.toLowerCase().includes(query) ||
+          alert.description.toLowerCase().includes(query) ||
+          alert.source.toLowerCase().includes(query) ||
+          alert.id.toLowerCase().includes(query) ||
+          alert.tags.some((tag) => tag.toLowerCase().includes(query))
+        )
+      }
+
+      return true
+    })
+
+    // Sort alerts
+    filtered.sort((a, b) => {
+      let aValue: any = a[sortBy as keyof typeof a]
+      let bValue: any = b[sortBy as keyof typeof b]
+
+      if (sortBy === "timestamp") {
+        aValue = a.timeValue
+        bValue = b.timeValue
+      }
+
+      if (sortBy === "severity") {
+        const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 }
+        aValue = severityOrder[a.severity]
+        bValue = severityOrder[b.severity]
+      }
+
+      if (typeof aValue === "string") {
+        aValue = aValue.toLowerCase()
+        bValue = bValue.toLowerCase()
+      }
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1
+      } else {
+        return aValue < bValue ? 1 : -1
+      }
+    })
+
+    return filtered
+  }, [severityFilter, typeFilter, statusFilter, timeRangeFilter, searchQuery, sortBy, sortOrder])
+
+  // Calculate filtered alert counts by severity
+  const filteredAlertCounts = useMemo(() => {
+    const counts = { critical: 0, high: 0, medium: 0, low: 0, total: 0 }
+    filteredAlerts.forEach((alert) => {
+      counts[alert.severity]++
+      counts.total++
+    })
+    return counts
+  }, [filteredAlerts])
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSeverityFilter("all")
+    setTypeFilter("all")
+    setStatusFilter("all")
+    setTimeRangeFilter("all")
+    setSearchQuery("")
+    setSelectedAlerts([])
+  }
+
+  // Check if any filters are active
+  const hasActiveFilters =
+    severityFilter !== "all" ||
+    typeFilter !== "all" ||
+    statusFilter !== "all" ||
+    timeRangeFilter !== "all" ||
+    searchQuery
+
+  // Handle alert selection
+  const toggleAlertSelection = (alertId: string) => {
+    setSelectedAlerts((prev) => (prev.includes(alertId) ? prev.filter((id) => id !== alertId) : [...prev, alertId]))
+  }
+
+  const selectAllAlerts = () => {
+    setSelectedAlerts(filteredAlerts.map((alert) => alert.id))
+  }
+
+  const clearSelection = () => {
+    setSelectedAlerts([])
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-40 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
+      </div>
+
+      {/* Grid pattern overlay */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
+
+      {/* Header */}
+      <header className="border-b border-purple-500/20 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-50 relative">
+        <div className="mx-auto max-w-7xl px-6 py-4">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
+                <ShieldCheck className="h-5 w-5 text-white" />
+              </div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                CyberSense AI
+              </h1>
+            </Link>
+            <nav className="hidden md:flex items-center gap-6">
+              <Link href="/" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                Home
+              </Link>
+              <Link
+                href="/dashboard"
+                className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+              >
+                Dashboard
+              </Link>
+              <span className="text-sm font-medium text-purple-300">Alerts</span>
+              <Link
+                href="/reports"
+                className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+              >
+                Reports
+              </Link>
+              <Link
+                href="/settings"
+                className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+              >
+                Settings
+              </Link>
+              <ProfileDropdown />
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="relative py-8">
+        {/* Enhanced background for better contrast */}
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent" />
+
+        <div className="relative mx-auto max-w-7xl px-6">
+          {/* Page Header */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-red-500/20 p-3 border border-red-400/30 backdrop-blur-sm">
+                  <AlertTriangle className="h-6 w-6 text-red-300" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-bold text-white">Security Alerts</h1>
+                  <p className="text-lg text-zinc-200 mt-1">Monitor and respond to security threats in real-time</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent backdrop-blur-sm"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+                <Button className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Alerts
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Alert Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+            <Card className="bg-gray-900/80 border-red-400/40 backdrop-blur-xl">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-zinc-300">Critical</CardTitle>
+                  <AlertCircle className="h-4 w-4 text-red-400" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-400">{filteredAlertCounts.critical}</div>
+                <p className="text-xs text-red-300 mt-1">Immediate action required</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-zinc-300">High</CardTitle>
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-amber-400">{filteredAlertCounts.high}</div>
+                <p className="text-xs text-amber-300 mt-1">Action needed soon</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-900/80 border-yellow-400/40 backdrop-blur-xl">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-zinc-300">Medium</CardTitle>
+                  <Activity className="h-4 w-4 text-yellow-400" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-400">{filteredAlertCounts.medium}</div>
+                <p className="text-xs text-yellow-300 mt-1">Monitor closely</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-zinc-300">Low</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-blue-400" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-400">{filteredAlertCounts.low}</div>
+                <p className="text-xs text-blue-300 mt-1">Informational</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-zinc-300">Total</CardTitle>
+                  <Shield className="h-4 w-4 text-purple-400" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-white">{filteredAlertCounts.total}</div>
+                <p className="text-xs text-zinc-300 mt-1">{hasActiveFilters ? "Filtered" : "All"} alerts</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filters and Controls */}
+          <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl mb-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-purple-400" />
+                  <CardTitle className="text-lg text-white">Filter & Search Alerts</CardTitle>
+                  {hasActiveFilters && (
+                    <Badge variant="outline" className="text-xs border-purple-400/30 text-purple-300">
+                      {filteredAlerts.length} of {alertsData.length} alerts
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedAlerts.length > 0 && (
+                    <>
+                      <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                        {selectedAlerts.length} selected
+                      </Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={clearSelection}
+                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                      >
+                        Clear
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm"
+                            className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700"
+                          >
+                            Bulk Actions
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="bg-gray-800 border-purple-400/30">
+                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Mark as Resolved
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
+                            <Archive className="h-4 w-4 mr-2" />
+                            Archive
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
+                            <Flag className="h-4 w-4 mr-2" />
+                            Escalate
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-purple-500/20" />
+                          <DropdownMenuItem className="text-red-400 hover:bg-red-900/40">
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+                {/* Search */}
+                <div className="md:col-span-2 space-y-2">
+                  <Label className="text-xs font-medium text-zinc-400">Search</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                    <Input
+                      placeholder="Search alerts, IDs, tags..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 bg-zinc-800 border-zinc-700 text-white focus:border-purple-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Severity Filter */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-zinc-400">Severity</Label>
+                  <Select value={severityFilter} onValueChange={setSeverityFilter}>
+                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="all">All Severities</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Type Filter */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-zinc-400">Type</Label>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="malware">Malware</SelectItem>
+                      <SelectItem value="network">Network</SelectItem>
+                      <SelectItem value="authentication">Authentication</SelectItem>
+                      <SelectItem value="data">Data</SelectItem>
+                      <SelectItem value="system">System</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Status Filter */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-zinc-400">Status</Label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="investigating">Investigating</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                      <SelectItem value="escalated">Escalated</SelectItem>
+                      <SelectItem value="acknowledged">Acknowledged</SelectItem>
+                      <SelectItem value="mitigated">Mitigated</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Time Range Filter */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-zinc-400">Time Range</Label>
+                  <Select value={timeRangeFilter} onValueChange={setTimeRangeFilter}>
+                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="all">All Time</SelectItem>
+                      <SelectItem value="5">Last 5 minutes</SelectItem>
+                      <SelectItem value="30">Last 30 minutes</SelectItem>
+                      <SelectItem value="60">Last hour</SelectItem>
+                      <SelectItem value="1440">Last 24 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Sort and Clear Filters */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs font-medium text-zinc-400">Sort by:</Label>
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                      <SelectTrigger className="w-32 bg-zinc-800 border-zinc-700 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-800 border-zinc-700">
+                        <SelectItem value="timestamp">Time</SelectItem>
+                        <SelectItem value="severity">Severity</SelectItem>
+                        <SelectItem value="riskScore">Risk Score</SelectItem>
+                        <SelectItem value="title">Title</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                    >
+                      {sortOrder === "asc" ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={selectAllAlerts}
+                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                  >
+                    Select All
+                  </Button>
+                </div>
+
+                {hasActiveFilters && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-2" />
+                    Clear Filters
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Alerts List */}
+          <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg text-white">
+                  {hasActiveFilters ? "Filtered Alerts" : "All Alerts"}
+                </CardTitle>
+                <span className="text-sm text-zinc-400">
+                  Showing {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-zinc-800">
+                {filteredAlerts.length > 0 ? (
+                  filteredAlerts.map((alert) => (
+                    <AlertItem
+                      key={alert.id}
+                      alert={alert}
+                      isSelected={selectedAlerts.includes(alert.id)}
+                      onToggleSelection={toggleAlertSelection}
+                    />
+                  ))
+                ) : (
+                  <div className="p-8 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="rounded-full bg-zinc-800 p-3">
+                        <Search className="h-6 w-6 text-zinc-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-medium text-white">No alerts found</h3>
+                        <p className="text-sm text-zinc-400 mt-1">Try adjusting your filters or search criteria</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={clearFilters}
+                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                      >
+                        Clear all filters
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
+                <ShieldCheck className="h-4 w-4 text-white" />
+              </div>
+              <span className="font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                CyberSense AI
+              </span>
+            </div>
+            <p className="text-sm text-zinc-400">© 2025 CyberSense AI. Built for cybersecurity professionals.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}
+
+// Alert Item Component
+interface AlertItemProps {
+  alert: (typeof alertsData)[0]
+  isSelected: boolean
+  onToggleSelection: (alertId: string) => void
+}
+
+function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
+  const severityConfig = {
+    critical: { color: "red", bgColor: "bg-red-900/20", borderColor: "border-red-500/30", textColor: "text-red-400" },
+    high: {
+      color: "amber",
+      bgColor: "bg-amber-900/20",
+      borderColor: "border-amber-500/30",
+      textColor: "text-amber-400",
+    },
+    medium: {
+      color: "yellow",
+      bgColor: "bg-yellow-900/20",
+      borderColor: "border-yellow-500/30",
+      textColor: "text-yellow-400",
+    },
+    low: { color: "blue", bgColor: "bg-blue-900/20", borderColor: "border-blue-500/30", textColor: "text-blue-400" },
+  }
+
+  const statusConfig = {
+    active: { color: "text-red-400", bg: "bg-red-500/20", border: "border-red-500/30" },
+    investigating: { color: "text-blue-400", bg: "bg-blue-500/20", border: "border-blue-500/30" },
+    resolved: { color: "text-green-400", bg: "bg-green-500/20", border: "border-green-500/30" },
+    escalated: { color: "text-purple-400", bg: "bg-purple-500/20", border: "border-purple-500/30" },
+    acknowledged: { color: "text-yellow-400", bg: "bg-yellow-500/20", border: "border-yellow-500/30" },
+    mitigated: { color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30" },
+  }
+
+  const typeIcons = {
+    malware: <Zap className="h-4 w-4" />,
+    network: <Globe className="h-4 w-4" />,
+    authentication: <Users className="h-4 w-4" />,
+    data: <Database className="h-4 w-4" />,
+    system: <Activity className="h-4 w-4" />,
+  }
+
+  const severityConf = severityConfig[alert.severity]
+  const statusConf = statusConfig[alert.status]
+
+  return (
+    <div
+      className={`p-4 hover:bg-zinc-800/50 transition-colors ${isSelected ? "bg-purple-900/20 border-l-4 border-l-purple-500" : ""}`}
+    >
+      <div className="flex items-start gap-4">
+        {/* Selection Checkbox */}
+        <div className="flex items-center pt-1">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => onToggleSelection(alert.id)}
+            className="border-purple-400/30 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+          />
+        </div>
+
+        {/* Alert Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Badge
+                className={`${severityConf.bgColor} ${severityConf.textColor} ${severityConf.borderColor} text-xs`}
+              >
+                {alert.severity.toUpperCase()}
+              </Badge>
+              <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-400">
+                <div className="flex items-center gap-1">
+                  {typeIcons[alert.type as keyof typeof typeIcons]}
+                  {alert.type.charAt(0).toUpperCase() + alert.type.slice(1)}
+                </div>
+              </Badge>
+              <Badge className={`${statusConf.bg} ${statusConf.color} ${statusConf.border} text-xs`}>
+                {alert.status.charAt(0).toUpperCase() + alert.status.slice(1)}
+              </Badge>
+              <span className="text-xs font-mono text-zinc-500">{alert.id}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-zinc-400 hover:text-white">
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-gray-900 border-purple-400/40 max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-white">{alert.title}</DialogTitle>
+                    <DialogDescription className="text-zinc-300">{alert.description}</DialogDescription>
+                  </DialogHeader>
+                  <AlertDetailsModal alert={alert} />
+                </DialogContent>
+              </Dialog>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-zinc-400 hover:text-white">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-gray-800 border-purple-400/30">
+                  <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Mark as Resolved
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
+                    <Flag className="h-4 w-4 mr-2" />
+                    Escalate
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Add Comment
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-purple-500/20" />
+                  <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
+                    <Archive className="h-4 w-4 mr-2" />
+                    Archive
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          <h4 className="font-medium text-white mb-2 text-lg">{alert.title}</h4>
+          <p className="text-sm text-zinc-300 mb-3">{alert.description}</p>
+
+          {/* Alert Metadata */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-zinc-400 mb-3">
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <span>{alert.timestamp}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Wifi className="h-3 w-3" />
+              <span>Source: {alert.source}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Server className="h-3 w-3" />
+              <span>Target: {alert.destination}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <MapPin className="h-3 w-3" />
+              <span>{alert.location}</span>
+            </div>
+          </div>
+
+          {/* Risk Score and Confidence */}
+          <div className="flex items-center gap-6 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400">Risk Score:</span>
+              <Badge
+                className={`text-xs ${alert.riskScore >= 8 ? "bg-red-500/20 text-red-400 border-red-500/30" : alert.riskScore >= 6 ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-blue-500/20 text-blue-400 border-blue-500/30"}`}
+              >
+                {alert.riskScore}/10
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400">Confidence:</span>
+              <span className="text-xs text-white">{alert.confidence}%</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400">Affected Assets:</span>
+              <span className="text-xs text-white">{alert.affectedAssets}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400">Assignee:</span>
+              <span className="text-xs text-white">{alert.assignee}</span>
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {alert.tags.map((tag) => (
+              <Badge key={tag} variant="outline" className="text-xs border-zinc-600 text-zinc-400 bg-zinc-800/50">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Alert Details Modal Component
+function AlertDetailsModal({ alert }: { alert: (typeof alertsData)[0] }) {
+  return (
+    <div className="space-y-6">
+      {/* Timeline */}
+      <div>
+        <h3 className="text-lg font-medium text-white mb-3">Timeline</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-zinc-400">First Seen:</span>
+            <span className="text-white">{alert.firstSeen}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-zinc-400">Last Seen:</span>
+            <span className="text-white">{alert.lastSeen}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Technical Details */}
+      <div>
+        <h3 className="text-lg font-medium text-white mb-3">Technical Details</h3>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="text-zinc-400">Source IP:</span>
+            <p className="text-white font-mono">{alert.source}</p>
+          </div>
+          <div>
+            <span className="text-zinc-400">Destination:</span>
+            <p className="text-white font-mono">{alert.destination}</p>
+          </div>
+          <div>
+            <span className="text-zinc-400">Risk Score:</span>
+            <p className="text-white">{alert.riskScore}/10</p>
+          </div>
+          <div>
+            <span className="text-zinc-400">Confidence:</span>
+            <p className="text-white">{alert.confidence}%</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-3">
+        <Button className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700">
+          <CheckCircle className="h-4 w-4 mr-2" />
+          Resolve Alert
+        </Button>
+        <Button variant="outline" className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent">
+          <Flag className="h-4 w-4 mr-2" />
+          Escalate
+        </Button>
+        <Button variant="outline" className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent">
+          <ExternalLink className="h-4 w-4 mr-2" />
+          Investigate
+        </Button>
+      </div>
+    </div>
+  )
+}
