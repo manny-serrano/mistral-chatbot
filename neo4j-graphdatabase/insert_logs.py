@@ -44,7 +44,25 @@ def load_protocol_map(csv_path):
     except Exception as e:
         print(f"Could not load protocol map: {e}")
     return protocol_map
+def load_port_service_map(csv_path):
+    port_service_map = {}
+    try:
+        with open(csv_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                # The column names may vary; adjust if needed!
+                port = row.get('Port Number') or row.get('port') or row.get('Port')
+                service = row.get('Service Name') or row.get('service') or row.get('Service')
+                if port and service:
+                    try:
+                        port_service_map[int(port)] = service.lower()
+                    except Exception:
+                        continue
+    except Exception as e:
+        print(f"Could not load port service map: {e}")
+    return port_service_map
 
+PORT_SERVICE_MAP = load_port_service_map('enrichment_data/service-names-port-numbers (1).csv')
 IP_DICTIONARY = load_ip_dictionary('enrichment_data/ip_dictionary.csv')
 FIELD_DEFINITIONS = load_field_definitions('enrichment_data/mistral_flow_fields.xlsx')
 PROTOCOL_MAP = load_protocol_map('enrichment_data/protocol-numbers.csv')
@@ -141,6 +159,16 @@ class Neo4jFlowIngester:
                     dst_ip = flow["destinationIPv4Address"]
                     src_port = flow["sourceTransportPort"]
                     dst_port = flow["destinationTransportPort"]
+                # --- Look up port service names ---
+                try:
+                    src_service = PORT_SERVICE_MAP.get(int(src_port), None)
+                except Exception:
+                    src_service = None
+                try:
+                    dst_service = PORT_SERVICE_MAP.get(int(dst_port), None)
+                except Exception:
+                    dst_service = None
+
 
                 flow_props = self.flatten_dict(flow)
                 for k in flow_props:
@@ -155,16 +183,20 @@ class Neo4jFlowIngester:
                 flow_props['honeypot'] = bool(malicious_honeypot)
 
                 cypher_flows.append({
-                    "flowId": flow_id,
-                    "src_ip": src_ip,
-                    "dst_ip": dst_ip,
-                    "src_port": src_port,
-                    "dst_port": dst_port,
-                    "props": flow_props,
-                    "protocol": protocol_name,
-                    "src_info": src_info,
-                    "dst_info": dst_info,
+                "flowId": flow_id,
+                "src_ip": src_ip,
+                "dst_ip": dst_ip,
+                "src_port": src_port,
+                "dst_port": dst_port,
+                "src_service": src_service,
+                "dst_service": dst_service,
+                "props": flow_props,
+                "protocol": protocol_name,
+                "src_info": src_info,
+                "dst_info": dst_info,
                 })
+    
+                                     
 
             if not cypher_flows:
                 return
@@ -182,7 +214,9 @@ class Neo4jFlowIngester:
             MERGE (dst:Host {{ip: flow.dst_ip}})
             SET dst += flow.dst_info
             MERGE (srcPort:Port {{port: flow.src_port}})
+            SET srcPort.service = flow.src_service
             MERGE (dstPort:Port {{port: flow.dst_port}})
+            SET dstPort.service = flow.dst_service
             MERGE (f{labels} {{flowId: flow.flowId}})
             SET f += flow.props
             MERGE (proto:Protocol {{name: flow.protocol}})
