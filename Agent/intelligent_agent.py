@@ -170,6 +170,8 @@ class Neo4jRetriever(BaseRetriever):
                     content = self._format_neo4j_result(record)
                     metadata = {
                         "source": "neo4j",
+                        "collection": "neo4j_graph",  # Set proper collection name
+                        "data_type": "graph_network_flows",  # Set proper data type  
                         "query_type": "graph",
                         "record_data": dict(record)
                     }
