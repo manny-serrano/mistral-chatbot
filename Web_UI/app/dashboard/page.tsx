@@ -1,9 +1,17 @@
+"use client"
+
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { Chat } from "@/components/chat"
-import { NetworkGraph } from "@/components/network-graph"
 import { ThreatDashboard } from "@/components/threat-dashboard"
 import { ShieldCheck, Bell } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
+
+// Dynamically import NetworkGraph to prevent SSR issues
+const NetworkGraph = dynamic(() => import("@/components/network-graph").then(mod => ({ default: mod.NetworkGraph })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-64 bg-zinc-900 rounded-lg border border-zinc-800"><p className="text-zinc-400">Loading network graph...</p></div>
+})
 
 export default function DashboardPage() {
   return (
@@ -48,7 +56,6 @@ export default function DashboardPage() {
       <div className="mx-auto flex w-full max-w-7xl flex-1 gap-6 p-6 relative z-10">
         <div className="flex w-2/3 flex-col gap-6">
           <ThreatDashboard />
-          <NetworkGraph />
         </div>
         <div className="w-1/3">
           <Chat />

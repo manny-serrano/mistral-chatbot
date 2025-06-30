@@ -28,10 +28,9 @@ else
     echo "  • Milvus:  milvus:19530"
     echo "  • Neo4j:   neo4j:7687"
     echo ""
-    echo "OpenWebUI Integration:"
+    echo "API Integration:"
     echo "  • API Endpoint:  http://mistral-security-app:8000"
     echo "  • API Docs:      http://localhost:8000/docs (when API is running)"
-    echo "  • OpenWebUI:     http://localhost:3000"
     echo ""
     
     # Keep container running for interactive use

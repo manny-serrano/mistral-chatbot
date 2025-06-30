@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 FastAPI server for the Intelligent Security Agent.
-Provides HTTP API endpoints for OpenWebUI integration.
+Provides HTTP API endpoints for frontend integration.
 """
 
 import os
@@ -63,17 +63,22 @@ class Config:
         self.environment = os.getenv("ENVIRONMENT", "development")
         self.cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
         
+        # Add lightweight mode for testing without databases
+        self.lightweight_mode = os.getenv("LIGHTWEIGHT_MODE", "false").lower() == "true"
+        
         # Validate configuration
         if self.api_port < 1 or self.api_port > 65535:
             raise ValueError(f"Invalid API port: {self.api_port}")
         
         logger.info(f"Configuration loaded - Host: {self.api_host}, Port: {self.api_port}, Environment: {self.environment}")
+        if self.lightweight_mode:
+            logger.info("⚠️  LIGHTWEIGHT MODE: Running without database connections for testing")
 
 config = Config()
 
 # Pydantic models for API requests/responses with improved validation
 class SecurityQueryRequest(BaseModel):
-    query: str = Field(..., description="Security question or analysis request", min_length=1, max_length=1000)
+    query: str = Field(..., description="Security question or analysis request", min_length=1, max_length=2000)
     analysis_type: str = Field(default="auto", description="Type of analysis: auto, semantic, graph, or hybrid")
     include_sources: bool = Field(default=True, description="Whether to include source documents")
     max_results: int = Field(default=10, description="Maximum number of source documents", ge=1, le=50)
@@ -90,6 +95,7 @@ class SecurityQueryResponse(BaseModel):
     processing_time: Optional[float] = None
     error: Optional[str] = None
     timestamp: str
+    success: bool = True
 
 class HealthResponse(BaseModel):
     status: str
@@ -107,13 +113,14 @@ app = FastAPI(
     redoc_url="/redoc" if config.environment == "development" else None
 )
 
-# Add CORS middleware with proper configuration
+# Add CORS middleware with proper configuration for custom frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    max_age=600,  # Cache preflight requests for 10 minutes
 )
 
 # Global agent instance with proper lifecycle management
@@ -127,6 +134,13 @@ def initialize_agent():
     
     if agent_initialized:
         return agent
+    
+    # Skip agent initialization in lightweight mode
+    if config.lightweight_mode:
+        logger.info("Skipping agent initialization (lightweight mode)")
+        agent_initialized = False
+        initialization_error = "Running in lightweight mode - databases not connected"
+        return None
     
     try:
         logger.info("Initializing Intelligent Security Agent...")
@@ -147,10 +161,15 @@ def initialize_agent():
 async def startup_event():
     """Initialize the agent on startup with proper error handling."""
     logger.info("Starting up Mistral Security Analysis API")
+    if config.lightweight_mode:
+        logger.info("🚀 API server ready in lightweight mode (testing only)")
+        return
+    
     try:
         initialize_agent()
     except Exception as e:
         logger.error(f"Failed to initialize during startup: {e}")
+        logger.warning("Server will continue in limited mode")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -187,7 +206,9 @@ async def health_check():
     global agent, agent_initialized, initialization_error
     
     # Determine overall agent status
-    if initialization_error:
+    if config.lightweight_mode:
+        agent_status = "lightweight_mode"
+    elif initialization_error:
         agent_status = f"error: {initialization_error}"
     elif agent_initialized and agent:
         agent_status = "healthy"
@@ -198,7 +219,14 @@ async def health_check():
     
     # Check database connections with detailed status
     databases = {}
-    if agent_initialized and agent:
+    if config.lightweight_mode:
+        databases = {
+            "mode": "lightweight_testing",
+            "milvus": "disabled",
+            "neo4j": "disabled",
+            "note": "Start with LIGHTWEIGHT_MODE=false to enable databases"
+        }
+    elif agent_initialized and agent:
         try:
             # Test Milvus connection
             if hasattr(agent, 'milvus_retriever') and agent.milvus_retriever:
@@ -231,7 +259,12 @@ async def health_check():
             databases["initialization_error"] = initialization_error
     
     # Determine overall status
-    overall_status = "healthy" if agent_status == "healthy" and any("connected" in status for status in databases.values()) else "unhealthy"
+    if config.lightweight_mode:
+        overall_status = "healthy_lightweight"
+    elif agent_status == "healthy" and any("connected" in str(status) for status in databases.values()):
+        overall_status = "healthy"
+    else:
+        overall_status = "unhealthy"
     
     return HealthResponse(
         status=overall_status,
@@ -244,98 +277,194 @@ async def health_check():
 async def analyze_security_query(request: SecurityQueryRequest):
     """
     Analyze a security query using the intelligent agent with enhanced error handling and validation.
+    Optimized for custom frontend integration.
     """
     global agent, agent_initialized
     
     # Validate analysis type
     valid_types = ["auto", "semantic", "graph", "hybrid"]
     if request.analysis_type not in valid_types:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid analysis_type. Must be one of: {', '.join(valid_types)}"
+        return SecurityQueryResponse(
+            result=f"Invalid analysis type '{request.analysis_type}'. Valid types: {', '.join(valid_types)}",
+            query_type="ERROR",
+            database_used="none",
+            error=f"Invalid analysis_type: {request.analysis_type}",
+            timestamp=datetime.now().isoformat(),
+            success=False
+        )
+    
+    # Handle lightweight mode
+    if config.lightweight_mode:
+        return SecurityQueryResponse(
+            result=f"✅ API is working correctly! In production, this would analyze: '{request.query}'\n\n"
+                   f"🔍 Analysis type: {request.analysis_type}\n"
+                   f"👤 User: {request.user}\n"
+                   f"📊 Would include sources: {request.include_sources}\n"
+                   f"💬 Conversation history: {len(request.conversation_history or [])} messages\n\n"
+                   f"To enable full functionality, start the required databases:\n"
+                   f"• Milvus (vector database): docker-compose up milvus\n"
+                   f"• Neo4j (graph database): docker-compose up neo4j\n"
+                   f"Then restart without LIGHTWEIGHT_MODE=true",
+            query_type="LIGHTWEIGHT_TEST",
+            database_used="mock",
+            processing_time=0.1,
+            timestamp=datetime.now().isoformat(),
+            success=True
         )
     
     # Ensure agent is initialized
     if not agent_initialized or not agent:
         agent = initialize_agent()
         if not agent:
-            raise HTTPException(
-                status_code=503,
-                detail=f"Security agent is not available. Error: {initialization_error or 'Unknown initialization error'}"
+            return SecurityQueryResponse(
+                result="Security agent is not available. Please check system status or start in lightweight mode.",
+                query_type="ERROR",
+                database_used="none",
+                error=f"Agent initialization failed: {initialization_error or 'Unknown error'}",
+                timestamp=datetime.now().isoformat(),
+                success=False
             )
     
     try:
         start_time = datetime.now()
         
-        # Log the request
-        logger.info(f"Processing query from user '{request.user}': {request.query[:100]}...")
+        # Log the request (safely)
+        safe_query = request.query[:100].replace('\n', ' ').replace('\r', '')
+        logger.info(f"Processing query from user '{request.user}': {safe_query}...")
         logger.debug(f"Analysis type: {request.analysis_type}, Include sources: {request.include_sources}")
         
-        # Prepare context from conversation history
+        # Prepare context from conversation history (improved for custom frontend)
         context = ""
-        if request.conversation_history:
+        if request.conversation_history and len(request.conversation_history) > 0:
             logger.info(f"Processing conversation history with {len(request.conversation_history)} messages")
             context_messages = []
-            for msg in request.conversation_history[-5:]:  # Last 5 messages for context
-                if msg.get("role") in ["user", "assistant"]:
-                    role = "User" if msg.get("role") == "user" else "Assistant"
-                    content = msg.get("content", "").strip()
-                    if content and len(content) < 200:  # Only include short messages for context
-                        context_messages.append(f"{role}: {content}")
+            
+            # Take last 3 exchanges (6 messages max) for better context
+            recent_messages = request.conversation_history[-6:]
+            
+            for msg in recent_messages:
+                # Handle different message formats from custom frontend
+                role = msg.get("role", "").lower()
+                content = msg.get("content", "") or msg.get("message", "")
+                
+                if not content:
+                    continue
+                    
+                # Clean and format the content
+                content = content.strip()
+                if len(content) > 300:  # Increase limit for better context
+                    content = content[:300] + "..."
+                
+                # Map roles to consistent format
+                if role in ["user", "human"]:
+                    context_messages.append(f"User: {content}")
+                elif role in ["assistant", "ai", "bot"]:
+                    context_messages.append(f"Assistant: {content}")
+                elif role == "system":
+                    context_messages.append(f"System: {content}")
             
             if context_messages:
-                context = "Previous conversation context:\n" + "\n".join(context_messages) + "\n\nCurrent question: "
-                logger.info(f"Created conversation context: {context[:200]}...")
+                context = "Previous conversation:\n" + "\n".join(context_messages) + "\n\nCurrent question: "
+                logger.debug(f"Created conversation context with {len(context_messages)} messages")
         
         # Combine context with current query
         full_query = context + request.query if context else request.query
-        logger.info(f"Full query being sent to agent: {full_query[:300]}...")
         
-        # Route query based on analysis type
-        result = None
-        if request.analysis_type == "auto":
-            result = agent.query(full_query)
+        # Handle analysis type override properly
+        if request.analysis_type != "auto":
+            # Create a modified agent query that forces the specific analysis type
+            logger.info(f"Forcing analysis type: {request.analysis_type}")
+            
+            # Directly call the appropriate retriever based on analysis type
+            if request.analysis_type == "semantic" and hasattr(agent, 'milvus_retriever') and agent.milvus_retriever:
+                from langchain.chains import RetrievalQA
+                qa_chain = RetrievalQA.from_chain_type(
+                    llm=agent.llm,
+                    retriever=agent.milvus_retriever,
+                    return_source_documents=True,
+                    chain_type_kwargs={"prompt": agent.classifier.llm.get_prompts()[0] if hasattr(agent.classifier.llm, 'get_prompts') else None}
+                )
+                result = qa_chain.invoke({"query": full_query})
+                result["query_type"] = "SEMANTIC_QUERY"
+                result["database_used"] = "milvus"
+                
+            elif request.analysis_type == "graph" and hasattr(agent, 'neo4j_retriever') and agent.neo4j_retriever:
+                from langchain.chains import RetrievalQA
+                qa_chain = RetrievalQA.from_chain_type(
+                    llm=agent.llm,
+                    retriever=agent.neo4j_retriever,
+                    return_source_documents=True
+                )
+                result = qa_chain.invoke({"query": full_query})
+                result["query_type"] = "GRAPH_QUERY"
+                result["database_used"] = "neo4j"
+                
+            elif request.analysis_type == "hybrid" and hasattr(agent, 'hybrid_retriever') and agent.hybrid_retriever:
+                from langchain.chains import RetrievalQA
+                qa_chain = RetrievalQA.from_chain_type(
+                    llm=agent.llm,
+                    retriever=agent.hybrid_retriever,
+                    return_source_documents=True
+                )
+                result = qa_chain.invoke({"query": full_query})
+                result["query_type"] = "HYBRID_QUERY"
+                result["database_used"] = "hybrid"
+            else:
+                # Fallback to auto mode if specific type not available
+                result = agent.query(full_query)
         else:
-            # Override the classifier for specific analysis types
+            # Use auto classification
             result = agent.query(full_query)
-            # Update the query type if it was overridden
-            result["query_type"] = f"{request.analysis_type.upper()}_QUERY"
         
         end_time = datetime.now()
         processing_time = (end_time - start_time).total_seconds()
         
         # Handle potential errors in result
-        if result.get('error'):
-            logger.warning(f"Agent returned error: {result['error']}")
+        error_msg = result.get('error')
+        if error_msg:
+            logger.warning(f"Agent returned error: {error_msg}")
         
-        # Process source documents with size limiting
+        # Process source documents with enhanced error handling
         source_docs = []
         if request.include_sources and result.get('source_documents'):
             for doc in result['source_documents'][:request.max_results]:
                 try:
                     # Serialize metadata to handle Neo4j objects
                     serialized_metadata = serialize_neo4j_objects(doc.metadata)
-                    # Limit content size for API response
-                    content = doc.page_content
-                    if len(content) > 2000:  # Truncate very long content
-                        content = content[:2000] + "... [truncated]"
+                    
+                    # Clean and limit content size for API response
+                    content = str(doc.page_content)
+                    if len(content) > 1500:  # Reasonable limit for frontend display
+                        content = content[:1500] + "... [truncated]"
+                    
+                    # Remove problematic characters
+                    content = content.replace('\x00', '').replace('\r\n', '\n').replace('\r', '\n')
                     
                     source_docs.append({
                         "content": content,
-                        "metadata": serialized_metadata
+                        "metadata": serialized_metadata,
+                        "score": getattr(doc, 'score', None)  # Include similarity score if available
                     })
                 except Exception as e:
                     logger.error(f"Error processing source document: {e}")
+                    # Continue with other documents rather than failing completely
+                    continue
+        
+        # Ensure result text is clean
+        result_text = result.get('result', 'No analysis result available.')
+        if isinstance(result_text, str):
+            result_text = result_text.replace('\x00', '').strip()
         
         response = SecurityQueryResponse(
-            result=result.get('result', 'No analysis result available.'),
+            result=result_text,
             query_type=result.get('query_type', 'UNKNOWN'),
             database_used=result.get('database_used', 'unknown'),
             collections_used=result.get('collections_used'),
             source_documents=source_docs if request.include_sources else None,
             processing_time=processing_time,
-            error=result.get('error'),
-            timestamp=datetime.now().isoformat()
+            error=error_msg,
+            timestamp=datetime.now().isoformat(),
+            success=not bool(error_msg)
         )
         
         logger.info(f"Query processed successfully in {processing_time:.2f}s using {response.database_used}")
@@ -343,9 +472,13 @@ async def analyze_security_query(request: SecurityQueryRequest):
         
     except Exception as e:
         logger.error(f"Error processing query: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing security query: {str(e)}"
+        return SecurityQueryResponse(
+            result=f"An error occurred while processing your query: {str(e)}",
+            query_type="ERROR", 
+            database_used="none",
+            error=str(e),
+            timestamp=datetime.now().isoformat(),
+            success=False
         )
 
 @app.get("/collections")
@@ -388,6 +521,25 @@ async def get_collections():
             status_code=500,
             detail=f"Error getting collections: {str(e)}"
         )
+
+@app.get("/test")
+async def test_endpoint():
+    """Simple test endpoint to verify API connectivity."""
+    return {
+        "status": "ok",
+        "message": "API is working",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0"
+    }
+
+@app.post("/test/echo")
+async def echo_test(data: dict):
+    """Echo test endpoint for frontend debugging."""
+    return {
+        "status": "ok",
+        "received": data,
+        "timestamp": datetime.now().isoformat()
+    }
 
 @app.get("/examples")
 async def get_query_examples():
