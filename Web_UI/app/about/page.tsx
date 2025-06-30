@@ -6,18 +6,14 @@ import { Badge } from "@/components/ui/badge"
 import {
   ShieldCheck,
   Target,
-  Award,
   Globe,
   Zap,
   Brain,
   Shield,
-  ArrowRight,
   CheckCircle,
-  Star,
   Github,
   Linkedin,
   Twitter,
-  Mail,
 } from "lucide-react"
 
 export default function AboutPage() {
@@ -327,72 +323,7 @@ export default function AboutPage() {
             </div>
           </section>
 
-          {/* Awards & Recognition */}
-          <section className="py-20">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold text-white mb-4">Awards & Recognition</h2>
-              <p className="text-xl text-zinc-200">Recognized by industry leaders and security communities</p>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <AwardCard
-                title="Best AI Security Solution"
-                organization="RSA Conference 2024"
-                year="2024"
-                icon={<Award className="h-8 w-8 text-yellow-400" />}
-              />
-              <AwardCard
-                title="Innovation Award"
-                organization="Black Hat USA"
-                year="2024"
-                icon={<Star className="h-8 w-8 text-purple-400" />}
-              />
-              <AwardCard
-                title="Top Cybersecurity Startup"
-                organization="Gartner Cool Vendors"
-                year="2023"
-                icon={<Zap className="h-8 w-8 text-blue-400" />}
-              />
-              <AwardCard
-                title="Excellence in AI"
-                organization="DEF CON AI Village"
-                year="2023"
-                icon={<Brain className="h-8 w-8 text-green-400" />}
-              />
-            </div>
-          </section>
-
-          {/* CTA Section */}
-          <section className="py-20">
-            <Card className="bg-gradient-to-r from-purple-900/50 to-violet-900/50 border-purple-400/40 backdrop-blur-xl">
-              <CardContent className="p-12 text-center">
-                <h2 className="text-4xl font-bold text-white mb-4">Ready to Secure Your Organization?</h2>
-                <p className="text-xl text-zinc-200 mb-8 max-w-2xl mx-auto">
-                  Join hundreds of organizations that trust CyberSense AI to protect their digital assets. Get started
-                  with a free trial today.
-                </p>
-                <div className="flex items-center justify-center gap-4">
-                  <Link href="/login">
-                    <Button
-                      size="lg"
-                      className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white shadow-xl shadow-purple-500/25"
-                    >
-                      Start Free Trial
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent"
-                  >
-                    <Mail className="mr-2 h-4 w-4" />
-                    Contact Sales
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </section>
         </div>
       </main>
 
@@ -480,23 +411,4 @@ function TeamMember({ name, role, bio, image, social }: TeamMemberProps) {
   )
 }
 
-// Award Card Component
-interface AwardCardProps {
-  title: string
-  organization: string
-  year: string
-  icon: React.ReactNode
-}
 
-function AwardCard({ title, organization, year, icon }: AwardCardProps) {
-  return (
-    <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-      <CardContent className="p-6 text-center">
-        <div className="mb-4 flex justify-center">{icon}</div>
-        <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
-        <p className="text-sm text-zinc-300">{organization}</p>
-        <p className="text-xs text-zinc-400 mt-1">{year}</p>
-      </CardContent>
-    </Card>
-  )
-}

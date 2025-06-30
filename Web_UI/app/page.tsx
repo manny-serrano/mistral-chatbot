@@ -1,3 +1,5 @@
+"use client"
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -42,6 +44,9 @@ export default function HomePage() {
               </h1>
             </div>
             <nav className="hidden md:flex items-center gap-6">
+              <a href="#how-it-works" className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors">
+                How It Works
+              </a>
               <a href="#features" className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors">
                 Features
               </a>
@@ -89,7 +94,7 @@ export default function HomePage() {
               Analyze and investigate network traffic through natural language conversations. Powered by AI to detect
               threats, trace communication paths, and suggest mitigation steps.
             </p>
-            <div className="mt-10 flex items-center justify-center gap-x-6">
+            <div className="mt-10 flex items-center justify-center">
               <Link href="/login">
                 <Button
                   size="lg"
@@ -99,14 +104,122 @@ export default function HomePage() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Button
-                variant="outline"
-                size="lg"
-                className="border-purple-400/30 text-zinc-300 hover:bg-purple-900/30 bg-gray-900/50 backdrop-blur-sm"
-              >
-                View Demo
-              </Button>
             </div>
+
+            {/* Scroll Hint */}
+            <div 
+              className="mt-16 flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200"
+              style={{
+                animation: 'bounce 3s infinite'
+              }}
+              onClick={() => {
+                document.getElementById('how-it-works')?.scrollIntoView({ 
+                  behavior: 'smooth' 
+                });
+              }}
+            >
+              <p className="text-sm text-zinc-400 mb-2 font-medium">Scroll to explore</p>
+              <div className="w-6 h-6 border-r-2 border-b-2 border-purple-400 transform rotate-45 opacity-70"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section id="how-it-works" className="py-20 lg:py-32 relative">
+        {/* Enhanced background for better contrast */}
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent" />
+
+        <div className="relative mx-auto max-w-7xl px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold tracking-tight sm:text-5xl text-white mb-4">
+              How It Works
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-xl text-zinc-200">
+              Get started with network security analysis in three simple steps
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
+            {/* Step 1 */}
+            <div className="text-center group">
+              <div className="flex items-center justify-center mb-6">
+                <div className="relative">
+                  <div className="rounded-full bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-8 group-hover:from-purple-500/30 group-hover:to-purple-600/20 transition-all duration-300 backdrop-blur-sm border border-purple-500/20 group-hover:border-purple-400/40">
+                    <ShieldCheck className="h-10 w-10 text-purple-400" />
+                  </div>
+                  <div className="absolute -top-2 -right-2 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">
+                    1
+                  </div>
+                </div>
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-4">Log In with DukeNetID</h3>
+              <p className="text-base text-zinc-200 leading-relaxed">
+                Securely authenticate using your Duke University credentials through our integrated SSO (Single Sign-On) system for seamless and secure access.
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className="text-center group">
+              <div className="flex items-center justify-center mb-6">
+                <div className="relative">
+                  <div className="rounded-full bg-gradient-to-br from-violet-500/20 to-violet-600/10 p-8 group-hover:from-violet-500/30 group-hover:to-violet-600/20 transition-all duration-300 backdrop-blur-sm border border-violet-500/20 group-hover:border-violet-400/40">
+                    <MessageSquare className="h-10 w-10 text-violet-400" />
+                  </div>
+                  <div className="absolute -top-2 -right-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">
+                    2
+                  </div>
+                </div>
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-4">Ask Natural Questions</h3>
+              <p className="text-base text-zinc-200 leading-relaxed">
+                Simply type your questions in plain English. "Show me suspicious traffic from the last hour" or "Which IPs are communicating with known threat actors?"
+              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div className="text-center group">
+              <div className="flex items-center justify-center mb-6">
+                <div className="relative">
+                  <div className="rounded-full bg-gradient-to-br from-fuchsia-500/20 to-fuchsia-600/10 p-8 group-hover:from-fuchsia-500/30 group-hover:to-fuchsia-600/20 transition-all duration-300 backdrop-blur-sm border border-fuchsia-500/20 group-hover:border-fuchsia-400/40">
+                    <Brain className="h-10 w-10 text-fuchsia-400" />
+                  </div>
+                  <div className="absolute -top-2 -right-2 bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">
+                    3
+                  </div>
+                </div>
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-4">Get AI Insights</h3>
+              <p className="text-base text-zinc-200 leading-relaxed">
+                Receive detailed analysis, visual network graphs, threat assessments, and actionable recommendations powered by advanced AI models.
+              </p>
+            </div>
+          </div>
+
+          {/* Connection lines for desktop */}
+          <div className="hidden lg:block absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl">
+            <div className="relative">
+              <div className="absolute top-0 left-1/6 right-1/6 h-px bg-gradient-to-r from-purple-500/50 via-violet-500/50 to-fuchsia-500/50"></div>
+              <div className="absolute top-0 left-1/3 w-2 h-2 bg-violet-500 rounded-full transform -translate-x-1/2 -translate-y-1/2"></div>
+              <div className="absolute top-0 right-1/3 w-2 h-2 bg-fuchsia-500 rounded-full transform translate-x-1/2 -translate-y-1/2"></div>
+            </div>
+          </div>
+
+          {/* Scroll Hint */}
+          <div 
+            className="mt-16 flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200"
+            style={{
+              animation: 'bounce 3s infinite'
+            }}
+            onClick={() => {
+              document.getElementById('features')?.scrollIntoView({ 
+                behavior: 'smooth' 
+              });
+            }}
+          >
+            <p className="text-sm text-zinc-400 mb-2 font-medium">See our features</p>
+            <div className="w-6 h-6 border-r-2 border-b-2 border-purple-400 transform rotate-45 opacity-70"></div>
           </div>
         </div>
       </section>
@@ -212,6 +325,22 @@ export default function HomePage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Scroll Hint */}
+          <div 
+            className="mt-16 flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200"
+            style={{
+              animation: 'bounce 3s infinite'
+            }}
+            onClick={() => {
+              document.getElementById('technology')?.scrollIntoView({ 
+                behavior: 'smooth' 
+              });
+            }}
+          >
+            <p className="text-sm text-zinc-400 mb-2 font-medium">View technology</p>
+            <div className="w-6 h-6 border-r-2 border-b-2 border-purple-400 transform rotate-45 opacity-70"></div>
+          </div>
         </div>
       </section>
 
@@ -236,7 +365,7 @@ export default function HomePage() {
               <div className="rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-4 mb-4 group-hover:from-purple-500/30 group-hover:to-purple-600/20 transition-all duration-300 backdrop-blur-sm border border-purple-500/20 group-hover:border-purple-400/40">
                 <GitBranch className="h-8 w-8 text-purple-400" />
               </div>
-              <h3 className="font-semibold text-white text-lg">LangChain & LangGraph</h3>
+              <h3 className="font-semibold text-white text-lg">LangChain</h3>
               <p className="text-base text-zinc-200 mt-2">Smart agent orchestration</p>
             </div>
 
@@ -245,7 +374,7 @@ export default function HomePage() {
                 <Database className="h-8 w-8 text-violet-400" />
               </div>
               <h3 className="font-semibold text-white text-lg">Milvus Vector DB</h3>
-              <p className="text-base text-zinc-200 mt-2">Flow similarity search</p>
+              <p className="text-base text-zinc-200 mt-2">Similarity search</p>
             </div>
 
             <div className="flex flex-col items-center text-center group">
@@ -253,104 +382,40 @@ export default function HomePage() {
                 <Network className="h-8 w-8 text-fuchsia-400" />
               </div>
               <h3 className="font-semibold text-white text-lg">Neo4j Graph DB</h3>
-              <p className="text-base text-zinc-200 mt-2">IP relationship mapping</p>
+              <p className="text-base text-zinc-200 mt-2">Relationship mapping</p>
             </div>
 
             <div className="flex flex-col items-center text-center group">
               <div className="rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-600/10 p-4 mb-4 group-hover:from-indigo-500/30 group-hover:to-indigo-600/20 transition-all duration-300 backdrop-blur-sm border border-indigo-500/20 group-hover:border-indigo-400/40">
-                <Zap className="h-8 w-8 text-indigo-400" />
+                <Brain className="h-8 w-8 text-indigo-400" />
               </div>
-              <h3 className="font-semibold text-white text-lg">MCP Integration</h3>
-              <p className="text-base text-zinc-200 mt-2">Secure component connection</p>
+              <h3 className="font-semibold text-white text-lg">DukeGPT</h3>
+              <p className="text-base text-zinc-200 mt-2">Powered by Duke's AI Suite</p>
             </div>
+          </div>
+
+          {/* Scroll Hint */}
+          <div 
+            className="mt-16 flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200"
+            style={{
+              animation: 'bounce 3s infinite'
+            }}
+            onClick={() => {
+              window.scrollTo({ 
+                top: 0, 
+                behavior: 'smooth' 
+              });
+            }}
+          >
+            <p className="text-sm text-zinc-400 mb-2 font-medium">Back to top</p>
+            <div className="w-6 h-6 border-l-2 border-t-2 border-purple-400 transform rotate-45 opacity-70"></div>
           </div>
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-20 lg:py-32 relative">
-        {/* Enhanced background for better contrast */}
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent" />
 
-        <div className="relative mx-auto max-w-7xl px-6">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-            <div className="text-center group">
-              <div className="flex items-center justify-center mb-4">
-                <div className="rounded-full bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-6 group-hover:from-purple-500/30 group-hover:to-purple-600/20 transition-all duration-300 backdrop-blur-sm border border-purple-500/20 group-hover:border-purple-400/40">
-                  <TrendingUp className="h-8 w-8 text-purple-400" />
-                </div>
-              </div>
-              <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-purple-300 bg-clip-text text-transparent">
-                99.7%
-              </div>
-              <div className="text-xl font-medium text-white">Threat Detection Rate</div>
-              <div className="text-base text-zinc-200 mt-2">Based on MISTRAL research dataset validation</div>
-            </div>
 
-            <div className="text-center group">
-              <div className="flex items-center justify-center mb-4">
-                <div className="rounded-full bg-gradient-to-br from-violet-500/20 to-violet-600/10 p-6 group-hover:from-violet-500/30 group-hover:to-violet-600/20 transition-all duration-300 backdrop-blur-sm border border-violet-500/20 group-hover:border-violet-400/40">
-                  <Zap className="h-8 w-8 text-violet-400" />
-                </div>
-              </div>
-              <div className="text-4xl font-bold bg-gradient-to-r from-violet-400 to-violet-300 bg-clip-text text-transparent">
-                {"<1s"}
-              </div>
-              <div className="text-xl font-medium text-white">Average Response Time</div>
-              <div className="text-base text-zinc-200 mt-2">Real-time analysis and recommendations</div>
-            </div>
 
-            <div className="text-center group">
-              <div className="flex items-center justify-center mb-4">
-                <div className="rounded-full bg-gradient-to-br from-fuchsia-500/20 to-fuchsia-600/10 p-6 group-hover:from-fuchsia-500/30 group-hover:to-fuchsia-600/20 transition-all duration-300 backdrop-blur-sm border border-fuchsia-500/20 group-hover:border-fuchsia-400/40">
-                  <Users className="h-8 w-8 text-fuchsia-400" />
-                </div>
-              </div>
-              <div className="text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-fuchsia-300 bg-clip-text text-transparent">
-                10M+
-              </div>
-              <div className="text-xl font-medium text-white">Network Flows Analyzed</div>
-              <div className="text-base text-zinc-200 mt-2">Continuously learning from traffic patterns</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 lg:py-32 relative">
-        {/* Enhanced background for better contrast */}
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent" />
-
-        <div className="relative mx-auto max-w-4xl px-6 text-center">
-          <h2 className="text-4xl font-bold tracking-tight sm:text-5xl text-white mb-4">
-            Ready to Secure Your Network?
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-xl text-zinc-200">
-            Start analyzing your network traffic with AI-powered insights. Perfect for cybersecurity analysts and
-            researchers.
-          </p>
-          <div className="mt-10 flex items-center justify-center gap-x-6">
-            <Link href="/login">
-              <Button
-                size="lg"
-                className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white shadow-xl shadow-purple-500/25 border border-purple-400/20"
-              >
-                Launch Dashboard
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-            <Button
-              variant="outline"
-              size="lg"
-              className="border-purple-400/30 text-zinc-300 hover:bg-purple-900/30 bg-gray-900/50 backdrop-blur-sm"
-            >
-              Contact Sales
-            </Button>
-          </div>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative">
