@@ -109,6 +109,12 @@ Relationships:
 
 Given the user query, generate the most relevant Cypher query, using LIMIT clauses to avoid too large result sets.
 
+Important notes:
+- Always include LIMIT clauses unless aggregation queries.
+- Use parameterized syntax if possible.
+- Do NOT include any explanation or comments.
+- Return only the Cypher query.
+
 Example 1:
 User query: "List all hosts sending traffic on port 80"
 Cypher query:
