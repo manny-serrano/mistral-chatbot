@@ -24,3 +24,16 @@ neo4j-graphdatabase/neo4j/
 .DS_Store
 .DS_Store?
 ._*
+# Log files
+*.log
+api_server*.log
+
+# Cache directories
+.cache/
+__pycache__/
+
+# Temporary files
+cookies.txt
+
+# Build output
+.next/

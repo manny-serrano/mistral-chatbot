@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ShieldCheck, Eye, EyeOff, Mail, Lock, Github, Chrome } from "lucide-react"
+import DukeSSOButton from "@/components/auth/duke-sso-button"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -88,6 +89,21 @@ export default function LoginPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Duke SSO Section */}
+              <div className="space-y-4">
+                <DukeSSOButton 
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg shadow-blue-500/25"
+                />
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <Separator className="w-full bg-purple-500/20" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-gray-900 px-2 text-zinc-400">Or use local account</span>
+                  </div>
+                </div>
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-white">

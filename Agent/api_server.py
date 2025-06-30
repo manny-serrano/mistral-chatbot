@@ -16,6 +16,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 import json
 from neo4j.time import DateTime as Neo4jDateTime
+from contextlib import asynccontextmanager
 
 # Configure logging
 logging.basicConfig(
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 # Suppress warnings before importing the agent
 os.environ['GRPC_VERBOSITY'] = 'ERROR'
 os.environ['GRPC_TRACE'] = ''
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'  # Prevent tokenizer fork warnings
 logging.getLogger('absl').setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -76,53 +78,6 @@ class Config:
 
 config = Config()
 
-# Pydantic models for API requests/responses with improved validation
-class SecurityQueryRequest(BaseModel):
-    query: str = Field(..., description="Security question or analysis request", min_length=1, max_length=2000)
-    analysis_type: str = Field(default="auto", description="Type of analysis: auto, semantic, graph, or hybrid")
-    include_sources: bool = Field(default=True, description="Whether to include source documents")
-    max_results: int = Field(default=10, description="Maximum number of source documents", ge=1, le=50)
-    user: str = Field(default="anonymous", description="User making the request", max_length=100)
-    timestamp: Optional[str] = Field(default=None, description="Request timestamp")
-    conversation_history: Optional[List[Dict[str, str]]] = Field(default=None, description="Previous conversation messages for context")
-
-class SecurityQueryResponse(BaseModel):
-    result: str
-    query_type: str
-    database_used: str
-    collections_used: Optional[List[str]] = None
-    source_documents: Optional[List[Dict[str, Any]]] = None
-    processing_time: Optional[float] = None
-    error: Optional[str] = None
-    timestamp: str
-    success: bool = True
-
-class HealthResponse(BaseModel):
-    status: str
-    timestamp: str
-    agent_status: str
-    databases: Dict[str, str]
-    version: str = "1.0.0"
-
-# Initialize FastAPI app with enhanced configuration
-app = FastAPI(
-    title="Mistral Security Analysis API",
-    description="API for the Intelligent Security Agent with enhanced network security analysis capabilities",
-    version="1.0.0",
-    docs_url="/docs" if config.environment == "development" else None,
-    redoc_url="/redoc" if config.environment == "development" else None
-)
-
-# Add CORS middleware with proper configuration for custom frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=config.cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    max_age=600,  # Cache preflight requests for 10 minutes
-)
-
 # Global agent instance with proper lifecycle management
 agent = None
 agent_initialized = False
@@ -157,31 +112,88 @@ def initialize_agent():
         initialization_error = str(e)
         return None
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the agent on startup with proper error handling."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan with proper resource handling."""
+    # Startup
     logger.info("Starting up Mistral Security Analysis API")
     if config.lightweight_mode:
         logger.info("🚀 API server ready in lightweight mode (testing only)")
-        return
+    else:
+        try:
+            initialize_agent()
+        except Exception as e:
+            logger.error(f"Failed to initialize during startup: {e}")
+            logger.warning("Server will continue in limited mode")
     
-    try:
-        initialize_agent()
-    except Exception as e:
-        logger.error(f"Failed to initialize during startup: {e}")
-        logger.warning("Server will continue in limited mode")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up on shutdown with proper error handling."""
+    yield
+    
+    # Shutdown
     logger.info("Shutting down Mistral Security Analysis API")
     global agent
     if agent:
         try:
+            # Force close all connections
+            if hasattr(agent, 'milvus_retriever') and agent.milvus_retriever:
+                if hasattr(agent.milvus_retriever, 'client'):
+                    agent.milvus_retriever.client.close()
+            if hasattr(agent, 'neo4j_retriever') and agent.neo4j_retriever:
+                if hasattr(agent.neo4j_retriever, 'driver'):
+                    agent.neo4j_retriever.driver.close()
             agent.close()
             logger.info("Agent connections closed successfully")
         except Exception as e:
             logger.error(f"Error closing agent: {e}")
+        finally:
+            agent = None
+
+# Pydantic models for API requests/responses with improved validation
+class SecurityQueryRequest(BaseModel):
+    query: str = Field(..., description="Security question or analysis request", min_length=1, max_length=2000)
+    analysis_type: str = Field(default="auto", description="Type of analysis: auto, semantic, graph, or hybrid")
+    include_sources: bool = Field(default=True, description="Whether to include source documents")
+    max_results: int = Field(default=10, description="Maximum number of source documents", ge=1, le=50)
+    user: str = Field(default="anonymous", description="User making the request", max_length=100)
+    timestamp: Optional[str] = Field(default=None, description="Request timestamp")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(default=None, description="Previous conversation messages for context")
+
+class SecurityQueryResponse(BaseModel):
+    result: str
+    query_type: str
+    database_used: str
+    collections_used: Optional[List[str]] = None
+    source_documents: Optional[List[Dict[str, Any]]] = None
+    processing_time: Optional[float] = None
+    error: Optional[str] = None
+    timestamp: str
+    success: bool = True
+
+class HealthResponse(BaseModel):
+    status: str
+    timestamp: str
+    agent_status: str
+    databases: Dict[str, str]
+    version: str = "1.0.0"
+
+# Initialize FastAPI app with enhanced configuration
+app = FastAPI(
+    title="Mistral Security Analysis API",
+    description="API for the Intelligent Security Agent with enhanced network security analysis capabilities",
+    version="1.0.0",
+    docs_url="/docs" if config.environment == "development" else None,
+    redoc_url="/redoc" if config.environment == "development" else None,
+    lifespan=lifespan
+)
+
+# Add CORS middleware with proper configuration for custom frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    max_age=600,  # Cache preflight requests for 10 minutes
+)
 
 @app.get("/", response_model=dict)
 async def root():
@@ -606,15 +618,16 @@ async def internal_error_handler(request, exc):
     logger.error(f"Internal server error: {exc}")
     return {"error": "Internal server error", "message": "Please try again later"}
 
+# Run the server
 if __name__ == "__main__":
     logger.info(f"Starting Mistral Security Analysis API on {config.api_host}:{config.api_port}")
-    if config.environment == "development":
-        logger.info("API Documentation available at: http://localhost:8000/docs")
+    logger.info(f"API Documentation available at: http://localhost:{config.api_port}/docs")
     
     uvicorn.run(
         "api_server:app",
         host=config.api_host,
         port=config.api_port,
-        reload=config.environment == "development",
-        log_level=config.log_level.lower()
+        reload=True if config.environment == "development" else False,
+        log_level=config.log_level.lower(),
+        access_log=True
     ) 

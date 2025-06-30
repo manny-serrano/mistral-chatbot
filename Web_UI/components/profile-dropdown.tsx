@@ -37,11 +37,18 @@ export function ProfileDropdown({
 }: ProfileDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
 
-  const handleSignOut = () => {
-    // Add sign out logic here
-    console.log("Signing out...")
-    // Redirect to login page
-    window.location.href = "/login"
+  const handleSignOut = async () => {
+    try {
+      // Call the logout API to clear session
+      await fetch('/api/auth/session', { method: 'DELETE' })
+      console.log("Successfully signed out")
+      // Redirect to login page
+      window.location.href = "/login"
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Fallback to redirect even if logout API fails
+      window.location.href = "/login"
+    }
   }
 
   return (
