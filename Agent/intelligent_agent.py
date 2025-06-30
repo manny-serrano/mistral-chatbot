@@ -107,6 +107,8 @@ Relationships:
 - (Flow)-[:USES_PROTOCOL]->(Protocol)
 - (Host)-[:RECEIVED]->(Flow)
 
+Given the user query, generate the most relevant Cypher query, using LIMIT clauses to avoid too large result sets.
+
 Example 1:
 User query: "List all hosts sending traffic on port 80"
 Cypher query:
