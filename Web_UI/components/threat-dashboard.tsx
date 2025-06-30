@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useState, useMemo } from "react"
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -134,7 +133,7 @@ const alertsData = [
   },
 ]
 
-export function ThreatDashboard() {
+function ThreatDashboard() {
   // Filter states
   const [severityFilter, setSeverityFilter] = useState<string>("all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
@@ -148,12 +147,10 @@ export function ThreatDashboard() {
       if (severityFilter !== "all" && alert.severity !== severityFilter) {
         return false
       }
-
       // Type filter
       if (typeFilter !== "all" && alert.type !== typeFilter) {
         return false
       }
-
       // Time range filter
       if (timeRangeFilter !== "all") {
         const timeLimit = Number.parseInt(timeRangeFilter)
@@ -161,7 +158,6 @@ export function ThreatDashboard() {
           return false
         }
       }
-
       // Search filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
@@ -171,7 +167,6 @@ export function ThreatDashboard() {
           alert.source.toLowerCase().includes(query)
         )
       }
-
       return true
     })
   }, [severityFilter, typeFilter, timeRangeFilter, searchQuery])
@@ -300,7 +295,7 @@ export function ThreatDashboard() {
                         placeholder="Search alerts..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 bg-zinc-800 border-zinc-700 text-white focus:border-purple-400"
+                        className="pl-10 bg-zinc-800 border-zinc-700 text-white !text-white focus:border-purple-400"
                       />
                     </div>
                   </div>
@@ -309,8 +304,8 @@ export function ThreatDashboard() {
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-zinc-400">Severity</label>
                     <Select value={severityFilter} onValueChange={setSeverityFilter}>
-                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                        <SelectValue placeholder="All Severities" />
+                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white !text-white">
+                        <SelectValue placeholder="All Severities" className="!text-white" />
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-800 border-zinc-700">
                         <SelectItem value="all">All Severities</SelectItem>
@@ -346,8 +341,8 @@ export function ThreatDashboard() {
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-zinc-400">Type</label>
                     <Select value={typeFilter} onValueChange={setTypeFilter}>
-                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                        <SelectValue placeholder="All Types" />
+                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white !text-white">
+                        <SelectValue placeholder="All Types" className="!text-white" />
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-800 border-zinc-700">
                         <SelectItem value="all">All Types</SelectItem>
@@ -389,8 +384,8 @@ export function ThreatDashboard() {
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-zinc-400">Time Range</label>
                     <Select value={timeRangeFilter} onValueChange={setTimeRangeFilter}>
-                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                        <SelectValue placeholder="All Time" />
+                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white !text-white">
+                        <SelectValue placeholder="All Time" className="!text-white" />
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-800 border-zinc-700">
                         <SelectItem value="all">All Time</SelectItem>
@@ -901,3 +896,5 @@ function TrendItem({ category, count, change, percentage, color, icon }: TrendIt
     </div>
   )
 }
+
+export default ThreatDashboard;

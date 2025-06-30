@@ -1,16 +1,10 @@
-<<<<<<< HEAD
-"use client"
-
-=======
 'use client';
->>>>>>> 3f67aaa (WIP: save local changes before pulling from main)
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Chat } from "@/components/chat"
 import { ThreatDashboard } from "@/components/threat-dashboard"
 import { ShieldCheck, Bell } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
-import GraphViewer from '@/components/GraphViewer'
 
 // Dynamically import NetworkGraph to prevent SSR issues
 const NetworkGraph = dynamic(() => import("@/components/network-graph").then(mod => ({ default: mod.NetworkGraph })), {
@@ -62,7 +56,7 @@ export default function DashboardPage() {
         <div className="flex w-2/3 flex-col gap-6">
           <ThreatDashboard />
           <div className="rounded-lg shadow p-4 h-[400px] overflow-hidden">
-            <GraphViewer />
+            {/* Removed: <GraphViewer /> */}
           </div>
         </div>
         <div className="w-1/3">

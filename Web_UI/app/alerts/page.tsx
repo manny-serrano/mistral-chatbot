@@ -1,5 +1,5 @@
 "use client"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -55,172 +55,48 @@ import {
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 
-// Enhanced alert data with more detailed information
-const alertsData = [
-  {
-    id: "ALT-2024-001247",
-    severity: "critical" as const,
-    type: "malware",
-    title: "Ransomware Activity Detected",
-    description: "WannaCry variant detected attempting to encrypt files on multiple endpoints",
-    timestamp: "2 minutes ago",
-    timeValue: 2,
-    source: "192.168.1.87",
-    destination: "Multiple endpoints",
-    status: "active" as const,
-    assignee: "Sarah Chen",
-    tags: ["ransomware", "encryption", "critical-infrastructure"],
-    affectedAssets: 15,
-    confidence: 95,
-    location: "San Francisco, CA",
-    firstSeen: "2024-12-26 14:32:15",
-    lastSeen: "2024-12-26 14:34:22",
-    riskScore: 9.8,
-  },
-  {
-    id: "ALT-2024-001246",
-    severity: "high" as const,
-    type: "network",
-    title: "Suspicious Outbound Traffic",
-    description: "Large data transfer to known command & control server detected",
-    timestamp: "8 minutes ago",
-    timeValue: 8,
-    source: "10.0.0.45",
-    destination: "185.143.223.12",
-    status: "investigating" as const,
-    assignee: "Mike Rodriguez",
-    tags: ["data-exfiltration", "c2-communication"],
-    affectedAssets: 1,
-    confidence: 87,
-    location: "New York, NY",
-    firstSeen: "2024-12-26 14:26:33",
-    lastSeen: "2024-12-26 14:34:15",
-    riskScore: 8.5,
-  },
-  {
-    id: "ALT-2024-001245",
-    severity: "high" as const,
-    type: "authentication",
-    title: "Brute Force Attack",
-    description: "Multiple failed SSH login attempts from external IP address",
-    timestamp: "15 minutes ago",
-    timeValue: 15,
-    source: "203.0.113.42",
-    destination: "ssh-server-01",
-    status: "resolved" as const,
-    assignee: "Alex Thompson",
-    tags: ["brute-force", "ssh", "external-threat"],
-    affectedAssets: 1,
-    confidence: 92,
-    location: "Moscow, Russia",
-    firstSeen: "2024-12-26 14:19:45",
-    lastSeen: "2024-12-26 14:27:12",
-    riskScore: 7.8,
-  },
-  {
-    id: "ALT-2024-001244",
-    severity: "medium" as const,
-    type: "network",
-    title: "Port Scan Activity",
-    description: "Systematic port scanning detected from internal network",
-    timestamp: "23 minutes ago",
-    timeValue: 23,
-    source: "192.168.1.200",
-    destination: "192.168.1.0/24",
-    status: "active" as const,
-    assignee: "Lisa Park",
-    tags: ["port-scan", "reconnaissance", "internal"],
-    affectedAssets: 254,
-    confidence: 78,
-    location: "Internal Network",
-    firstSeen: "2024-12-26 14:11:33",
-    lastSeen: "2024-12-26 14:34:01",
-    riskScore: 6.2,
-  },
-  {
-    id: "ALT-2024-001243",
-    severity: "medium" as const,
-    type: "data",
-    title: "Unusual Database Access",
-    description: "Abnormal database query patterns detected outside business hours",
-    timestamp: "35 minutes ago",
-    timeValue: 35,
-    source: "db-user-analytics",
-    destination: "customer-db-01",
-    status: "investigating" as const,
-    assignee: "David Kim",
-    tags: ["database", "anomaly", "after-hours"],
-    affectedAssets: 1,
-    confidence: 65,
-    location: "Data Center A",
-    firstSeen: "2024-12-26 13:59:22",
-    lastSeen: "2024-12-26 14:32:45",
-    riskScore: 5.8,
-  },
-  {
-    id: "ALT-2024-001242",
-    severity: "low" as const,
-    type: "system",
-    title: "Certificate Expiry Warning",
-    description: "SSL certificate for web-server-03 expires in 7 days",
-    timestamp: "1 hour ago",
-    timeValue: 60,
-    source: "web-server-03",
-    destination: "N/A",
-    status: "acknowledged" as const,
-    assignee: "Emma Wilson",
-    tags: ["certificate", "expiry", "maintenance"],
-    affectedAssets: 1,
-    confidence: 100,
-    location: "DMZ",
-    firstSeen: "2024-12-26 13:34:15",
-    lastSeen: "2024-12-26 13:34:15",
-    riskScore: 2.1,
-  },
-  {
-    id: "ALT-2024-001241",
-    severity: "critical" as const,
-    type: "malware",
-    title: "Advanced Persistent Threat",
-    description: "APT group indicators detected in network traffic and system logs",
-    timestamp: "45 minutes ago",
-    timeValue: 45,
-    source: "Multiple sources",
-    destination: "Multiple targets",
-    status: "escalated" as const,
-    assignee: "Security Team Lead",
-    tags: ["apt", "advanced-threat", "nation-state"],
-    affectedAssets: 8,
-    confidence: 89,
-    location: "Multiple locations",
-    firstSeen: "2024-12-26 13:49:33",
-    lastSeen: "2024-12-26 14:33:12",
-    riskScore: 9.5,
-  },
-  {
-    id: "ALT-2024-001240",
-    severity: "high" as const,
-    type: "network",
-    title: "DDoS Attack Detected",
-    description: "Distributed denial of service attack targeting web infrastructure",
-    timestamp: "1.2 hours ago",
-    timeValue: 72,
-    source: "Multiple botnets",
-    destination: "web-cluster-01",
-    status: "mitigated" as const,
-    assignee: "Network Team",
-    tags: ["ddos", "botnet", "infrastructure"],
-    affectedAssets: 5,
-    confidence: 94,
-    location: "Global",
-    firstSeen: "2024-12-26 13:22:15",
-    lastSeen: "2024-12-26 14:15:33",
-    riskScore: 8.2,
-  },
-]
+// API Alert type
+interface ApiAlert {
+  type: string
+  ip: string
+  date: string
+  unique_ports: number
+  pcr: number
+  por: number
+  p_value: number
+  severity: "critical" | "high" | "medium" | "low"
+  message: string
+}
+
+// UI Alert type
+interface AlertUI {
+  id: string
+  severity: "critical" | "high" | "medium" | "low"
+  type: string
+  title: string
+  description: string
+  timestamp: string
+  timeValue: number
+  source: string
+  destination: string
+  status: string
+  assignee: string
+  tags: string[]
+  affectedAssets: number
+  confidence: number
+  location: string
+  firstSeen: string
+  lastSeen: string
+  riskScore: number
+}
 
 export default function AlertsPage() {
-  // Filter states
+  // Fetch alerts from API
+  const [alertsData, setAlertsData] = useState<AlertUI[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Filters and sort states
   const [severityFilter, setSeverityFilter] = useState<string>("all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -230,6 +106,63 @@ export default function AlertsPage() {
   const [sortBy, setSortBy] = useState<string>("timestamp")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
 
+  // Fetch alerts on mount
+  useEffect(() => {
+    setLoading(true)
+    fetch("/api/alerts")
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch alerts")
+        return res.json()
+      })
+      .then(data => {
+        // Map API alerts to UI alerts
+        const now = Date.now()
+        const mapped: AlertUI[] = (data.alerts || []).map((a: ApiAlert, idx: number) => {
+          // Calculate timeValue (minutes ago)
+          let timeValue = 0
+          let timestamp = a.date
+          try {
+            const alertDate = new Date(a.date)
+            if (!isNaN(alertDate.getTime())) {
+              timeValue = Math.floor((now - alertDate.getTime()) / 60000)
+              if (timeValue < 1) timestamp = "just now"
+              else if (timeValue < 60) timestamp = `${timeValue} minutes ago`
+              else if (timeValue < 120) timestamp = `${(timeValue/60).toFixed(1)} hours ago`
+              else timestamp = a.date
+            }
+          } catch {
+            timestamp = a.date
+          }
+          return {
+            id: `ALERT-${idx}-${a.ip}-${a.date}`,
+            severity: a.severity,
+            type: a.type,
+            title: a.message.split(" (")[0],
+            description: a.message,
+            timestamp,
+            timeValue,
+            source: a.ip,
+            destination: "N/A",
+            status: "active",
+            assignee: "Unassigned",
+            tags: [a.type],
+            affectedAssets: a.unique_ports,
+            confidence: Math.round(a.p_value * 100),
+            location: "-",
+            firstSeen: a.date,
+            lastSeen: a.date,
+            riskScore: Math.round(a.p_value * 10 * 10) / 10 // 0-10, 1 decimal
+          }
+        })
+        setAlertsData(mapped)
+        setLoading(false)
+      })
+      .catch(err => {
+        setError(err.message)
+        setLoading(false)
+      })
+  }, [])
+
   // Filter alerts based on current filters
   const filteredAlerts = useMemo(() => {
     const filtered = alertsData.filter((alert) => {
@@ -237,17 +170,14 @@ export default function AlertsPage() {
       if (severityFilter !== "all" && alert.severity !== severityFilter) {
         return false
       }
-
       // Type filter
       if (typeFilter !== "all" && alert.type !== typeFilter) {
         return false
       }
-
       // Status filter
       if (statusFilter !== "all" && alert.status !== statusFilter) {
         return false
       }
-
       // Time range filter
       if (timeRangeFilter !== "all") {
         const timeLimit = Number.parseInt(timeRangeFilter)
@@ -255,7 +185,6 @@ export default function AlertsPage() {
           return false
         }
       }
-
       // Search filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
@@ -267,40 +196,33 @@ export default function AlertsPage() {
           alert.tags.some((tag) => tag.toLowerCase().includes(query))
         )
       }
-
       return true
     })
-
     // Sort alerts
     filtered.sort((a, b) => {
       let aValue: any = a[sortBy as keyof typeof a]
       let bValue: any = b[sortBy as keyof typeof b]
-
       if (sortBy === "timestamp") {
         aValue = a.timeValue
         bValue = b.timeValue
       }
-
       if (sortBy === "severity") {
         const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 }
         aValue = severityOrder[a.severity]
         bValue = severityOrder[b.severity]
       }
-
       if (typeof aValue === "string") {
         aValue = aValue.toLowerCase()
         bValue = bValue.toLowerCase()
       }
-
       if (sortOrder === "asc") {
         return aValue > bValue ? 1 : -1
       } else {
         return aValue < bValue ? 1 : -1
       }
     })
-
     return filtered
-  }, [severityFilter, typeFilter, statusFilter, timeRangeFilter, searchQuery, sortBy, sortOrder])
+  }, [alertsData, severityFilter, typeFilter, statusFilter, timeRangeFilter, searchQuery, sortBy, sortOrder])
 
   // Calculate filtered alert counts by severity
   const filteredAlertCounts = useMemo(() => {
@@ -351,10 +273,8 @@ export default function AlertsPage() {
         <div className="absolute top-40 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
         <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
       </div>
-
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
-
       {/* Header */}
       <header className="border-b border-purple-500/20 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-50 relative">
         <div className="mx-auto max-w-7xl px-6 py-4">
@@ -395,13 +315,11 @@ export default function AlertsPage() {
           </div>
         </div>
       </header>
-
       {/* Main Content */}
       <main className="relative py-8">
         {/* Enhanced background for better contrast */}
         <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent" />
-
         <div className="relative mx-auto max-w-7xl px-6">
           {/* Page Header */}
           <div className="mb-8">
@@ -419,6 +337,7 @@ export default function AlertsPage() {
                 <Button
                   variant="outline"
                   className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent backdrop-blur-sm"
+                  onClick={() => window.location.reload()}
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
@@ -430,7 +349,6 @@ export default function AlertsPage() {
               </div>
             </div>
           </div>
-
           {/* Alert Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
             <Card className="bg-gray-900/80 border-red-400/40 backdrop-blur-xl">
@@ -445,7 +363,6 @@ export default function AlertsPage() {
                 <p className="text-xs text-red-300 mt-1">Immediate action required</p>
               </CardContent>
             </Card>
-
             <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -458,7 +375,6 @@ export default function AlertsPage() {
                 <p className="text-xs text-amber-300 mt-1">Action needed soon</p>
               </CardContent>
             </Card>
-
             <Card className="bg-gray-900/80 border-yellow-400/40 backdrop-blur-xl">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -471,7 +387,6 @@ export default function AlertsPage() {
                 <p className="text-xs text-yellow-300 mt-1">Monitor closely</p>
               </CardContent>
             </Card>
-
             <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -484,7 +399,6 @@ export default function AlertsPage() {
                 <p className="text-xs text-blue-300 mt-1">Informational</p>
               </CardContent>
             </Card>
-
             <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -498,7 +412,6 @@ export default function AlertsPage() {
               </CardContent>
             </Card>
           </div>
-
           {/* Filters and Controls */}
           <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl mb-6">
             <CardHeader>
@@ -575,7 +488,6 @@ export default function AlertsPage() {
                     />
                   </div>
                 </div>
-
                 {/* Severity Filter */}
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-zinc-400">Severity</Label>
@@ -592,7 +504,6 @@ export default function AlertsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 {/* Type Filter */}
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-zinc-400">Type</Label>
@@ -602,15 +513,10 @@ export default function AlertsPage() {
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
                       <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="malware">Malware</SelectItem>
-                      <SelectItem value="network">Network</SelectItem>
-                      <SelectItem value="authentication">Authentication</SelectItem>
-                      <SelectItem value="data">Data</SelectItem>
-                      <SelectItem value="system">System</SelectItem>
+                      <SelectItem value="unique_ports_logistic">Unique Ports</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
                 {/* Status Filter */}
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-zinc-400">Status</Label>
@@ -621,15 +527,9 @@ export default function AlertsPage() {
                     <SelectContent className="bg-zinc-800 border-zinc-700">
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="investigating">Investigating</SelectItem>
-                      <SelectItem value="resolved">Resolved</SelectItem>
-                      <SelectItem value="escalated">Escalated</SelectItem>
-                      <SelectItem value="acknowledged">Acknowledged</SelectItem>
-                      <SelectItem value="mitigated">Mitigated</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
                 {/* Time Range Filter */}
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-zinc-400">Time Range</Label>
@@ -647,7 +547,6 @@ export default function AlertsPage() {
                   </Select>
                 </div>
               </div>
-
               {/* Sort and Clear Filters */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -682,7 +581,6 @@ export default function AlertsPage() {
                     Select All
                   </Button>
                 </div>
-
                 {hasActiveFilters && (
                   <Button
                     variant="outline"
@@ -697,7 +595,6 @@ export default function AlertsPage() {
               </div>
             </CardContent>
           </Card>
-
           {/* Alerts List */}
           <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
             <CardHeader>
@@ -712,7 +609,11 @@ export default function AlertsPage() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y divide-zinc-800">
-                {filteredAlerts.length > 0 ? (
+                {loading ? (
+                  <div className="p-8 text-center text-zinc-400">Loading alerts...</div>
+                ) : error ? (
+                  <div className="p-8 text-center text-red-400">Error: {error}</div>
+                ) : filteredAlerts.length > 0 ? (
                   filteredAlerts.map((alert) => (
                     <AlertItem
                       key={alert.id}
@@ -747,7 +648,6 @@ export default function AlertsPage() {
           </Card>
         </div>
       </main>
-
       {/* Footer */}
       <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative">
         <div className="mx-auto max-w-7xl px-6">
@@ -770,7 +670,7 @@ export default function AlertsPage() {
 
 // Alert Item Component
 interface AlertItemProps {
-  alert: (typeof alertsData)[0]
+  alert: AlertUI
   isSelected: boolean
   onToggleSelection: (alertId: string) => void
 }
@@ -792,7 +692,6 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
     },
     low: { color: "blue", bgColor: "bg-blue-900/20", borderColor: "border-blue-500/30", textColor: "text-blue-400" },
   }
-
   const statusConfig = {
     active: { color: "text-red-400", bg: "bg-red-500/20", border: "border-red-500/30" },
     investigating: { color: "text-blue-400", bg: "bg-blue-500/20", border: "border-blue-500/30" },
@@ -801,18 +700,11 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
     acknowledged: { color: "text-yellow-400", bg: "bg-yellow-500/20", border: "border-yellow-500/30" },
     mitigated: { color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30" },
   }
-
   const typeIcons = {
-    malware: <Zap className="h-4 w-4" />,
-    network: <Globe className="h-4 w-4" />,
-    authentication: <Users className="h-4 w-4" />,
-    data: <Database className="h-4 w-4" />,
-    system: <Activity className="h-4 w-4" />,
+    malware: <Zap className="h-4 w-4" />, network: <Globe className="h-4 w-4" />, authentication: <Users className="h-4 w-4" />, data: <Database className="h-4 w-4" />, system: <Activity className="h-4 w-4" />, unique_ports_logistic: <Globe className="h-4 w-4" />
   }
-
   const severityConf = severityConfig[alert.severity]
-  const statusConf = statusConfig[alert.status]
-
+  const statusConf = statusConfig[alert.status as keyof typeof statusConfig] || statusConfig.active
   return (
     <div
       className={`p-4 hover:bg-zinc-800/50 transition-colors ${isSelected ? "bg-purple-900/20 border-l-4 border-l-purple-500" : ""}`}
@@ -826,7 +718,6 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
             className="border-purple-400/30 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
           />
         </div>
-
         {/* Alert Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between mb-3">
@@ -890,10 +781,8 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
               </DropdownMenu>
             </div>
           </div>
-
           <h4 className="font-medium text-white mb-2 text-lg">{alert.title}</h4>
           <p className="text-sm text-zinc-300 mb-3">{alert.description}</p>
-
           {/* Alert Metadata */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-zinc-400 mb-3">
             <div className="flex items-center gap-1">
@@ -913,7 +802,6 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
               <span>{alert.location}</span>
             </div>
           </div>
-
           {/* Risk Score and Confidence */}
           <div className="flex items-center gap-6 mb-3">
             <div className="flex items-center gap-2">
@@ -937,7 +825,6 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
               <span className="text-xs text-white">{alert.assignee}</span>
             </div>
           </div>
-
           {/* Tags */}
           <div className="flex items-center gap-2 flex-wrap">
             {alert.tags.map((tag) => (
@@ -953,7 +840,7 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
 }
 
 // Alert Details Modal Component
-function AlertDetailsModal({ alert }: { alert: (typeof alertsData)[0] }) {
+function AlertDetailsModal({ alert }: { alert: AlertUI }) {
   return (
     <div className="space-y-6">
       {/* Timeline */}
@@ -970,7 +857,6 @@ function AlertDetailsModal({ alert }: { alert: (typeof alertsData)[0] }) {
           </div>
         </div>
       </div>
-
       {/* Technical Details */}
       <div>
         <h3 className="text-lg font-medium text-white mb-3">Technical Details</h3>
@@ -993,7 +879,6 @@ function AlertDetailsModal({ alert }: { alert: (typeof alertsData)[0] }) {
           </div>
         </div>
       </div>
-
       {/* Actions */}
       <div className="flex gap-3">
         <Button className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700">
