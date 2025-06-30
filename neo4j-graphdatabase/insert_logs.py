@@ -6,7 +6,7 @@ import csv
 from pathlib import Path
 from neo4j import GraphDatabase
 
-# ---- Load IP Dictionary ----
+# Load IP enrichment data from CSV
 def load_ip_dictionary(csv_path):
     ip_dict = {}
     try:
@@ -20,7 +20,7 @@ def load_ip_dictionary(csv_path):
         print(f"Could not load IP dictionary: {e}")
     return ip_dict
 
-# ---- Load Flow Field Definitions ----
+# Load flow field definitions from Excel
 def load_field_definitions(xlsx_path):
     try:
         df = pd.read_excel(xlsx_path)
@@ -30,9 +30,7 @@ def load_field_definitions(xlsx_path):
         print(f"Could not load field definitions: {e}")
         return {}
 
-IP_DICTIONARY = load_ip_dictionary('enrichment_data/ip_dictionary.csv')
-FIELD_DEFINITIONS = load_field_definitions('enrichment_data/mistral_flow_fields.xlsx')
-
+# Load protocol mapping from CSV
 def load_protocol_map(csv_path):
     protocol_map = {}
     try:
@@ -50,8 +48,30 @@ def load_protocol_map(csv_path):
         print(f"Could not load protocol map: {e}")
     return protocol_map
 
+# Load port->service name mapping from CSV
+def load_port_service_map(csv_path):
+    port_service_map = {}
+    try:
+        with open(csv_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                port = row.get('Port Number') or row.get('port') or row.get('Port')
+                service = row.get('Service Name') or row.get('service') or row.get('Service')
+                if port and service:
+                    try:
+                        port_service_map[int(port)] = service.lower()
+                    except Exception:
+                        continue
+    except Exception as e:
+        print(f"Could not load port service map: {e}")
+    return port_service_map
+
+PORT_SERVICE_MAP = load_port_service_map('enrichment_data/service-names-port-numbers (1).csv')
+IP_DICTIONARY = load_ip_dictionary('enrichment_data/ip_dictionary.csv')
+FIELD_DEFINITIONS = load_field_definitions('enrichment_data/mistral_flow_fields.xlsx')
 PROTOCOL_MAP = load_protocol_map('enrichment_data/protocol-numbers.csv')
 
+# Extract protocol name from flow
 def extract_protocol(flow):
     proto_id = flow.get("protocolIdentifier")
     if proto_id is not None:
@@ -71,6 +91,7 @@ def extract_protocol(flow):
     return "unknown"
 
 class Neo4jFlowIngester:
+    # Initialize ingester and Neo4j connection
     def __init__(self, uri=None, user=None, password=None, batch_size=1000):
         uri = uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
         user = user or os.getenv("NEO4J_USER", "neo4j")
@@ -78,11 +99,12 @@ class Neo4jFlowIngester:
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self.batch_size = batch_size
         self.skipped_logs = []
-        self.seen_fields = set()  # For audit
+        self.seen_fields = set()
 
     def close(self):
         self.driver.close()
 
+    # Create constraints to ensure unique keys in Neo4j
     def create_constraints(self):
         with self.driver.session() as session:
             session.run("CREATE CONSTRAINT host_ip IF NOT EXISTS FOR (h:Host) REQUIRE h.ip IS UNIQUE")
@@ -91,6 +113,7 @@ class Neo4jFlowIngester:
             session.run("CREATE CONSTRAINT file_name IF NOT EXISTS FOR (pf:ProcessedFile) REQUIRE pf.name IS UNIQUE")
             session.run("CREATE CONSTRAINT proto_name IF NOT EXISTS FOR (proto:Protocol) REQUIRE proto.name IS UNIQUE")
 
+    # Check if a flow is valid (for honeypot or netflow schema)
     def is_valid_flow(self, flow):
         honeypot_required = ["src_ip", "dst_ip", "src_port", "dst_port", "start_time"]
         netflow_required = ["sourceIPv4Address", "destinationIPv4Address", "sourceTransportPort", "destinationTransportPort", "flowStartMilliseconds"]
@@ -99,6 +122,7 @@ class Neo4jFlowIngester:
             all(flow.get(field) is not None for field in netflow_required)
         )
 
+    # Flatten nested dicts for Neo4j properties
     def flatten_dict(self, d, parent_key='', sep='_'):
         items = []
         for k, v in d.items():
@@ -114,16 +138,19 @@ class Neo4jFlowIngester:
                 items.append((new_key, v))
         return dict(items)
 
+    # Batch process and insert flows into Neo4j
     def process_flow_batch(self, flows_batch, malicious_honeypot=False):
         with self.driver.session() as session:
             cypher_flows = []
             for flow in flows_batch:
+                # Determine if this flow is honeypot or netflow style
                 honeypot = all(flow.get(field) is not None for field in ["src_ip", "dst_ip", "src_port", "dst_port", "start_time"])
                 netflow = all(flow.get(field) is not None for field in ["sourceIPv4Address", "destinationIPv4Address", "sourceTransportPort", "destinationTransportPort", "flowStartMilliseconds"])
                 if not (honeypot or netflow):
                     self.skipped_logs.append(flow)
                     continue
 
+                # Standardize flow keys
                 if honeypot:
                     flow_id = (
                         f"{flow['src_ip']}-{flow['src_port']}-"
@@ -145,7 +172,16 @@ class Neo4jFlowIngester:
                     src_port = flow["sourceTransportPort"]
                     dst_port = flow["destinationTransportPort"]
 
-                # Determine properties
+                # Get port/service names for both src and dst
+                try:
+                    src_service = PORT_SERVICE_MAP.get(int(src_port), None)
+                except Exception:
+                    src_service = None
+                try:
+                    dst_service = PORT_SERVICE_MAP.get(int(dst_port), None)
+                except Exception:
+                    dst_service = None
+
                 flow_props = self.flatten_dict(flow)
                 for k in flow_props:
                     self.seen_fields.add(k)
@@ -154,7 +190,7 @@ class Neo4jFlowIngester:
                 src_info = IP_DICTIONARY.get(src_ip, {})
                 dst_info = IP_DICTIONARY.get(dst_ip, {})
 
-                # Set malicious/honeypot properties for all, True only for sampleSTINGAR
+                # Mark honeypot/malicious flows
                 flow_props['malicious'] = bool(malicious_honeypot)
                 flow_props['honeypot'] = bool(malicious_honeypot)
 
@@ -164,6 +200,8 @@ class Neo4jFlowIngester:
                     "dst_ip": dst_ip,
                     "src_port": src_port,
                     "dst_port": dst_port,
+                    "src_service": src_service,
+                    "dst_service": dst_service,
                     "props": flow_props,
                     "protocol": protocol_name,
                     "src_info": src_info,
@@ -173,12 +211,13 @@ class Neo4jFlowIngester:
             if not cypher_flows:
                 return
 
-            # Choose labels based on flag
+            # Choose node labels for malicious honeypot flows
             if malicious_honeypot:
                 labels = ":Flow:Malicious:Honeypot"
             else:
                 labels = ":Flow"
 
+            # Cypher query for inserting flow and its relations
             query = f"""
             UNWIND $flows AS flow
             MERGE (src:Host {{ip: flow.src_ip}})
@@ -186,7 +225,9 @@ class Neo4jFlowIngester:
             MERGE (dst:Host {{ip: flow.dst_ip}})
             SET dst += flow.dst_info
             MERGE (srcPort:Port {{port: flow.src_port}})
+            SET srcPort.service = flow.src_service
             MERGE (dstPort:Port {{port: flow.dst_port}})
+            SET dstPort.service = flow.dst_service
             MERGE (f{labels} {{flowId: flow.flowId}})
             SET f += flow.props
             MERGE (proto:Protocol {{name: flow.protocol}})
@@ -202,6 +243,7 @@ class Neo4jFlowIngester:
             except Exception as e:
                 print(f"Error processing batch: {str(e)}")
 
+    # Check if a file has already been processed
     def has_been_processed(self, filename):
         with self.driver.session() as session:
             result = session.run(
@@ -210,17 +252,18 @@ class Neo4jFlowIngester:
             )
             return result.single() is not None
 
+    # Mark a file as processed in Neo4j
     def mark_processed(self, filename):
         with self.driver.session() as session:
             session.run("MERGE (pf:ProcessedFile {name: $filename})", filename=filename)
 
+    # Main function: scan directory, ingest JSON logs in batches
     def process_flows_directory(self, directory_path):
         self.create_constraints()
         log_dir = Path(directory_path)
         if not log_dir.exists():
             print(f"Directory {directory_path} does not exist")
             return
-        batch = []
         total_processed = 0
         for json_file in log_dir.glob("*.json"):
             fname = os.path.basename(str(json_file.resolve()))
@@ -229,8 +272,8 @@ class Neo4jFlowIngester:
                 continue
             print(f"Processing file: {fname}")
 
-            # Check if this file should mark flows as malicious/honeypot
             is_malicious_honeypot = (fname == "sampleSTINGAR.json")
+            batch = []
 
             try:
                 with open(json_file, 'r') as f:
@@ -262,14 +305,13 @@ class Neo4jFlowIngester:
                             self.process_flow_batch(batch, malicious_honeypot=is_malicious_honeypot)
                             total_processed += len(batch)
                             batch.clear()
+                # Process remaining flows in last batch
+                if batch:
+                    self.process_flow_batch(batch, malicious_honeypot=is_malicious_honeypot)
+                    total_processed += len(batch)
                 self.mark_processed(fname)
             except Exception as e:
                 print(f"Error reading {json_file}: {e}")
-        if batch:
-            # If the last batch is left, use the right label
-            is_malicious_honeypot = (fname == "sampleSTINGAR.json")
-            self.process_flow_batch(batch, malicious_honeypot=is_malicious_honeypot)
-            total_processed += len(batch)
 
         print(f"Final total flows processed: {total_processed}")
         print(f"Skipped flows due to missing fields: {len(self.skipped_logs)}")
