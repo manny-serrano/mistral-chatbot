@@ -86,7 +86,7 @@ Answer:"""
 )
 
 class CypherGenerator:
-    """Use LLM to generate Cypher queries from natural language prompts."""
+    """Use LLM to generate Cypher queries from natural language prompts with few-shot examples."""
 
     def __init__(self, llm):
         self.llm = llm
@@ -108,6 +108,33 @@ Relationships:
 - (Host)-[:RECEIVED]->(Flow)
 
 Given the user query, generate the most relevant Cypher query, using LIMIT clauses to avoid too large result sets.
+
+Important notes:
+- Always include LIMIT clauses unless aggregation queries.
+- Use parameterized syntax if possible.
+- Do NOT include any explanation or comments.
+- Return only the Cypher query.
+
+Example 1:
+User query: "List all hosts sending traffic on port 80"
+Cypher query:
+MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(p:Port {port: 80})
+RETURN DISTINCT src.ip
+LIMIT 25
+
+Example 2:
+User query: "Show flows marked malicious with protocol 6"
+Cypher query:
+MATCH (f:Flow)-[:USES_PROTOCOL]->(p:Protocol)
+WHERE f.malicious = true AND f.protocolIdentifier = 6
+RETURN f.flowId, f.flowStartMilliseconds, p.name
+LIMIT 25
+
+Example 3:
+User query: "Find the path between host 192.168.1.10 and 10.0.0.5"
+Cypher query:
+MATCH path = shortestPath((src:Host {ip: "192.168.1.10"})-[:SENT*..5]-(dst:Host {ip: "10.0.0.5"}))
+RETURN path
 
 User query:
 \"\"\"{query}\"\"\"
@@ -206,6 +233,10 @@ class Neo4jRetriever(BaseRetriever):
                 cypher_query, parameters = self._query_to_cypher(query)
                 logger.debug(f"Executing Cypher query: {cypher_query}")
                 
+                # Log the Cypher query
+                logger.info(f"Executing LLM-generated Cypher:\n{cypher_query}")
+
+                
                 result = session.run(cypher_query, parameters)
                 
                 documents = []
@@ -222,6 +253,7 @@ class Neo4jRetriever(BaseRetriever):
                     documents.append(Document(page_content=content, metadata=metadata))
                 
                 logger.info(f"Retrieved {len(documents)} documents from Neo4j")
+                
                 return documents
         except Exception as e:
             logger.error(f"Error querying Neo4j: {e}")
