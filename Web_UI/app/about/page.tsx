@@ -324,7 +324,7 @@ export default function AboutPage() {
                 <TeamMember
                   name="Andy Chen"
                   role="Developer"
-                  bio="CS + ECE"
+                  bio="Computer Science | Electrical and Computer Engineering"
                   image="/team/andy-chen.png"
                   social={{
                     linkedin: "#",
@@ -335,7 +335,7 @@ export default function AboutPage() {
                 <TeamMember
                   name="Emmanuel Serrano Campa"
                   role="Developer"
-                  bio="CS + ECE"
+                  bio="Computer Science | Electrical and Computer Engineering"
                   image="/team/emmanual-serrano.png"
                   social={{
                     linkedin: "#",
@@ -346,7 +346,7 @@ export default function AboutPage() {
                 <TeamMember
                   name="Ahmed Al-Ghannam"
                   role="Developer"
-                  bio="CS"
+                  bio="Computer Science"
                   image="/team/ahmed-al-ghannam.png"
                   social={{
                     linkedin: "#",
@@ -361,7 +361,7 @@ export default function AboutPage() {
                 <TeamMember
                   name="Fahad Al-Athel"
                   role="Developer"
-                  bio="CS"
+                  bio="Computer Science"
                   image="/team/fahad-al-athel.png"
                   social={{
                     linkedin: "#",
@@ -372,7 +372,7 @@ export default function AboutPage() {
                 <TeamMember
                   name="Meshari Alsughayyir"
                   role="Developer"
-                  bio="ECE"
+                  bio="Computer Engineering"
                   image="/team/Meshari-alsughayyir.jpg"
                   social={{
                     linkedin: "#",
