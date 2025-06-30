@@ -1,0 +1,34 @@
+{
+  "window": "1h",
+  "generated_at": "2024-05-31T11:06:19.029000+00:00",
+  "traffic_volume": 42511784609,
+  "total_flows": 59616,
+  "top_talkers": {},
+  "top_ports": {},
+  "source_endpoints": [],
+  "destination_endpoints": [],
+  "protocol_breakdown": {
+    "6": 41387,
+    "17": 18226,
+    "1": 2,
+    "112": 1
+  },
+  "bandwidth_utilization": {
+    "average_bps": 94470632,
+    "peak_bps": 2885494255
+  },
+  "performance_metrics": {
+    "avg_flow_duration_ms": 126.59490457259797,
+    "total_packet_count": 17163309,
+    "avg_packets_per_flow": 287.8976952495974
+  },
+  "alarms": [],
+  "historical_comparison": {},
+  "llm_analysis": [
+    {
+      "finding": "High traffic volume detected from a single source IP.",
+      "confidence_score": 0.92,
+      "recommended_action": "Investigate the top talker for possible exfiltration or scanning."
+    }
+  ]
+}
