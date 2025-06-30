@@ -197,8 +197,8 @@ export function ThreatDashboard() {
   const hasActiveFilters = severityFilter !== "all" || typeFilter !== "all" || timeRangeFilter !== "all" || searchQuery
 
   return (
-    <Card className="bg-zinc-950 border-zinc-800">
-      <CardHeader className="border-b border-zinc-800 px-4 py-3">
+    <Card className="bg-zinc-950 border-zinc-800 h-[600px] flex flex-col">
+      <CardHeader className="border-b border-zinc-800 px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -206,9 +206,9 @@ export function ThreatDashboard() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-0">
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-zinc-900 rounded-none border-b border-zinc-800">
+      <CardContent className="p-0 flex-1 overflow-hidden">
+        <Tabs defaultValue="overview" className="w-full h-full flex flex-col">
+          <TabsList className="grid w-full grid-cols-3 bg-zinc-900 rounded-none border-b border-zinc-800 flex-shrink-0">
             <TabsTrigger value="overview" className="data-[state=active]:bg-purple-600">
               Overview
             </TabsTrigger>
@@ -221,7 +221,7 @@ export function ThreatDashboard() {
           </TabsList>
 
           {/* Overview Tab */}
-          <TabsContent value="overview" className="p-4 m-0">
+          <TabsContent value="overview" className="p-4 m-0 flex-1 overflow-y-auto">
             <div className="grid grid-cols-4 gap-4 mb-4">
               <MetricCard
                 title="Active Threats"
@@ -276,7 +276,7 @@ export function ThreatDashboard() {
           </TabsContent>
 
           {/* Alerts Tab with Filtering */}
-          <TabsContent value="alerts" className="p-4 m-0">
+          <TabsContent value="alerts" className="p-4 m-0 flex-1 overflow-y-auto">
             <div className="space-y-4">
               {/* Filter Controls */}
               <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
@@ -535,7 +535,7 @@ export function ThreatDashboard() {
           </TabsContent>
 
           {/* Trends Tab */}
-          <TabsContent value="trends" className="p-4 m-0">
+          <TabsContent value="trends" className="p-4 m-0 flex-1 overflow-y-auto">
             <div className="space-y-6">
               {/* Trend Summary */}
               <div className="grid grid-cols-3 gap-4">

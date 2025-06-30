@@ -12,7 +12,6 @@ volumes:
   neo4j_logs:
   neo4j_import:
   neo4j_plugins:
-  openwebui_data:
 
 services:
   # =============================================================================
@@ -123,7 +122,7 @@ services:
   mistral-app:
     container_name: mistral-security-app
     build: .
-    command: api  # Start the API server for OpenWebUI integration
+    command: api  # Start the API server
     depends_on:
       milvus:
         condition: service_healthy
@@ -150,31 +149,7 @@ services:
       - mistral_network
     restart: unless-stopped
 
-  # =============================================================================
-  # OPENWEBUI - WEB INTERFACE
-  # =============================================================================
-  
-  openwebui:
-    container_name: mistral-openwebui
-    image: ghcr.io/open-webui/open-webui:main
-    ports:
-      - "3000:8080"
-    environment:
-      - OPENAI_API_BASE_URL=${OPENAI_API_BASE}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - WEBUI_SECRET_KEY=mistral-security-analysis-2024
-      - ENABLE_COMMUNITY_SHARING=false
-      - ENABLE_ADMIN_EXPORT=true
-      - DEFAULT_USER_ROLE=user
-      - DEFAULT_MODELS=${OPENAI_API_BASE}/models
-    volumes:
-      - openwebui_data:/app/backend/data
-      - ./openwebui_functions:/app/backend/data/functions:rw
-    depends_on:
-      - mistral-app
-    networks:
-      - mistral_network
-    restart: unless-stopped
+
 
   # =============================================================================
   # OPTIONAL: MANAGEMENT SERVICES
