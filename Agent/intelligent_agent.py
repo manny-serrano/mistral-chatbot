@@ -85,6 +85,73 @@ If this is a simple conversational question, respond naturally. If it's about se
 Answer:"""
 )
 
+class CypherGenerator:
+    """Use LLM to generate Cypher queries from natural language prompts with few-shot examples."""
+
+    def __init__(self, llm):
+        self.llm = llm
+        self.prompt_template = """
+You are a cybersecurity graph database expert.
+
+The Neo4j schema contains nodes:
+- (Host {{ip}})
+- (Port {{port}})
+- (Flow {{flowId, protocolIdentifier, flowStartMilliseconds, malicious, honeypot, ...}})
+- (Protocol {{name}})
+- (ProcessedFile {{name}})
+
+Relationships:
+- (Host)-[:SENT]->(Flow)
+- (Flow)-[:USES_SRC_PORT]->(Port)
+- (Flow)-[:USES_DST_PORT]->(Port)
+- (Flow)-[:USES_PROTOCOL]->(Protocol)
+- (Host)-[:RECEIVED]->(Flow)
+
+Given the user query, generate the most relevant Cypher query, using LIMIT clauses to avoid too large result sets.
+
+Important notes:
+- Always include LIMIT clauses unless aggregation queries.
+- Use parameterized syntax if possible.
+- Do NOT include any explanation or comments.
+- Return only the Cypher query.
+
+Example 1:
+User query: "List all hosts sending traffic on port 80"
+Cypher query:
+MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(p:Port {port: 80})
+RETURN DISTINCT src.ip
+LIMIT 25
+
+Example 2:
+User query: "Show flows marked malicious with protocol 6"
+Cypher query:
+MATCH (f:Flow)-[:USES_PROTOCOL]->(p:Protocol)
+WHERE f.malicious = true AND f.protocolIdentifier = 6
+RETURN f.flowId, f.flowStartMilliseconds, p.name
+LIMIT 25
+
+Example 3:
+User query: "Find the path between host 192.168.1.10 and 10.0.0.5"
+Cypher query:
+MATCH path = shortestPath((src:Host {ip: "192.168.1.10"})-[:SENT*..5]-(dst:Host {ip: "10.0.0.5"}))
+RETURN path
+
+User query:
+\"\"\"{query}\"\"\"
+
+Cypher query (only the code, no explanations):
+"""
+    
+    def generate(self, query: str) -> str:
+        prompt = self.prompt_template.format(query=query)
+        try:
+            cypher = self.llm.invoke(prompt).strip()
+            if not cypher.lower().startswith("match"):
+                raise ValueError("Invalid Cypher generated")
+            return cypher
+        except Exception as e:
+            return "MATCH (n) RETURN n LIMIT 5  // Fallback Cypher due to error"
+
 class QueryClassifier:
     """Classifies queries to determine which database to use and whether they need database retrieval at all."""
     
@@ -92,7 +159,7 @@ class QueryClassifier:
         self.llm = llm
         self.classification_prompt = PromptTemplate(
             input_variables=["query"],
-            template="""
+            template=""" 
             Analyze the following query and classify it into one of these categories:
             
             1. CONVERSATIONAL - For greetings, personal questions, names, general chat that doesn't need security data
@@ -138,17 +205,21 @@ class Neo4jRetriever(BaseRetriever):
     # Use PrivateAttr for non-config attributes
     _driver: Any = PrivateAttr()
     
-    def __init__(self, uri: str, user: str, password: str, **kwargs):
+    def __init__(self, uri: str, user: str, password: str, llm=None, **kwargs):
         super().__init__(**kwargs)
         try:
             self._driver = GraphDatabase.driver(uri, auth=(user, password))
-            # Test connection
             with self._driver.session() as session:
                 session.run("RETURN 1")
             logger.info("Neo4j connection established successfully")
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {e}")
             raise
+
+        if llm is None:
+            raise ValueError("LLM instance must be provided for Cypher generation.")
+
+        self.cypher_generator = CypherGenerator(llm)
     
     @property
     def driver(self):
@@ -161,6 +232,10 @@ class Neo4jRetriever(BaseRetriever):
                 # Convert natural language query to Cypher
                 cypher_query, parameters = self._query_to_cypher(query)
                 logger.debug(f"Executing Cypher query: {cypher_query}")
+                
+                # Log the Cypher query
+                logger.info(f"Executing LLM-generated Cypher:\n{cypher_query}")
+
                 
                 result = session.run(cypher_query, parameters)
                 
@@ -178,175 +253,23 @@ class Neo4jRetriever(BaseRetriever):
                     documents.append(Document(page_content=content, metadata=metadata))
                 
                 logger.info(f"Retrieved {len(documents)} documents from Neo4j")
+                
                 return documents
         except Exception as e:
             logger.error(f"Error querying Neo4j: {e}")
             return []
-    
+    #Now relies on the LLM to generate the Cypher query, ignoring the hardcoded logic
     def _query_to_cypher(self, query: str) -> tuple[str, dict]:
-        """Convert natural language query to Cypher query with parameters for security."""
-        query_lower = query.lower()
-        parameters = {}
-        
-        # Extract IP addresses safely using regex
-        ip_pattern = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
-        ip_matches = re.findall(ip_pattern, query)
-        
-        # COUNT/NUMERICAL QUERIES - No limits needed for aggregations
-        if any(word in query_lower for word in ["how many", "count", "total", "number of"]):
-            if "node" in query_lower:
-                if any(word in query_lower for word in ["type", "label", "different", "breakdown", "category"]):
-                    return """
-                    MATCH (n)
-                    RETURN labels(n)[0] as node_type, COUNT(n) as count
-                    ORDER BY count DESC
-                    """, parameters
-                else:
-                    return """
-                    MATCH (n)
-                    RETURN COUNT(n) as total_nodes
-                    """, parameters
-            elif "ip" in query_lower and ("address" in query_lower or "ips" in query_lower):
-                return """
-                MATCH (ip:IP)
-                RETURN COUNT(DISTINCT ip.address) as total_ips,
-                       collect(DISTINCT ip.address)[0..8] as sample_ips
-                """, parameters
-            elif "connection" in query_lower:
-                return """
-                MATCH (f:Flow)
-                RETURN COUNT(f) as total_connections,
-                       COUNT(DISTINCT f) as unique_flows
-                """, parameters
-            elif "flow" in query_lower:
-                return """
-                MATCH (f:Flow)
-                RETURN COUNT(f) as total_flows,
-                       COUNT(DISTINCT f.flowId) as unique_flow_ids
-                """, parameters
-            elif "host" in query_lower:
-                return """
-                MATCH (h:Host)
-                RETURN COUNT(DISTINCT h.ip) as total_hosts,
-                       collect(DISTINCT h.ip)[0..8] as sample_hosts
-                """, parameters
-        
-        # STATISTICAL/ANALYTICAL QUERIES - No limits for aggregations
-        elif any(word in query_lower for word in ["average", "sum", "min", "max", "stats", "statistics"]):
-            return """
-            MATCH (src:Host)-[r:SENT]->(f:Flow)-[:USES_SRC_PORT]->(sp:Port),
-                  (f)-[:USES_DST_PORT]->(dp:Port)
-            RETURN COUNT(f) as total_flows,
-                   COUNT(DISTINCT src.ip) as unique_sources,
-                   COUNT(DISTINCT dp.port) as unique_dest_ports,
-                   AVG(toInteger(dp.port)) as avg_dest_port,
-                   MIN(toInteger(dp.port)) as min_dest_port,
-                   MAX(toInteger(dp.port)) as max_dest_port
-            """, parameters
-        
-        # SPECIFIC IP/HOST QUERIES - Use parameterized queries for security
-        elif ("from ip" in query_lower or "ip " in query_lower) and ip_matches:
-            target_ip = ip_matches[0]  # Use first found IP
-            parameters["target_ip"] = target_ip
-            return """
-            MATCH (src:Host {ip: $target_ip})-[r:SENT]->(f:Flow),
-                  (f)-[:USES_DST_PORT]->(dp:Port),
-                  (dst:Host)-[:RECEIVED]->(f)
-            RETURN src.ip as source_ip, dst.ip as dest_ip, 
-                   dp.port as dest_port, f.flowId as flow_id,
-                   f.protocolIdentifier as protocol
-            ORDER BY f.flowStartMilliseconds DESC
-            LIMIT 50
-            """, parameters
-        
-        # CONNECTION/RELATIONSHIP QUERIES - Reasonable limits for readability
-        elif "connection" in query_lower or "connect" in query_lower:
-            return """
-            MATCH (src:Host)-[r:SENT]->(f:Flow),
-                  (dst:Host)-[:RECEIVED]->(f),
-                  (f)-[:USES_SRC_PORT]->(sp:Port),
-                  (f)-[:USES_DST_PORT]->(dp:Port)
-            RETURN src.ip as source_ip, dst.ip as dest_ip, 
-                   sp.port as src_port, dp.port as dst_port,
-                   f.protocolIdentifier as protocol,
-                   f.flowStartMilliseconds as timestamp
-            ORDER BY f.flowStartMilliseconds DESC
-            LIMIT 25
-            """, parameters
-        
-        # PATH QUERIES - Reasonable limits to prevent exponential explosion
-        elif "path" in query_lower:
-            return """
-            MATCH path = (src:Host)-[:SENT]->(:Flow)<-[:RECEIVED]-(dst:Host)
-            WHERE src.ip <> dst.ip
-            RETURN DISTINCT src.ip as source, dst.ip as destination
-            LIMIT 20
-            """, parameters
-        
-        # PORT/SERVICE QUERIES
-        elif "port" in query_lower:
-            # Extract port numbers safely
-            port_pattern = r'\b(?:port\s+)?(\d{1,5})\b'
-            port_matches = re.findall(port_pattern, query_lower)
-            
-            if port_matches:
-                # Specific port query
-                port_num = int(port_matches[0])
-                if 1 <= port_num <= 65535:  # Validate port range
-                    parameters["port_num"] = port_num
-                    return """
-                    MATCH (f:Flow)-[:USES_DST_PORT]->(dp:Port {port: $port_num}),
-                          (src:Host)-[:SENT]->(f),
-                          (dst:Host)-[:RECEIVED]->(f)
-                    RETURN src.ip as source_ip, dst.ip as dest_ip,
-                           dp.port as dest_port,
-                           COUNT(f) as flow_count
-                    ORDER BY flow_count DESC
-                    LIMIT 25
-                    """, parameters
-            elif any(word in query_lower for word in ["common", "popular", "top"]):
-                return """
-                MATCH (f:Flow)-[:USES_DST_PORT]->(dp:Port)
-                RETURN dp.port as port, COUNT(f) as connection_count
-                ORDER BY connection_count DESC
-                LIMIT 20
-                """, parameters
-            else:
-                return """
-                MATCH (f:Flow)-[:USES_DST_PORT]->(dp:Port),
-                      (src:Host)-[:SENT]->(f),
-                      (dst:Host)-[:RECEIVED]->(f)
-                RETURN DISTINCT dp.port as dest_port,
-                       COUNT(f) as flow_count,
-                       COUNT(DISTINCT src.ip) as unique_sources
-                ORDER BY flow_count DESC
-                LIMIT 50
-                """, parameters
-        
-        # PROTOCOL QUERIES - No limits for protocol analysis
-        elif "protocol" in query_lower:
-            return """
-            MATCH (f:Flow)
-            WHERE f.protocolIdentifier IS NOT NULL
-            RETURN f.protocolIdentifier as protocol,
-                   COUNT(f) as flow_count,
-                   COUNT(DISTINCT f.flowId) as unique_flows
-            ORDER BY flow_count DESC
-            """, parameters
-        
-        # DEFAULT QUERY - Comprehensive overview with reasonable limit
-        else:
-            return """
-            MATCH (src:Host)-[r:SENT]->(f:Flow),
-                  (dst:Host)-[:RECEIVED]->(f),
-                  (f)-[:USES_DST_PORT]->(dp:Port)
-            RETURN src.ip as source_ip, dst.ip as dest_ip, 
-                   dp.port as dest_port,
-                   f.protocolIdentifier as protocol,
-                   f.flowStartMilliseconds as timestamp
-            ORDER BY f.flowStartMilliseconds DESC
-            LIMIT 15
-            """, parameters
+        """Generate Cypher query exclusively via LLM, ignoring hardcoded logic."""
+        if not self.cypher_generator:
+            logger.warning("No CypherGenerator available, using default fallback.")
+            return "MATCH (n) RETURN n LIMIT 5", {}
+
+        logger.info("Generating Cypher query using LLM for user query.")
+        cypher_query = self.cypher_generator.generate(query)
+        # LLM returns plain Cypher, so no parameters expected
+        return cypher_query, {}
+
     
     def _format_neo4j_result(self, record) -> str:
         """Format Neo4j record into readable text."""
@@ -685,7 +608,12 @@ class IntelligentSecurityAgent:
         
         # Initialize Neo4j retriever
         try:
-            self.neo4j_retriever = Neo4jRetriever(self.neo4j_uri, self.neo4j_user, self.neo4j_password)
+            self.neo4j_retriever = Neo4jRetriever(
+                self.neo4j_uri,
+                self.neo4j_user,
+                self.neo4j_password,
+                llm=self.llm  # pass the LLM here
+            )
         except Exception as e:
             logger.error(f"Failed to initialize Neo4j retriever: {e}")
             self.neo4j_retriever = None
