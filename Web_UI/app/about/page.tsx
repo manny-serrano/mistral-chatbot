@@ -286,40 +286,101 @@ export default function AboutPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <TeamMember
-                name="Dr. Sarah Chen"
-                role="Chief Technology Officer"
-                bio="Former DARPA researcher with 15+ years in AI and cybersecurity. PhD in Computer Science from MIT."
-                image="/placeholder.svg?height=300&width=300"
-                social={{
-                  linkedin: "#",
-                  twitter: "#",
-                  github: "#",
-                }}
-              />
-              <TeamMember
-                name="Marcus Rodriguez"
-                role="Head of Security Research"
-                bio="Ex-NSA analyst and penetration testing expert. Discovered 50+ CVEs and leads our threat intelligence team."
-                image="/placeholder.svg?height=300&width=300"
-                social={{
-                  linkedin: "#",
-                  twitter: "#",
-                  github: "#",
-                }}
-              />
-              <TeamMember
-                name="Dr. Aisha Patel"
-                role="VP of Engineering"
-                bio="Distributed systems architect with experience at Google and Amazon. Specializes in real-time data processing."
-                image="/placeholder.svg?height=300&width=300"
-                social={{
-                  linkedin: "#",
-                  twitter: "#",
-                  github: "#",
-                }}
-              />
+            {/* Team Leads */}
+            <div className="mb-12">
+              <h3 className="text-2xl font-bold text-purple-300 text-center mb-8">Team Leads</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <TeamMember
+                  name="Alex Merck"
+                  role="Project Lead"
+                  bio="IT Consultant"
+                  image="/team/alex-merck.jpeg"
+                  social={{
+                    linkedin: "#",
+                    twitter: "#",
+                    github: "#",
+                  }}
+                />
+                <TeamMember
+                  name="Vanessa Simmons"
+                  role="Project Lead"
+                  bio="Sr. IT Analyst"
+                  image="/team/vanessa-simmons.jpg"
+                  social={{
+                    linkedin: "#",
+                    twitter: "#",
+                    github: "#",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Developers */}
+            <div>
+              <h3 className="text-2xl font-bold text-violet-300 text-center mb-8">Developers</h3>
+              
+              {/* First row - 3 developers */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
+                <TeamMember
+                  name="Andy Chen"
+                  role="Developer"
+                  bio="CS + ECE"
+                  image="/team/andy-chen.png"
+                  social={{
+                    linkedin: "#",
+                    twitter: "#",
+                    github: "#",
+                  }}
+                />
+                <TeamMember
+                  name="Emmanuel Serrano Campa"
+                  role="Developer"
+                  bio="CS + ECE"
+                  image="/team/emmanual-serrano.png"
+                  social={{
+                    linkedin: "#",
+                    twitter: "#",
+                    github: "#",
+                  }}
+                />
+                <TeamMember
+                  name="Ahmed Al-Ghannam"
+                  role="Developer"
+                  bio="CS"
+                  image="/team/ahmed-al-ghannam.png"
+                  social={{
+                    linkedin: "#",
+                    twitter: "#",
+                    github: "#",
+                  }}
+                />
+              </div>
+              
+              {/* Second row - 2 developers centered */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <TeamMember
+                  name="Fahad Al-Athel"
+                  role="Developer"
+                  bio="CS"
+                  image="/team/fahad-al-athel.png"
+                  social={{
+                    linkedin: "#",
+                    twitter: "#",
+                    github: "#",
+                  }}
+                />
+                <TeamMember
+                  name="Meshari Alsughayyir"
+                  role="Developer"
+                  bio="ECE"
+                  image="/team/Meshari-alsughayyir.jpg"
+                  social={{
+                    linkedin: "#",
+                    twitter: "#",
+                    github: "#",
+                  }}
+                />
+              </div>
             </div>
           </section>
 
