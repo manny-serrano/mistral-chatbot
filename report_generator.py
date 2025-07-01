@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-Network Traffic Report Generator with Real LLM Analysis
+Graph-Based Network Traffic Report Generator with LLM Analysis
 """
 
 import os
 import json
-import pandas as pd
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+from neo4j import GraphDatabase
 import openai
 
 # --- Config ---
-LOGS_PATH = 'neo4j-graphdatabase/logs-json'
 OUTPUT_DIR = 'output_reports'
 WINDOWS = [24, 12, 8, 1]
 
@@ -20,32 +19,153 @@ load_dotenv()
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 OPENAI_API_BASE = os.environ.get("OPENAI_API_BASE", None)
-
+NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "password123")
 
 # --- Ensure output directory exists ---
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def parse_flow(line):
-    try:
-        data = json.loads(line)
-        flow = data.get('flows', {})
-        # Parse times to datetime (UTC)
-        for k in ['flowStartMilliseconds', 'flowEndMilliseconds']:
-            if k in flow:
-                try:
-                    flow[k] = datetime.strptime(flow[k], "%Y-%m-%d %H:%M:%S.%f").replace(tzinfo=timezone.utc)
-                except Exception:
-                    flow[k] = None
-        return flow
-    except Exception:
-        return None
+# ---- Neo4j Helper ----
+class Neo4jReport:
+    def __init__(self, uri, user, password):
+        self.driver = GraphDatabase.driver(uri, auth=(user, password))
 
+    def close(self):
+        self.driver.close()
+
+    def get_latest_time(self):
+        query = """
+        MATCH (f:Flow)
+        RETURN max(f.flowStartMilliseconds) AS latest
+        """
+        with self.driver.session() as session:
+            result = session.run(query)
+            latest = result.single()['latest']
+            if isinstance(latest, str):
+                try:
+                    return datetime.strptime(latest, "%Y-%m-%d %H:%M:%S.%f").replace(tzinfo=timezone.utc)
+                except Exception:
+                    pass
+            if isinstance(latest, datetime):
+                return latest
+            return datetime.now(timezone.utc)
+
+    def flows_in_window(self, start_time, end_time):
+        query = """
+        MATCH (f:Flow)
+        WHERE f.flowStartMilliseconds >= $start_time AND f.flowStartMilliseconds < $end_time
+        RETURN f
+        """
+        with self.driver.session() as session:
+            result = session.run(query, start_time=start_time, end_time=end_time)
+            flows = [dict(record['f']) for record in result]
+            return flows
+
+    def top_talkers(self, start_time, end_time, n=5):
+        query = """
+        MATCH (src:Host)-[:SENT]->(f:Flow)
+        WHERE f.flowStartMilliseconds >= $start_time AND f.flowStartMilliseconds < $end_time
+        RETURN src.ip AS ip, sum(f.octetTotalCount) AS bytes
+        ORDER BY bytes DESC
+        LIMIT $n
+        """
+        with self.driver.session() as session:
+            result = session.run(query, start_time=start_time, end_time=end_time, n=n)
+            return {r['ip']: r['bytes'] for r in result if r['ip']}
+
+    def top_ports(self, start_time, end_time, n=5):
+        query = """
+        MATCH (f:Flow)-[:USES_DST_PORT]->(p:Port)
+        WHERE f.flowStartMilliseconds >= $start_time AND f.flowStartMilliseconds < $end_time
+        RETURN p.port AS port, sum(f.octetTotalCount) AS bytes
+        ORDER BY bytes DESC
+        LIMIT $n
+        """
+        with self.driver.session() as session:
+            result = session.run(query, start_time=start_time, end_time=end_time, n=n)
+            return {str(r['port']): r['bytes'] for r in result if r['port'] is not None}
+
+    def protocol_breakdown(self, start_time, end_time):
+        query = """
+        MATCH (f:Flow)
+        WHERE f.flowStartMilliseconds >= $start_time AND f.flowStartMilliseconds < $end_time
+        RETURN f.protocolIdentifier AS protocol, count(*) AS count
+        ORDER BY count DESC
+        """
+        with self.driver.session() as session:
+            result = session.run(query, start_time=start_time, end_time=end_time)
+            return {str(r['protocol']): r['count'] for r in result if r['protocol'] is not None}
+
+    def endpoints(self, start_time, end_time):
+        query = """
+        MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(p:Port)<-[:USES_DST_PORT]-(f2:Flow)<-[:RECEIVED]-(dst:Host)
+        WHERE f.flowStartMilliseconds >= $start_time AND f.flowStartMilliseconds < $end_time
+        RETURN DISTINCT src.ip AS src, dst.ip AS dst
+        """
+        with self.driver.session() as session:
+            result = session.run(query, start_time=start_time, end_time=end_time)
+            sources = set()
+            destinations = set()
+            for r in result:
+                if r['src']:
+                    sources.add(r['src'])
+                if r['dst']:
+                    destinations.add(r['dst'])
+            return sorted(sources), sorted(destinations)
+
+    def perf_metrics(self, start_time, end_time):
+        query = """
+        MATCH (f:Flow)
+        WHERE f.flowStartMilliseconds >= $start_time AND f.flowStartMilliseconds < $end_time
+        RETURN avg(f.flowDurationMilliseconds) AS avg_duration,
+               sum(f.packetTotalCount) AS total_packets,
+               avg(f.packetTotalCount) AS avg_packets_per_flow
+        """
+        with self.driver.session() as session:
+            r = session.run(query, start_time=start_time, end_time=end_time).single()
+            return {
+                "avg_flow_duration_ms": float(r['avg_duration'] or 0.0),
+                "total_packet_count": int(r['total_packets'] or 0),
+                "avg_packets_per_flow": float(r['avg_packets_per_flow'] or 0.0)
+            }
+
+    def bandwidth(self, start_time, end_time):
+        # average and peak bps
+        query = """
+        MATCH (f:Flow)
+        WHERE f.flowStartMilliseconds >= $start_time AND f.flowStartMilliseconds < $end_time
+        RETURN sum(f.octetTotalCount + f.reverseOctetTotalCount) AS total_bytes
+        """
+        with self.driver.session() as session:
+            total_bytes = session.run(query, start_time=start_time, end_time=end_time).single()['total_bytes'] or 0
+        total_bits = total_bytes * 8
+        seconds = (end_time - start_time).total_seconds()
+        avg_bps = int(total_bits / seconds) if seconds > 0 else 0
+
+        # peak (max) bps in any 1-minute window
+        query = """
+        MATCH (f:Flow)
+        WHERE f.flowStartMilliseconds >= $start_time AND f.flowStartMilliseconds < $end_time
+        WITH f, apoc.date.truncate(apoc.date.parse(f.flowStartMilliseconds,'ms','yyyy-MM-dd HH:mm:ss.SSS'), 'minute') AS minute
+        RETURN minute, sum(f.octetTotalCount + f.reverseOctetTotalCount)*8/60 AS bps
+        ORDER BY bps DESC
+        LIMIT 1
+        """
+        try:
+            with self.driver.session() as session:
+                r = session.run(query, start_time=start_time, end_time=end_time).single()
+                peak_bps = int(r['bps']) if r and r['bps'] is not None else avg_bps
+        except Exception:
+            peak_bps = avg_bps
+        return {"average_bps": avg_bps, "peak_bps": peak_bps}
+
+# ---- LLM Analysis ----
 def llm_analysis(report_dict):
     """
     Use OpenAI (or Azure-compatible) LLM to analyze the traffic report.
     Returns a list of findings with confidence and recommendations.
     """
-   
     prompt = f"""
 You are a senior cybersecurity analyst. You are given a summary of network traffic for a time window, in JSON format.
 
@@ -96,163 +216,53 @@ Example:
             }
         ]
 
-
-def aggregate_flows(flows, window_hours, now):
-    window_start = now - timedelta(hours=window_hours)
-    window_flows = [f for f in flows if f.get('flowStartMilliseconds') and f['flowStartMilliseconds'] >= window_start]
-    if not window_flows:
-        return None, None
-    df = pd.DataFrame(window_flows)
-    # Ensure all needed columns exist and are Series
-    for col in ['octetTotalCount', 'reverseOctetTotalCount', 'flowDurationMilliseconds', 'packetTotalCount']:
-        if col not in df:
-            df[col] = pd.Series(dtype=float)
-        elif not isinstance(df[col], pd.Series):
-            df[col] = pd.Series(df[col])
-    # Convert to numeric (only call fillna on Series)
-    for col in ['octetTotalCount', 'reverseOctetTotalCount', 'packetTotalCount']:
-        if not isinstance(df[col], pd.Series):
-            df[col] = pd.Series(df[col])
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-        if isinstance(df[col], pd.Series):
-            df[col] = df[col].fillna(0)
-    # For flowDurationMilliseconds, just use pd.to_numeric (no fillna on float)
-    if not isinstance(df['flowDurationMilliseconds'], pd.Series):
-        df['flowDurationMilliseconds'] = pd.Series(df['flowDurationMilliseconds'])
-    df['flowDurationMilliseconds'] = pd.to_numeric(df['flowDurationMilliseconds'], errors='coerce')
-    df['traffic'] = df['octetTotalCount'] + df['reverseOctetTotalCount']
-    traffic_volume = int(df['traffic'].sum())
-    total_flows = len(df)
-    # Top talkers
-    if 'sourceIPv4Address' in df and isinstance(df['sourceIPv4Address'], pd.Series) and df['sourceIPv4Address'].isnull().all() is False:
-        talkers_series = df.groupby('sourceIPv4Address')['octetTotalCount'].sum()
-        if isinstance(talkers_series, pd.Series):
-            talkers_series = talkers_series.sort_values(ascending=False)
-        top_talkers = talkers_series.head(5).to_dict()
-        source_endpoints = sorted(df['sourceIPv4Address'].dropna().unique().tolist())
-    else:
-        top_talkers = {}
-        source_endpoints = []
-    # Top ports
-    if 'destinationTransportPort' in df and isinstance(df['destinationTransportPort'], pd.Series) and df['destinationTransportPort'].isnull().all() is False:
-        ports_series = df.groupby('destinationTransportPort')['octetTotalCount'].sum()
-        if isinstance(ports_series, pd.Series):
-            ports_series = ports_series.sort_values(ascending=False)
-        top_ports = ports_series.head(5).to_dict()
-        destination_endpoints = sorted(df['destinationIPv4Address'].dropna().unique().tolist()) if 'destinationIPv4Address' in df else []
-    else:
-        top_ports = {}
-        destination_endpoints = []
-    # Protocol breakdown
-    protocol_breakdown = df['protocolIdentifier'].value_counts().to_dict() if 'protocolIdentifier' in df else {}
-    # Bandwidth utilization (bps)
-    df['duration'] = df['flowDurationMilliseconds']
-    total_bits = df['traffic'].sum() * 8
-    total_seconds = (window_hours * 3600)
-    avg_bps = int(total_bits / total_seconds) if total_seconds > 0 else 0
-    # Peak bps: max traffic in any 1-minute window
-    if 'flowStartMilliseconds' in df and isinstance(df['flowStartMilliseconds'], pd.Series):
-        df['minute'] = df['flowStartMilliseconds'].dt.floor('min')
-        minute_traffic = df.groupby('minute')['traffic'].sum()
-        if not isinstance(minute_traffic, pd.Series):
-            minute_traffic = pd.Series(minute_traffic)
-        minute_traffic_bps = minute_traffic * 8 / 60
-        peak_bps = int(minute_traffic_bps.max()) if not minute_traffic_bps.empty else 0
-    else:
-        peak_bps = 0
-    # Performance metrics
-    avg_flow_duration = float(df['duration'].mean()) if not df['duration'].empty else 0.0
-    total_packet_count = int(df['packetTotalCount'].sum())
-    avg_packets_per_flow = float(df['packetTotalCount'].mean()) if not df['packetTotalCount'].empty else 0.0
-    performance_metrics = {
-        "avg_flow_duration_ms": avg_flow_duration,
-        "total_packet_count": total_packet_count,
-        "avg_packets_per_flow": avg_packets_per_flow
-    }
-    alarms = []
-    return {
-        "window": f"{window_hours}h",
-        "generated_at": now.isoformat(),
-        "traffic_volume": traffic_volume,
-        "total_flows": total_flows,
-        "top_talkers": top_talkers,
-        "top_ports": top_ports,
-        "source_endpoints": source_endpoints,
-        "destination_endpoints": destination_endpoints,
-        "protocol_breakdown": protocol_breakdown,
-        "bandwidth_utilization": {
-            "average_bps": avg_bps,
-            "peak_bps": peak_bps
-        },
-        "performance_metrics": performance_metrics,
-        "alarms": alarms
-    }, df
-
-def historical_comparison(current_df, prev_df):
-    if current_df is None or prev_df is None:
-        return {}
-    comp = {}
-    for field in ["traffic", "octetTotalCount", "reverseOctetTotalCount", "packetTotalCount"]:
-        curr = current_df.get(field, pd.Series(dtype=float)).sum() if field in current_df else 0
-        prev = prev_df.get(field, pd.Series(dtype=float)).sum() if field in prev_df else 0
-        if prev == 0:
-            change = None
-        else:
-            change = (curr - prev) / prev
-        comp[field] = {
-            "current": int(curr),
-            "previous": int(prev),
-            "change": change
-        }
-    comp["total_flows"] = {
-        "current": len(current_df) if current_df is not None else 0,
-        "previous": len(prev_df) if prev_df is not None else 0,
-        "change": ((len(current_df) - len(prev_df)) / len(prev_df)) if prev_df is not None and len(prev_df) > 0 else None
-    }
-    return comp
-
+# ---- Main report loop ----
 def main():
-    # Read all flows from all files in logs-json
-    flows = []
-    logs_dir = LOGS_PATH
-    for fname in os.listdir(logs_dir):
-        if not fname.endswith('.json'):
-            continue
-        if fname == "sampleSTINGAR.json":
-            continue  # Skip this file
-        with open(os.path.join(logs_dir, fname), 'r') as f:
-            for line in f:
-                flow = parse_flow(line)
-                if flow:
-                    flows.append(flow)
-
-    print(f"Found {len(flows)} flows.")
-    # For testing, use the latest timestamp in flows as "now"
-    times = [f['flowStartMilliseconds'] for f in flows if f.get('flowStartMilliseconds')]
-    if times:
-        now = max(times)
+    neo4j = Neo4jReport(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
+    try:
+        now = neo4j.get_latest_time()
         print(f"Using latest flowStartMilliseconds as now: {now}")
-    else:
-        now = datetime.now(timezone.utc)
-        print("No flows found! Using current system time.")
 
-    prev_dfs = {}
-    for window in WINDOWS:
-        report, df = aggregate_flows(flows, window, now)
-        if report is None:
-            continue
-        # Historical comparison
-        prev_df = prev_dfs.get(window, None)
-        report["historical_comparison"] = historical_comparison(df, prev_df)
-        # LLM analysis (real, not stub!)
-        report["llm_analysis"] = llm_analysis(report)
-        # Save report
-        ts = now.strftime("%Y%m%dT%H%M%SZ")
-        out_path = os.path.join(OUTPUT_DIR, f"report_{window}h_{ts}.json")
-        with open(out_path, 'w') as out_f:
-            json.dump(report, out_f, indent=2, default=str)
-        print(f"Saved report: {out_path}")
-        prev_dfs[window] = df
+        for window in WINDOWS:
+            start_time = now - timedelta(hours=window)
+            end_time = now
+            print(f"Generating {window}h report from {start_time} to {end_time}...")
+
+            # Get all stats
+            traffic_volume = sum(neo4j.top_talkers(start_time, end_time).values())
+            total_flows = len(neo4j.flows_in_window(start_time, end_time))
+            top_talkers = neo4j.top_talkers(start_time, end_time)
+            top_ports = neo4j.top_ports(start_time, end_time)
+            protocol_breakdown = neo4j.protocol_breakdown(start_time, end_time)
+            source_endpoints, destination_endpoints = neo4j.endpoints(start_time, end_time)
+            bandwidth_utilization = neo4j.bandwidth(start_time, end_time)
+            performance_metrics = neo4j.perf_metrics(start_time, end_time)
+
+            report = {
+                "window": f"{window}h",
+                "generated_at": now.isoformat(),
+                "traffic_volume": traffic_volume,
+                "total_flows": total_flows,
+                "top_talkers": top_talkers,
+                "top_ports": top_ports,
+                "source_endpoints": source_endpoints,
+                "destination_endpoints": destination_endpoints,
+                "protocol_breakdown": protocol_breakdown,
+                "bandwidth_utilization": bandwidth_utilization,
+                "performance_metrics": performance_metrics,
+                "alarms": [],  # You can add anomaly detection here later!
+            }
+
+            report["llm_analysis"] = llm_analysis(report)
+
+            ts = now.strftime("%Y%m%dT%H%M%SZ")
+            out_path = os.path.join(OUTPUT_DIR, f"report_{window}h_{ts}.json")
+            with open(out_path, 'w') as out_f:
+                json.dump(report, out_f, indent=2, default=str)
+            print(f"Saved report: {out_path}")
+
+    finally:
+        neo4j.close()
 
 
 if __name__ == "__main__":
