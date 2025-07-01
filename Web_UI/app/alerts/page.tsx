@@ -305,10 +305,10 @@ export default function AlertsPage() {
                 Reports
               </Link>
               <Link
-                href="/settings"
+                href="/visualization"
                 className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
               >
-                Settings
+                Visualization
               </Link>
               <ProfileDropdown />
             </nav>

@@ -37,10 +37,10 @@ export default function DashboardPage() {
               Reports
             </Link>
             <Link
-              href="/settings"
+              href="/visualization"
               className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
             >
-              Settings
+              Visualization
             </Link>
           </nav>
           <div className="flex items-center gap-4">

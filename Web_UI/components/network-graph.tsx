@@ -32,8 +32,31 @@ export const NetworkGraph = () => {
     return () => observer.disconnect()
   }, [])
 
+  // Handle scroll events to prevent propagation outside the graph
+  const handleWheel = (e: React.WheelEvent) => {
+    // Allow the graph to handle zoom/pan, but stop propagation to parent
+    e.stopPropagation()
+  }
+
+  const handleMouseEnter = () => {
+    // Disable page scroll when mouse enters graph
+    document.body.style.overflow = 'hidden'
+  }
+
+  const handleMouseLeave = () => {
+    // Re-enable page scroll when mouse leaves graph
+    document.body.style.overflow = 'auto'
+  }
+
   return (
-    <div ref={containerRef} style={{ width: "100%", height: "calc(100vh - 60px)" }}>
+    <div 
+      ref={containerRef} 
+      style={{ width: "100%", height: "500px" }}
+      onWheel={handleWheel}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className="overflow-hidden relative border border-zinc-700 rounded-lg bg-zinc-900"
+    >
       <ForceGraph2D
         ref={graphRef}
         width={dims.width}
@@ -42,6 +65,7 @@ export const NetworkGraph = () => {
         nodeAutoColorBy="group"
         linkDirectionalArrowLength={3.5}
         linkDirectionalArrowRelPos={1}
+        backgroundColor="transparent"
       />
     </div>
   )

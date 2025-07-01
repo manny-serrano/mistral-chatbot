@@ -139,7 +139,12 @@ export default function SettingsPage() {
               >
                 Reports
               </Link>
-              <span className="text-sm font-medium text-purple-300">Settings</span>
+              <Link
+                href="/visualization"
+                className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+              >
+                Visualization
+              </Link>
               <ProfileDropdown />
             </nav>
           </div>
