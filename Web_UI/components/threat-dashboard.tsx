@@ -196,8 +196,8 @@ function ThreatDashboard() {
       <CardHeader className="border-b border-zinc-800 px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-            <CardTitle className="text-lg font-medium">Threat Intelligence Dashboard</CardTitle>
+            <span className="text-lg font-semibold text-white">Dashboard</span>
+            <CardTitle className="text-lg font-medium">Threat Intelligence</CardTitle>
           </div>
         </div>
       </CardHeader>

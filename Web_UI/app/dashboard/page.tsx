@@ -55,9 +55,6 @@ export default function DashboardPage() {
       <div className="mx-auto flex w-full max-w-7xl flex-1 gap-6 p-6 relative z-10">
         <div className="flex w-2/3 flex-col gap-6">
           <ThreatDashboard />
-          <div className="rounded-lg shadow p-4 h-[400px] overflow-hidden">
-            {/* Removed: <GraphViewer /> */}
-          </div>
         </div>
         <div className="w-1/3">
           <Chat />

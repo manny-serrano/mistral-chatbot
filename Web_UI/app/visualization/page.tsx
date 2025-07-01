@@ -6,6 +6,7 @@ import { ShieldCheck, Bell, BarChart3, Network, Cpu, Activity } from "lucide-rea
 import { ProfileDropdown } from "@/components/profile-dropdown"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { useEffect, useState, useRef } from "react"
 
 // Dynamically import NetworkGraph to prevent SSR issues
 const NetworkGraph = dynamic(() => import("@/components/network-graph").then(mod => ({ default: mod.NetworkGraph })), {
@@ -13,7 +14,89 @@ const NetworkGraph = dynamic(() => import("@/components/network-graph").then(mod
   loading: () => <div className="flex items-center justify-center h-64 bg-zinc-900 rounded-lg border border-zinc-800"><p className="text-zinc-400">Loading network graph...</p></div>
 })
 
+interface NetworkStats {
+  network_nodes: number
+  active_connections: number
+  data_throughput: string
+  total_hosts: number
+  total_flows: number
+  total_protocols: number
+  malicious_flows: number
+  top_ports: Array<{ port: number; service?: string; count: number }>
+  top_protocols: Array<{ protocol: string; count: number }>
+  threat_indicators: Array<{ ip: string; count: number; threat_type: string }>
+}
+
 export default function VisualizationPage() {
+  const [stats, setStats] = useState<NetworkStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const networkGraphRef = useRef<any>(null)
+  const [, forceUpdate] = useState({})
+
+  // Force component re-render to update controls
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (networkGraphRef.current) {
+        forceUpdate({})
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        
+        const response = await fetch('/api/network/stats')
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
+        const data = await response.json()
+        
+        if (!data.success && data.error) {
+          throw new Error(data.error)
+        }
+        
+        setStats(data)
+      } catch (err) {
+        console.error('Error fetching network stats:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load network statistics')
+        
+        // Fallback to mock data
+        setStats({
+          network_nodes: 1247,
+          active_connections: 3891,
+          data_throughput: "2.4 GB/s",
+          total_hosts: 156,
+          total_flows: 3891,
+          total_protocols: 12,
+          malicious_flows: 23,
+          top_ports: [
+            { port: 80, service: "http", count: 1024 },
+            { port: 443, service: "https", count: 892 },
+            { port: 22, service: "ssh", count: 234 },
+          ],
+          top_protocols: [
+            { protocol: "tcp", count: 2847 },
+            { protocol: "udp", count: 1044 },
+          ],
+          threat_indicators: [
+            { ip: "185.143.223.12", count: 15, threat_type: "Malware C&C" },
+            { ip: "91.243.85.45", count: 8, threat_type: "Scanning Activity" },
+          ]
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
       {/* Animated background elements */}
@@ -89,9 +172,15 @@ export default function VisualizationPage() {
               <CardContent>
                 <div className="flex items-center gap-2">
                   <Network className="h-4 w-4 text-purple-400" />
-                  <span className="text-2xl font-bold text-white">1,247</span>
+                  {loading ? (
+                    <span className="text-2xl font-bold text-white">...</span>
+                  ) : (
+                    <span className="text-2xl font-bold text-white">{stats?.network_nodes?.toLocaleString() || '0'}</span>
+                  )}
                 </div>
-                <p className="text-xs text-zinc-500 mt-1">+12 from last hour</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {error ? "⚠️ Using fallback data" : "Real-time from Neo4j"}
+                </p>
               </CardContent>
             </Card>
 
@@ -102,9 +191,15 @@ export default function VisualizationPage() {
               <CardContent>
                 <div className="flex items-center gap-2">
                   <Activity className="h-4 w-4 text-violet-400" />
-                  <span className="text-2xl font-bold text-white">3,891</span>
+                  {loading ? (
+                    <span className="text-2xl font-bold text-white">...</span>
+                  ) : (
+                    <span className="text-2xl font-bold text-white">{stats?.active_connections?.toLocaleString() || '0'}</span>
+                  )}
                 </div>
-                <p className="text-xs text-zinc-500 mt-1">Real-time monitoring</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {loading ? "Loading..." : `${stats?.total_flows || 0} total flows`}
+                </p>
               </CardContent>
             </Card>
 
@@ -115,22 +210,34 @@ export default function VisualizationPage() {
               <CardContent>
                 <div className="flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-fuchsia-400" />
-                  <span className="text-2xl font-bold text-white">2.4 GB/s</span>
+                  {loading ? (
+                    <span className="text-2xl font-bold text-white">...</span>
+                  ) : (
+                    <span className="text-2xl font-bold text-white">{stats?.data_throughput || '0 GB/s'}</span>
+                  )}
                 </div>
-                <p className="text-xs text-zinc-500 mt-1">Peak: 3.1 GB/s</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {loading ? "Calculating..." : `${stats?.total_hosts || 0} unique hosts`}
+                </p>
               </CardContent>
             </Card>
 
             <Card className="bg-gray-900/80 border-emerald-400/40 backdrop-blur-xl">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-zinc-400">CPU Usage</CardTitle>
+                <CardTitle className="text-sm font-medium text-zinc-400">Security Status</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-2">
                   <Cpu className="h-4 w-4 text-emerald-400" />
-                  <span className="text-2xl font-bold text-white">67%</span>
+                  {loading ? (
+                    <span className="text-2xl font-bold text-white">...</span>
+                  ) : (
+                    <span className="text-2xl font-bold text-white">{stats?.malicious_flows || 0}</span>
+                  )}
                 </div>
-                <p className="text-xs text-zinc-500 mt-1">Within normal range</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {loading ? "Analyzing..." : "Malicious flows detected"}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -140,17 +247,82 @@ export default function VisualizationPage() {
             <div className="xl:col-span-2">
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl h-[600px] relative z-10">
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Network className="h-5 w-5 text-purple-400" />
-                    Interactive Network Graph
-                  </CardTitle>
-                  <CardDescription>
-                    Real-time network topology with threat indicators
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-white flex items-center gap-2">
+                        <Network className="h-5 w-5 text-purple-400" />
+                        Interactive Network Graph
+                      </CardTitle>
+                      <CardDescription>
+                        Real-time network topology with threat indicators
+                      </CardDescription>
+                    </div>
+                    
+                    {/* Graph Controls */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-300 text-sm">Limit:</span>
+                        <select 
+                          value={networkGraphRef.current?.nodeLimit || 200}
+                          onChange={(e) => networkGraphRef.current?.handleLimitChange(parseInt(e.target.value))}
+                          className="bg-gray-800 text-white px-2 py-1 rounded border border-gray-600 focus:border-purple-400 focus:outline-none text-sm"
+                        >
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                          <option value={200}>200</option>
+                          <option value={500}>500</option>
+                          <option value={1000}>1000</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => networkGraphRef.current?.refreshGraph()}
+                        disabled={networkGraphRef.current?.loading}
+                        className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-3 py-1 rounded border border-purple-500 hover:border-purple-400 transition-colors flex items-center gap-1 text-sm"
+                      >
+                        {networkGraphRef.current?.loading ? '⏳' : '🔄'}
+                        <span>{networkGraphRef.current?.loading ? 'Loading...' : 'Refresh'}</span>
+                      </button>
+                      <button
+                        onClick={() => networkGraphRef.current?.centerGraph()}
+                        className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded border border-blue-500 hover:border-blue-400 transition-colors flex items-center gap-1 text-sm"
+                      >
+                        🎯
+                        <span>Center</span>
+                      </button>
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="p-0 h-[500px] relative overflow-hidden">
+                <CardContent className="p-0 h-[500px] relative">
                   <div className="w-full h-full">
-                    <NetworkGraph />
+                    <NetworkGraph ref={networkGraphRef} />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Network Graph Legend - Outside the card */}
+              <Card className="bg-gray-900/80 border-gray-400/40 backdrop-blur-xl mt-4">
+                <CardContent className="p-4">
+                  <div className="text-sm">
+                    <div className="font-medium mb-3 text-gray-300">Node Legend:</div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <span className="text-white">📤 Source Hosts</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span className="text-white">📥 Destination Hosts</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500 border border-red-400"></div>
+                        <span className="text-white">⚠️ Malicious Nodes</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-600 text-gray-400 grid grid-cols-3 gap-4">
+                      <div>💜 Animated particles = Data flow</div>
+                      <div>🔍 Zoom in to see IP labels</div>
+                      <div>🎯 Use Center button if nodes go off-screen</div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -201,29 +373,42 @@ export default function VisualizationPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-2 bg-red-500/10 rounded-lg border border-red-500/20">
-                      <div>
-                        <p className="text-sm font-medium text-white">185.143.223.12</p>
-                        <p className="text-xs text-red-400">Malware C&C</p>
-                      </div>
-                      <Badge className="bg-red-500/20 text-red-400 border-red-500/30">High</Badge>
-                    </div>
-                    
-                    <div className="flex items-center justify-between p-2 bg-orange-500/10 rounded-lg border border-orange-500/20">
-                      <div>
-                        <p className="text-sm font-medium text-white">91.243.85.45</p>
-                        <p className="text-xs text-orange-400">Scanning Activity</p>
-                      </div>
-                      <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Medium</Badge>
-                    </div>
-                    
-                    <div className="flex items-center justify-between p-2 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-                      <div>
-                        <p className="text-sm font-medium text-white">103.35.74.74</p>
-                        <p className="text-xs text-yellow-400">Suspicious Pattern</p>
-                      </div>
-                      <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Low</Badge>
-                    </div>
+                    {loading ? (
+                      <div className="text-center text-zinc-400">Loading threat indicators...</div>
+                    ) : stats?.threat_indicators && stats.threat_indicators.length > 0 ? (
+                      stats.threat_indicators.slice(0, 3).map((threat, index) => {
+                        const severityColor = threat.count > 10 ? "red" : threat.count > 5 ? "orange" : "yellow"
+                        const isHighThreat = threat.count > 10
+                        const isMediumThreat = threat.count > 5 && threat.count <= 10
+                        const isLowThreat = threat.count <= 5
+                        
+                        return (
+                          <div key={threat.ip} className={`flex items-center justify-between p-2 rounded-lg border ${
+                            isHighThreat ? 'bg-red-500/10 border-red-500/20' :
+                            isMediumThreat ? 'bg-orange-500/10 border-orange-500/20' :
+                            'bg-yellow-500/10 border-yellow-500/20'
+                          }`}>
+                            <div>
+                              <p className="text-sm font-medium text-white">{threat.ip}</p>
+                              <p className={`text-xs ${
+                                isHighThreat ? 'text-red-400' :
+                                isMediumThreat ? 'text-orange-400' :
+                                'text-yellow-400'
+                              }`}>{threat.threat_type}</p>
+                            </div>
+                            <Badge className={`${
+                              isHighThreat ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                              isMediumThreat ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                              'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                            }`}>
+                              {threat.count > 10 ? "High" : threat.count > 5 ? "Medium" : "Low"}
+                            </Badge>
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <div className="text-center text-zinc-400">No active threats detected</div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -237,20 +422,34 @@ export default function VisualizationPage() {
                 <CardContent>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Firewall Status</span>
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Active</Badge>
+                      <span className="text-sm text-zinc-400">Neo4j Database</span>
+                      <Badge className={stats && !error ? 
+                        'bg-green-500/20 text-green-400 border-green-500/30' : 
+                        'bg-red-500/20 text-red-400 border-red-500/30'
+                      }>
+                        {stats && !error ? 'Connected' : 'Error'}
+                      </Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">IDS/IPS</span>
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Operational</Badge>
+                      <span className="text-sm text-zinc-400">Total Protocols</span>
+                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+                        {loading ? "..." : stats?.total_protocols || 0}
+                      </Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Threat Intel</span>
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Updated</Badge>
+                      <span className="text-sm text-zinc-400">Graph Nodes</span>
+                      <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                        {loading ? "..." : stats?.network_nodes?.toLocaleString() || 0}
+                      </Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Log Analysis</span>
-                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Processing</Badge>
+                      <span className="text-sm text-zinc-400">Security Analysis</span>
+                      <Badge className={(stats?.malicious_flows || 0) > 0 ? 
+                        'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 
+                        'bg-green-500/20 text-green-400 border-green-500/30'
+                      }>
+                        {loading ? "..." : (stats?.malicious_flows || 0) > 0 ? "Threats Found" : "Clean"}
+                      </Badge>
                     </div>
                   </div>
                 </CardContent>

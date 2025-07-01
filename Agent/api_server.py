@@ -37,6 +37,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from intelligent_agent import IntelligentSecurityAgent
 
+# Import Neo4j driver for direct database queries
+from neo4j import GraphDatabase
+
 def serialize_neo4j_objects(obj):
     """Convert Neo4j objects to JSON-serializable formats."""
     if isinstance(obj, Neo4jDateTime):
@@ -83,6 +86,212 @@ agent = None
 agent_initialized = False
 initialization_error = None
 
+# Neo4j helper class for direct visualization queries
+class Neo4jVisualizationHelper:
+    def __init__(self):
+        self.uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        self.user = os.getenv("NEO4J_USER", "neo4j")
+        self.password = os.getenv("NEO4J_PASSWORD", "password123")
+        self.driver = None
+        
+    def connect(self):
+        try:
+            self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
+            with self.driver.session() as session:
+                session.run("RETURN 1")
+            logger.info("Neo4j visualization helper connected successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect Neo4j visualization helper: {e}")
+            return False
+    
+    def close(self):
+        if self.driver:
+            self.driver.close()
+    
+    def get_network_graph_data(self, limit: int = 100):
+        """Get network graph data optimized for visualization"""
+        if not self.driver:
+            if not self.connect():
+                raise Exception("Cannot connect to Neo4j")
+        
+        nodes = []
+        links = []
+        
+        try:
+            with self.driver.session() as session:
+                # Get a sample of hosts, flows, and their relationships
+                query = """
+                MATCH (src:Host)-[:SENT]->(f:Flow)-[:RECEIVED]-(dst:Host)
+                OPTIONAL MATCH (f)-[:USES_PROTOCOL]->(p:Protocol)
+                OPTIONAL MATCH (f)-[:USES_DST_PORT]->(port:Port)
+                WITH src, dst, f, p, port
+                LIMIT $limit
+                RETURN 
+                    src.ip as src_ip,
+                    dst.ip as dst_ip,
+                    f.flowId as flow_id,
+                    f.malicious as malicious,
+                    f.honeypot as honeypot,
+                    p.name as protocol,
+                    port.port as dst_port,
+                    port.service as service
+                """
+                
+                result = session.run(query, limit=limit)
+                
+                node_set = set()
+                
+                for record in result:
+                    src_ip = record["src_ip"]
+                    dst_ip = record["dst_ip"]
+                    flow_id = record["flow_id"]
+                    malicious = record.get("malicious", False)
+                    protocol = record.get("protocol", "unknown")
+                    dst_port = record.get("dst_port")
+                    service = record.get("service")
+                    
+                    # Add source host node
+                    if src_ip not in node_set:
+                        nodes.append(NetworkNode(
+                            id=src_ip,
+                            type="host",
+                            label=src_ip,
+                            group="source_host",
+                            ip=src_ip,
+                            malicious=malicious
+                        ))
+                        node_set.add(src_ip)
+                    
+                    # Add destination host node  
+                    if dst_ip not in node_set:
+                        nodes.append(NetworkNode(
+                            id=dst_ip,
+                            type="host", 
+                            label=dst_ip,
+                            group="dest_host",
+                            ip=dst_ip,
+                            malicious=malicious
+                        ))
+                        node_set.add(dst_ip)
+                    
+                    # Add flow connection
+                    links.append(NetworkLink(
+                        source=src_ip,
+                        target=dst_ip,
+                        type="FLOW",
+                        metadata={
+                            "flow_id": flow_id,
+                            "malicious": malicious,
+                            "protocol": protocol,
+                            "dst_port": dst_port,
+                            "service": service
+                        }
+                    ))
+        
+        except Exception as e:
+            logger.error(f"Error getting network graph data: {e}")
+            raise
+        
+        return nodes, links
+    
+    def get_network_statistics(self):
+        """Get network statistics for the dashboard"""
+        if not self.driver:
+            if not self.connect():
+                raise Exception("Cannot connect to Neo4j")
+        
+        stats = {}
+        
+        try:
+            with self.driver.session() as session:
+                # Total hosts
+                result = session.run("MATCH (h:Host) RETURN count(h) as total_hosts")
+                record = result.single()
+                stats["total_hosts"] = record["total_hosts"] if record else 0
+                
+                # Total flows
+                result = session.run("MATCH (f:Flow) RETURN count(f) as total_flows")
+                record = result.single()
+                stats["total_flows"] = record["total_flows"] if record else 0
+                
+                # Total protocols  
+                result = session.run("MATCH (p:Protocol) RETURN count(p) as total_protocols")
+                record = result.single()
+                stats["total_protocols"] = record["total_protocols"] if record else 0
+                
+                # Malicious flows
+                result = session.run("MATCH (f:Flow) WHERE f.malicious = true RETURN count(f) as malicious_flows")
+                record = result.single()
+                stats["malicious_flows"] = record["malicious_flows"] if record else 0
+                
+                # Active connections (flows)
+                stats["active_connections"] = stats["total_flows"]
+                
+                # Network nodes count (hosts + protocols + ports)
+                result = session.run("""
+                    MATCH (h:Host) WITH count(h) as hosts
+                    MATCH (p:Protocol) WITH hosts, count(p) as protocols  
+                    MATCH (port:Port) WITH hosts, protocols, count(port) as ports
+                    RETURN hosts + protocols + ports as total_nodes
+                """)
+                record = result.single()
+                stats["network_nodes"] = record["total_nodes"] if record else stats["total_hosts"]
+                
+                # Top ports
+                result = session.run("""
+                    MATCH (f:Flow)-[:USES_DST_PORT]->(port:Port)
+                    RETURN port.port as port, port.service as service, count(f) as flow_count
+                    ORDER BY flow_count DESC
+                    LIMIT 5
+                """)
+                stats["top_ports"] = []
+                for record in result:
+                    stats["top_ports"].append({
+                        "port": record["port"], 
+                        "service": record["service"], 
+                        "count": record["flow_count"]
+                    })
+                
+                # Top protocols
+                result = session.run("""
+                    MATCH (f:Flow)-[:USES_PROTOCOL]->(p:Protocol)
+                    RETURN p.name as protocol, count(f) as flow_count
+                    ORDER BY flow_count DESC
+                    LIMIT 5
+                """)
+                stats["top_protocols"] = []
+                for record in result:
+                    stats["top_protocols"].append({
+                        "protocol": record["protocol"], 
+                        "count": record["flow_count"]
+                    })
+                
+                # Threat indicators (malicious flows by source)
+                result = session.run("""
+                    MATCH (src:Host)-[:SENT]->(f:Flow)
+                    WHERE f.malicious = true
+                    RETURN src.ip as source_ip, count(f) as malicious_count
+                    ORDER BY malicious_count DESC
+                    LIMIT 5
+                """)
+                stats["threat_indicators"] = []
+                for record in result:
+                    stats["threat_indicators"].append({
+                        "ip": record["source_ip"], 
+                        "count": record["malicious_count"]
+                    })
+                
+        except Exception as e:
+            logger.error(f"Error getting network statistics: {e}")
+            # Return what we have so far, don't raise
+            pass
+        
+        return stats
+
+# Initialize Neo4j helper
+neo4j_helper = Neo4jVisualizationHelper()
+
 def initialize_agent():
     """Initialize the security agent with comprehensive error handling."""
     global agent, agent_initialized, initialization_error
@@ -125,6 +334,12 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize during startup: {e}")
             logger.warning("Server will continue in limited mode")
+        
+        # Initialize Neo4j helper for visualization
+        try:
+            neo4j_helper.connect()
+        except Exception as e:
+            logger.error(f"Failed to initialize Neo4j visualization helper: {e}")
     
     yield
     
@@ -146,6 +361,13 @@ async def lifespan(app: FastAPI):
             logger.error(f"Error closing agent: {e}")
         finally:
             agent = None
+    
+    # Close Neo4j helper
+    try:
+        neo4j_helper.close()
+        logger.info("Neo4j visualization helper closed successfully")
+    except Exception as e:
+        logger.error(f"Error closing Neo4j helper: {e}")
 
 # Pydantic models for API requests/responses with improved validation
 class SecurityQueryRequest(BaseModel):
@@ -174,6 +396,49 @@ class HealthResponse(BaseModel):
     agent_status: str
     databases: Dict[str, str]
     version: str = "1.0.0"
+
+# New models for network visualization
+class NetworkNode(BaseModel):
+    id: str
+    type: str  # host, port, protocol, flow
+    label: str
+    group: str
+    ip: Optional[str] = None
+    port: Optional[int] = None
+    protocol: Optional[str] = None
+    service: Optional[str] = None
+    malicious: Optional[bool] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+class NetworkLink(BaseModel):
+    source: str
+    target: str
+    type: str  # SENT, RECEIVED, USES_PROTOCOL, USES_SRC_PORT, USES_DST_PORT
+    weight: Optional[int] = 1
+    metadata: Optional[Dict[str, Any]] = None
+
+class NetworkGraphResponse(BaseModel):
+    nodes: List[NetworkNode]
+    links: List[NetworkLink]
+    statistics: Dict[str, Any]
+    timestamp: str
+    success: bool = True
+    error: Optional[str] = None
+
+class NetworkStatsResponse(BaseModel):
+    network_nodes: int
+    active_connections: int
+    data_throughput: str
+    total_hosts: int
+    total_flows: int
+    total_protocols: int
+    malicious_flows: int
+    top_ports: List[Dict[str, Any]]
+    top_protocols: List[Dict[str, Any]]
+    threat_indicators: List[Dict[str, Any]]
+    timestamp: str
+    success: bool = True
+    error: Optional[str] = None
 
 # Initialize FastAPI app with enhanced configuration
 app = FastAPI(
@@ -208,7 +473,9 @@ async def root():
         "endpoints": {
             "analyze": "/analyze",
             "collections": "/collections",
-            "examples": "/examples"
+            "examples": "/examples",
+            "network_graph": "/network/graph",
+            "network_stats": "/network/stats"
         }
     }
 
@@ -607,6 +874,149 @@ async def get_query_examples():
         ],
         "timestamp": datetime.now().isoformat()
     }
+
+@app.get("/network/graph", response_model=NetworkGraphResponse)
+async def get_network_graph(limit: int = 100):
+    """Get network graph data from Neo4j for visualization."""
+    if config.lightweight_mode:
+        # Return mock data for lightweight mode
+        mock_nodes = [
+            NetworkNode(id="192.168.1.1", type="host", label="192.168.1.1", group="source_host", ip="192.168.1.1"),
+            NetworkNode(id="10.0.0.1", type="host", label="10.0.0.1", group="dest_host", ip="10.0.0.1"),
+            NetworkNode(id="172.16.0.1", type="host", label="172.16.0.1", group="dest_host", ip="172.16.0.1"),
+        ]
+        mock_links = [
+            NetworkLink(source="192.168.1.1", target="10.0.0.1", type="FLOW"),
+            NetworkLink(source="192.168.1.1", target="172.16.0.1", type="FLOW"),
+        ]
+        mock_stats = {"total_nodes": 3, "total_links": 2, "malicious_flows": 0}
+        
+        return NetworkGraphResponse(
+            nodes=mock_nodes,
+            links=mock_links,
+            statistics=mock_stats,
+            timestamp=datetime.now().isoformat()
+        )
+    
+    try:
+        nodes, links = neo4j_helper.get_network_graph_data(limit=limit)
+        
+        # Generate basic statistics
+        node_types = {}
+        malicious_count = 0
+        for node in nodes:
+            node_types[node.type] = node_types.get(node.type, 0) + 1
+            if node.malicious:
+                malicious_count += 1
+        
+        statistics = {
+            "total_nodes": len(nodes),
+            "total_links": len(links),
+            "node_types": node_types,
+            "malicious_flows": malicious_count,
+            "limit_applied": limit
+        }
+        
+        return NetworkGraphResponse(
+            nodes=nodes,
+            links=links,
+            statistics=statistics,
+            timestamp=datetime.now().isoformat()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting network graph data: {e}")
+        return NetworkGraphResponse(
+            nodes=[],
+            links=[],
+            statistics={},
+            timestamp=datetime.now().isoformat(),
+            success=False,
+            error=str(e)
+        )
+
+@app.get("/network/stats", response_model=NetworkStatsResponse)
+async def get_network_stats():
+    """Get network statistics from Neo4j for the dashboard."""
+    if config.lightweight_mode:
+        # Return mock data for lightweight mode
+        return NetworkStatsResponse(
+            network_nodes=1247,
+            active_connections=3891,
+            data_throughput="2.4 GB/s",
+            total_hosts=156,
+            total_flows=3891,
+            total_protocols=12,
+            malicious_flows=23,
+            top_ports=[
+                {"port": 80, "service": "http", "count": 1024},
+                {"port": 443, "service": "https", "count": 892},
+                {"port": 22, "service": "ssh", "count": 234},
+            ],
+            top_protocols=[
+                {"protocol": "tcp", "count": 2847},
+                {"protocol": "udp", "count": 1044},
+            ],
+            threat_indicators=[
+                {"ip": "185.143.223.12", "count": 15, "threat_type": "Malware C&C"},
+                {"ip": "91.243.85.45", "count": 8, "threat_type": "Scanning Activity"},
+            ],
+            timestamp=datetime.now().isoformat()
+        )
+    
+    try:
+        stats = neo4j_helper.get_network_statistics()
+        
+        # Format data throughput (mock calculation for now)
+        # In a real implementation, this would come from network monitoring
+        throughput_gbps = min(stats.get("total_flows", 0) / 1000, 5.0)
+        
+        # Enhance threat indicators with threat types
+        enhanced_threats = []
+        for threat in stats.get("threat_indicators", []):
+            threat_type = "Malicious Activity"
+            if threat["count"] > 10:
+                threat_type = "High Volume Attack"
+            elif threat["count"] > 5:
+                threat_type = "Moderate Threat"
+            
+            enhanced_threats.append({
+                "ip": threat["ip"],
+                "count": threat["count"],
+                "threat_type": threat_type
+            })
+        
+        return NetworkStatsResponse(
+            network_nodes=stats.get("network_nodes", 0),
+            active_connections=stats.get("active_connections", 0),
+            data_throughput=f"{throughput_gbps:.1f} GB/s",
+            total_hosts=stats.get("total_hosts", 0),
+            total_flows=stats.get("total_flows", 0),
+            total_protocols=stats.get("total_protocols", 0),
+            malicious_flows=stats.get("malicious_flows", 0),
+            top_ports=stats.get("top_ports", []),
+            top_protocols=stats.get("top_protocols", []),
+            threat_indicators=enhanced_threats,
+            timestamp=datetime.now().isoformat()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting network statistics: {e}")
+        return NetworkStatsResponse(
+            network_nodes=0,
+            active_connections=0,
+            data_throughput="0 GB/s",
+            total_hosts=0,
+            total_flows=0,
+            total_protocols=0,
+            malicious_flows=0,
+            top_ports=[],
+            top_protocols=[],
+            threat_indicators=[],
+            timestamp=datetime.now().isoformat(),
+            success=False,
+            error=str(e)
+        )
 
 # Error handlers
 @app.exception_handler(404)
