@@ -68,8 +68,8 @@ export const NetworkGraph = forwardRef<NetworkGraphRef>((props, ref) => {
             graphRef.current.height(height)
             
             // Restart simulation to adapt to new dimensions
-            if (graphRef.current.reheatSimulation) {
-              graphRef.current.reheatSimulation()
+            if (graphRef.current.d3ReheatSimulation) {
+              graphRef.current.d3ReheatSimulation()
             }
           }
         }, 100)
@@ -114,8 +114,8 @@ export const NetworkGraph = forwardRef<NetworkGraphRef>((props, ref) => {
       setTimeout(() => {
         if (graphRef.current) {
           // Restart simulation to spread nodes across the space
-          if (graphRef.current.reheatSimulation) {
-            graphRef.current.reheatSimulation()
+          if (graphRef.current.d3ReheatSimulation) {
+            graphRef.current.d3ReheatSimulation()
           }
           
           // Set initial zoom without centering
@@ -157,8 +157,8 @@ export const NetworkGraph = forwardRef<NetworkGraphRef>((props, ref) => {
   const centerGraph = () => {
     if (graphRef.current) {
       // Restart simulation to spread nodes across full space
-      if (graphRef.current.reheatSimulation) {
-        graphRef.current.reheatSimulation()
+      if (graphRef.current.d3ReheatSimulation) {
+        graphRef.current.d3ReheatSimulation()
       }
       
       // Try to fit the graph to show all nodes
@@ -371,7 +371,7 @@ export const NetworkGraph = forwardRef<NetworkGraphRef>((props, ref) => {
         onNodeDragEnd={(node) => {
           // Restart simulation when node is dragged to maintain layout
           if (graphRef.current) {
-            graphRef.current.reheatSimulation()
+            graphRef.current.d3ReheatSimulation()
           }
         }}
       />
