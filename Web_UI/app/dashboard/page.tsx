@@ -2,7 +2,7 @@
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Chat } from "@/components/chat"
-import { ThreatDashboard } from "@/components/threat-dashboard"
+import ThreatDashboard from "@/components/threat-dashboard"
 import { ShieldCheck, Bell } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 
