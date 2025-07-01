@@ -32,13 +32,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsMounted(true)
   }, [])
 
-  // Prevent hydration mismatch by not rendering auth context on server
-  if (!isMounted) {
-    return <>{children}</>
+  // During SSR and hydration, provide safe default values
+  const defaultAuthState = {
+    isAuthenticated: false,
+    user: null,
+    loading: true,
+    logout: async () => {},
+    loginWithDuke: () => {},
+    checkAuthStatus: async () => {}
   }
 
   return (
-    <AuthContext.Provider value={auth}>
+    <AuthContext.Provider value={isMounted ? auth : defaultAuthState}>
       {children}
     </AuthContext.Provider>
   )

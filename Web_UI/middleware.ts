@@ -28,17 +28,69 @@ const publicRoutes = [
 ]
 
 export function middleware(request: NextRequest) {
-  // For now, just allow everything through to fix CSS loading
-  return NextResponse.next()
+  const pathname = request.nextUrl.pathname
+  
+  // Skip middleware for static assets, API routes (except auth), and Next.js internals
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api/') ||
+    pathname.includes('.') || // Static files like CSS, JS, images
+    pathname.startsWith('/favicon')
+  ) {
+    return NextResponse.next()
+  }
+
+  // Check if the current path is a protected route
+  const isProtectedRoute = protectedRoutes.some(route => 
+    pathname === route || pathname.startsWith(route + '/')
+  )
+  
+  // If it's not a protected route, allow access
+  if (!isProtectedRoute) {
+    return NextResponse.next()
+  }
+
+  // For protected routes, check authentication via session cookie
+  const sessionCookie = request.cookies.get('duke-sso-session')
+  
+  if (!sessionCookie) {
+    // No session cookie - redirect to login
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  try {
+    // Validate session cookie
+    const sessionData = JSON.parse(Buffer.from(sessionCookie.value, 'base64').toString())
+    
+    // Check if session is expired
+    if (Date.now() > sessionData.expires) {
+      // Session expired - redirect to login and clear cookie
+      const loginUrl = new URL('/login', request.url)
+      loginUrl.searchParams.set('redirect', pathname)
+      const response = NextResponse.redirect(loginUrl)
+      response.cookies.delete('duke-sso-session')
+      return response
+    }
+
+    // Session is valid - allow access
+    return NextResponse.next()
+    
+  } catch (error) {
+    // Invalid session cookie - redirect to login and clear cookie
+    console.error('Session validation error in middleware:', error)
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('redirect', pathname)
+    const response = NextResponse.redirect(loginUrl)
+    response.cookies.delete('duke-sso-session')
+    return response
+  }
 }
 
 export const config = {
   matcher: [
-    // Only match specific protected routes, not static assets
-    '/dashboard/:path*',
-    '/alerts/:path*', 
-    '/reports/:path*',
-    '/settings/:path*',
-    '/profile/:path*'
+    // Match all routes except static files and API routes
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\..*$).*)',
   ],
 } 

@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
   try {
+    // Get the redirect parameter from the request URL
+    const url = new URL(req.url)
+    const redirectPath = url.searchParams.get('redirect') || '/dashboard'
+    
     // For development, redirect directly to mock SSO
     if (process.env.NODE_ENV === 'development') {
       // Use the request URL to get the correct host and protocol
       const baseUrl = new URL(req.url).origin
       const mockSsoUrl = new URL('/api/auth/sso/mock', baseUrl)
-      mockSsoUrl.searchParams.set('target', '/dashboard')
+      mockSsoUrl.searchParams.set('target', redirectPath)
       return NextResponse.redirect(mockSsoUrl.toString())
     }
     
@@ -17,7 +21,7 @@ export async function GET(req: NextRequest) {
     // Build the SSO redirect URL for production
     // This redirects to your own Shibboleth.sso endpoint which handles Duke SSO
     const ssoUrl = new URL('/Shibboleth.sso/Login', entityId)
-    ssoUrl.searchParams.set('target', '/api/auth/shibboleth?target=/dashboard')
+    ssoUrl.searchParams.set('target', `/api/auth/shibboleth?target=${encodeURIComponent(redirectPath)}`)
     
     return NextResponse.redirect(ssoUrl.toString())
     

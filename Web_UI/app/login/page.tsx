@@ -2,7 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,18 +14,29 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ShieldCheck, Eye, EyeOff, Mail, Lock, Github, Chrome } from "lucide-react"
 import DukeSSOButton from "@/components/auth/duke-sso-button"
 
-export default function LoginPage() {
+function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [rememberMe, setRememberMe] = useState(false)
+  const [redirectPath, setRedirectPath] = useState("/dashboard")
+  
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    // Get the redirect parameter from URL if present
+    const redirect = searchParams.get('redirect')
+    if (redirect) {
+      setRedirectPath(redirect)
+    }
+  }, [searchParams])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     // Handle login logic here
     console.log("Login attempt:", { email, password, rememberMe })
-    // Redirect to dashboard on successful login
-    window.location.href = "/dashboard"
+    // Redirect to the intended page after successful login
+    window.location.href = redirectPath
   }
 
   return (
@@ -93,6 +105,7 @@ export default function LoginPage() {
               <div className="space-y-4">
                 <DukeSSOButton 
                   className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg shadow-blue-500/25"
+                  redirectPath={redirectPath}
                 />
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
@@ -232,5 +245,22 @@ export default function LoginPage() {
         </div>
       </footer>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="rounded-full bg-gradient-to-r from-purple-500 to-violet-500 p-3 shadow-lg shadow-purple-500/25 mx-auto mb-4 w-fit">
+            <ShieldCheck className="h-8 w-8 text-white" />
+          </div>
+          <p className="text-zinc-300">Loading...</p>
+        </div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }

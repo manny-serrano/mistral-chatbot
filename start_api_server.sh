@@ -158,7 +158,7 @@ case "${1:-start}" in
         ;;
     "status")
         if check_server; then
-            local pid=$(cat "$PID_FILE")
+            pid=$(cat "$PID_FILE")
             echo -e "${GREEN}✅ Server is running (PID: $pid)${NC}"
             
             # Try health check
