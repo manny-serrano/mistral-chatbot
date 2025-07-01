@@ -1,0 +1,105 @@
+import { NextResponse } from 'next/server';
+import neo4j from 'neo4j-driver';
+
+function logistic_regression(num_ports, pcr, por, coef_ports, coef_pcr, coef_por, intercept) {
+  const z = (coef_ports * num_ports) + (coef_pcr * pcr) + (coef_por * por) + intercept;
+  return 1 / (1 + Math.exp(-z));
+}
+
+export async function GET() {
+  let driver, session;
+  try {
+    driver = neo4j.driver(
+      'bolt://localhost:7687',
+      neo4j.auth.basic('neo4j', 'password123')
+    );
+    session = driver.session();
+
+    // Query all flows with required properties
+    const result = await session.run(`
+      MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port)
+      RETURN src.ip AS src_ip, f.flowStartMilliseconds AS flow_start, dst_port.port AS dst_port,
+             f.protocolIdentifier AS protocol, f.packets AS packets, f.reversePackets AS reverse_packets,
+             f.bytes AS bytes, f.reverseBytes AS reverse_bytes
+    `);
+
+    const unique_ports = {};
+    for (const record of result.records) {
+      const src_ip = record.get('src_ip');
+      const dst_port = record.get('dst_port');
+      const bytes = record.get('bytes') || 0;
+      const reverse_bytes = record.get('reverse_bytes') || 0;
+      const packets = record.get('packets') || 0;
+      const flow_start = record.get('flow_start');
+      // Use date string for grouping
+      let date = 'unknown';
+      if (flow_start !== null && flow_start !== undefined && !isNaN(Number(flow_start))) {
+        const d = new Date(Number(flow_start));
+        if (!isNaN(d.getTime())) {
+          date = d.toISOString().slice(0, 10);
+        }
+      }
+      const key = `${src_ip}_${date}`;
+
+      if (!unique_ports[key]) {
+        unique_ports[key] = {
+          src_ip,
+          date,
+          dest_port_string: new Set(),
+          bytes: 0,
+          reverse_bytes: 0,
+          packets: 0,
+          pcr: 0,
+          por: 0,
+          p_value: 0
+        };
+      }
+      unique_ports[key].dest_port_string.add(dst_port);
+      unique_ports[key].bytes += bytes;
+      unique_ports[key].reverse_bytes += reverse_bytes;
+      unique_ports[key].packets += packets;
+      if (unique_ports[key].reverse_bytes !== 0) {
+        unique_ports[key].pcr = unique_ports[key].bytes / unique_ports[key].reverse_bytes;
+      }
+      if (unique_ports[key].bytes !== 0) {
+        unique_ports[key].por = unique_ports[key].packets / unique_ports[key].bytes;
+      }
+      unique_ports[key].num_ports = unique_ports[key].dest_port_string.size;
+      unique_ports[key].p_value = logistic_regression(
+        unique_ports[key].num_ports,
+        unique_ports[key].pcr,
+        unique_ports[key].por,
+        0.00243691,
+        0.00014983,
+        0.00014983,
+        -3.93433105
+      );
+    }
+
+    // Generate alerts based on p_value thresholds
+    const alerts = Object.values(unique_ports).map((entry) => {
+      let severity = 'low';
+      if (entry.p_value >= 0.8) severity = 'critical';
+      else if (entry.p_value >= 0.6) severity = 'high';
+      else if (entry.p_value >= 0.4) severity = 'medium';
+      return {
+        type: 'unique_ports_logistic',
+        ip: entry.src_ip,
+        date: entry.date,
+        unique_ports: entry.num_ports,
+        pcr: entry.pcr,
+        por: entry.por,
+        p_value: entry.p_value,
+        severity,
+        message: `IP ${entry.src_ip} on ${entry.date} connected to ${entry.num_ports} unique ports (p_value: ${entry.p_value.toFixed(3)})`
+      };
+    }).filter(alert => alert.unique_ports >= 5); // Only show alerts with at least 5 unique ports
+
+    return NextResponse.json({ alerts });
+  } catch (error) {
+    return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
+  } finally {
+    if (session) await session.close();
+    if (driver) await driver.close();
+  }
+} 
