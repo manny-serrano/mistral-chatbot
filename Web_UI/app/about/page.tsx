@@ -442,7 +442,7 @@ export default function AboutPage() {
                 <TeamMember
                   name="Ahmed Al-Ghannam"
                   role="Developer"
-                  bio="Computer Science"
+                  bio="Cybersecurity and Digital Forensics"
                   image="/team/ahmed-al-ghannam.png"
                   social={{
                     linkedin: "#",
