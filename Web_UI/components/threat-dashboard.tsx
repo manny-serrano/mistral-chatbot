@@ -28,168 +28,25 @@ import {
   RotateCcw,
   Calendar,
 } from "lucide-react"
-
-// Alert data with more detailed information
-const alertsData = [
-  {
-    id: 1,
-    severity: "critical" as const,
-    type: "malware",
-    title: "Malware Detection",
-    description: "Trojan.Win32.Agent detected on endpoint DESKTOP-ABC123",
-    timestamp: "2 minutes ago",
-    source: "192.168.1.105",
-    timeValue: 2,
-  },
-  {
-    id: 2,
-    severity: "high" as const,
-    type: "network",
-    title: "Suspicious Network Activity",
-    description: "Unusual outbound traffic to known C&C server",
-    timestamp: "8 minutes ago",
-    source: "10.0.0.45",
-    timeValue: 8,
-  },
-  {
-    id: 3,
-    severity: "high" as const,
-    type: "authentication",
-    title: "Failed Login Attempts",
-    description: "Multiple failed SSH login attempts from external IP",
-    timestamp: "15 minutes ago",
-    source: "203.0.113.42",
-    timeValue: 15,
-  },
-  {
-    id: 4,
-    severity: "medium" as const,
-    type: "network",
-    title: "Port Scan Detected",
-    description: "Systematic port scanning activity detected",
-    timestamp: "23 minutes ago",
-    source: "198.51.100.15",
-    timeValue: 23,
-  },
-  {
-    id: 5,
-    severity: "medium" as const,
-    type: "network",
-    title: "DNS Tunneling",
-    description: "Potential DNS tunneling activity observed",
-    timestamp: "35 minutes ago",
-    source: "172.16.0.88",
-    timeValue: 35,
-  },
-  {
-    id: 6,
-    severity: "low" as const,
-    type: "system",
-    title: "Certificate Expiry Warning",
-    description: "SSL certificate expires in 7 days",
-    timestamp: "1 hour ago",
-    source: "web-server-01",
-    timeValue: 60,
-  },
-  {
-    id: 7,
-    severity: "critical" as const,
-    type: "malware",
-    title: "Ransomware Activity",
-    description: "Potential ransomware encryption detected",
-    timestamp: "45 minutes ago",
-    source: "192.168.1.87",
-    timeValue: 45,
-  },
-  {
-    id: 8,
-    severity: "high" as const,
-    type: "data",
-    title: "Data Exfiltration Attempt",
-    description: "Large data transfer to external server detected",
-    timestamp: "1.5 hours ago",
-    source: "10.0.0.123",
-    timeValue: 90,
-  },
-  {
-    id: 9,
-    severity: "medium" as const,
-    type: "authentication",
-    title: "Privilege Escalation",
-    description: "Unauthorized privilege escalation attempt",
-    timestamp: "2 hours ago",
-    source: "192.168.1.200",
-    timeValue: 120,
-  },
-  {
-    id: 10,
-    severity: "low" as const,
-    type: "system",
-    title: "System Update Available",
-    description: "Security patches available for installation",
-    timestamp: "3 hours ago",
-    source: "update-server",
-    timeValue: 180,
-  },
-]
+import { useAlerts } from "@/hooks/useAlerts"
 
 function ThreatDashboard() {
-  // Filter states
-  const [severityFilter, setSeverityFilter] = useState<string>("all")
-  const [typeFilter, setTypeFilter] = useState<string>("all")
-  const [timeRangeFilter, setTimeRangeFilter] = useState<string>("all")
-  const [searchQuery, setSearchQuery] = useState<string>("")
-
-  // Filter alerts based on current filters
-  const filteredAlerts = useMemo(() => {
-    return alertsData.filter((alert) => {
-      // Severity filter
-      if (severityFilter !== "all" && alert.severity !== severityFilter) {
-        return false
-      }
-      // Type filter
-      if (typeFilter !== "all" && alert.type !== typeFilter) {
-        return false
-      }
-      // Time range filter
-      if (timeRangeFilter !== "all") {
-        const timeLimit = Number.parseInt(timeRangeFilter)
-        if (alert.timeValue > timeLimit) {
-          return false
-        }
-      }
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        return (
-          alert.title.toLowerCase().includes(query) ||
-          alert.description.toLowerCase().includes(query) ||
-          alert.source.toLowerCase().includes(query)
-        )
-      }
-      return true
-    })
-  }, [severityFilter, typeFilter, timeRangeFilter, searchQuery])
-
-  // Calculate filtered alert counts by severity
-  const filteredAlertCounts = useMemo(() => {
-    const counts = { critical: 0, high: 0, medium: 0, low: 0 }
-    filteredAlerts.forEach((alert) => {
-      counts[alert.severity]++
-    })
-    return counts
-  }, [filteredAlerts])
-
-  // Clear all filters
-  const clearFilters = () => {
-    setSeverityFilter("all")
-    setTypeFilter("all")
-    setTimeRangeFilter("all")
-    setSearchQuery("")
-  }
+  // Use the shared alerts hook
+  const {
+    filteredAlerts,
+    filteredAlertCounts,
+    loading,
+    error,
+    severityFilter, setSeverityFilter,
+    typeFilter, setTypeFilter,
+    timeRangeFilter, setTimeRangeFilter,
+    searchQuery, setSearchQuery,
+    clearFilters
+  } = useAlerts()
 
   // Check if any filters are active
-  const hasActiveFilters = severityFilter !== "all" || typeFilter !== "all" || timeRangeFilter !== "all" || searchQuery
+  const hasActiveFilters =
+    severityFilter !== "all" || typeFilter !== "all" || timeRangeFilter !== "all" || searchQuery
 
   return (
     <Card className="bg-zinc-950 border-zinc-800 h-[600px] flex flex-col">
@@ -280,7 +137,7 @@ function ThreatDashboard() {
                   <h3 className="text-sm font-medium text-white">Filter Alerts</h3>
                   {hasActiveFilters && (
                     <Badge variant="outline" className="text-xs border-purple-400/30 text-purple-300">
-                      {filteredAlerts.length} of {alertsData.length} alerts
+                      {filteredAlerts.length} of {filteredAlerts.length} alerts
                     </Badge>
                   )}
                 </div>
@@ -491,7 +348,11 @@ function ThreatDashboard() {
                   </div>
                 </div>
                 <div className="divide-y divide-zinc-800">
-                  {filteredAlerts.length > 0 ? (
+                  {loading ? (
+                    <div className="p-8 text-center text-zinc-400">Loading alerts...</div>
+                  ) : error ? (
+                    <div className="p-8 text-center text-red-400">{error}</div>
+                  ) : filteredAlerts.length > 0 ? (
                     filteredAlerts.map((alert) => (
                       <AlertItem
                         key={alert.id}
