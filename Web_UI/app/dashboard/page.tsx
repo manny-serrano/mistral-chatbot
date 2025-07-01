@@ -5,6 +5,7 @@ import { Chat } from "@/components/chat"
 import ThreatDashboard from "@/components/threat-dashboard"
 import { ShieldCheck, Bell } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
+import { usePathname } from "next/navigation"
 
 // Dynamically import NetworkGraph to prevent SSR issues
 const NetworkGraph = dynamic(() => import("@/components/network-graph").then(mod => ({ default: mod.NetworkGraph })), {
@@ -13,6 +14,7 @@ const NetworkGraph = dynamic(() => import("@/components/network-graph").then(mod
 })
 
 export default function DashboardPage() {
+  const pathname = usePathname();
   return (
     <main className="flex min-h-screen flex-col bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-900 text-zinc-100 relative">
       {/* Grid pattern overlay */}
@@ -30,7 +32,10 @@ export default function DashboardPage() {
           </Link>
           <nav className="flex items-center gap-6">
             <span className="text-sm font-medium text-purple-300">Dashboard</span>
-            <Link href="/alerts" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+            <Link
+              href="/alerts"
+              className={`text-sm font-medium transition-colors ${pathname === "/alerts" ? "text-purple-300" : "text-zinc-300 hover:text-purple-300"}`}
+            >
               Alerts
             </Link>
             <Link href="/reports" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
