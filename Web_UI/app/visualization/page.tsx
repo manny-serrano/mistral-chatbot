@@ -1,101 +1,84 @@
 "use client"
 
 import Link from "next/link"
-import dynamic from "next/dynamic"
-import { ShieldCheck, Bell, BarChart3, Network, Cpu, Activity } from "lucide-react"
+import { ShieldCheck, Bell, Network, BarChart3, PieChart, TrendingUp, Activity, Map, Globe, Zap, LineChart, MapPin } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useEffect, useState, useRef } from "react"
-
-// Dynamically import NetworkGraph to prevent SSR issues
-const NetworkGraph = dynamic(() => import("@/components/network-graph").then(mod => ({ default: mod.NetworkGraph })), {
-  ssr: false,
-  loading: () => <div className="flex items-center justify-center h-64 bg-zinc-900 rounded-lg border border-zinc-800"><p className="text-zinc-400">Loading network graph...</p></div>
-})
-
-interface NetworkStats {
-  network_nodes: number
-  active_connections: number
-  data_throughput: string
-  total_hosts: number
-  total_flows: number
-  total_protocols: number
-  malicious_flows: number
-  top_ports: Array<{ port: number; service?: string; count: number }>
-  top_protocols: Array<{ protocol: string; count: number }>
-  threat_indicators: Array<{ ip: string; count: number; threat_type: string }>
-}
 
 export default function VisualizationPage() {
-  const [stats, setStats] = useState<NetworkStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const networkGraphRef = useRef<any>(null)
-  const [, forceUpdate] = useState({})
-
-  // Force component re-render to update controls
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (networkGraphRef.current) {
-        forceUpdate({})
-      }
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [])
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        
-        const response = await fetch('/api/network/stats')
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        
-        const data = await response.json()
-        
-        if (!data.success && data.error) {
-          throw new Error(data.error)
-        }
-        
-        setStats(data)
-      } catch (err) {
-        console.error('Error fetching network stats:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load network statistics')
-        
-        // Fallback to mock data
-        setStats({
-          network_nodes: 1247,
-          active_connections: 3891,
-          data_throughput: "2.4 GB/s",
-          total_hosts: 156,
-          total_flows: 3891,
-          total_protocols: 12,
-          malicious_flows: 23,
-          top_ports: [
-            { port: 80, service: "http", count: 1024 },
-            { port: 443, service: "https", count: 892 },
-            { port: 22, service: "ssh", count: 234 },
-          ],
-          top_protocols: [
-            { protocol: "tcp", count: 2847 },
-            { protocol: "udp", count: 1044 },
-          ],
-          threat_indicators: [
-            { ip: "185.143.223.12", count: 15, threat_type: "Malware C&C" },
-            { ip: "91.243.85.45", count: 8, threat_type: "Scanning Activity" },
-          ]
-        })
-      } finally {
-        setLoading(false)
-      }
+  const visualizationTypes = [
+    {
+      id: "network",
+      title: "Network Visualization",
+      description: "Interactive network graphs and topology visualizations",
+      icon: Network,
+      color: "purple",
+      gradient: "from-purple-500 to-violet-500",
+      bgColor: "bg-purple-500/10",
+      borderColor: "border-purple-400/30",
+      textColor: "text-purple-300",
+      href: "/visualization/network",
+      status: "Active",
+      features: ["Real-time network topology", "Threat indicators", "Interactive nodes"]
+    },
+    {
+      id: "time-series",
+      title: "Time-Series Line Chart",
+      description: "Temporal data analysis with interactive line charts",
+      icon: LineChart,
+      color: "blue",
+      gradient: "from-blue-500 to-cyan-500",
+      bgColor: "bg-blue-500/10",
+      borderColor: "border-blue-400/30",
+      textColor: "text-blue-300",
+      href: "/visualization/time-series",
+      status: "Active",
+      features: ["Historical data trends", "Multi-metric comparison", "Zoom and pan controls"]
+    },
+    {
+      id: "bar-chart",
+      title: "Bar Chart",
+      description: "Statistical data visualization with customizable bar charts",
+      icon: BarChart3,
+      color: "green",
+      gradient: "from-green-500 to-emerald-500",
+      bgColor: "bg-green-500/10",
+      borderColor: "border-green-400/30",
+      textColor: "text-green-300",
+      href: "/visualization/bar-chart",
+      status: "Active",
+      features: ["Protocol distribution", "Port usage statistics", "Traffic volume analysis"]
+    },
+    {
+      id: "geolocation",
+      title: "Geolocation Map",
+      description: "Geographic visualization of network traffic and threats",
+      icon: MapPin,
+      color: "red",
+      gradient: "from-red-500 to-orange-500",
+      bgColor: "bg-red-500/10",
+      borderColor: "border-red-400/30",
+      textColor: "text-red-300",
+      href: "/visualization/geolocation",
+      status: "Active",
+      features: ["IP geolocation mapping", "Threat origin tracking", "Traffic flow visualization"]
+    },
+    {
+      id: "heatmap",
+      title: "Heatmap",
+      description: "Intensity-based visualizations for pattern recognition",
+      icon: Activity,
+      color: "amber",
+      gradient: "from-amber-500 to-yellow-500",
+      bgColor: "bg-amber-500/10",
+      borderColor: "border-amber-400/30",
+      textColor: "text-amber-300",
+      href: "/visualization/heatmap",
+      status: "Active",
+      features: ["Traffic intensity patterns", "Temporal activity heatmaps", "Security event clustering"]
     }
-
-    fetchStats()
-  }, [])
+  ]
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
@@ -145,322 +128,128 @@ export default function VisualizationPage() {
 
       {/* Main Content */}
       <main className="relative py-8">
-        {/* Enhanced background for better contrast */}
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90 pointer-events-none" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent pointer-events-none" />
-
         <div className="relative mx-auto max-w-7xl px-6">
           {/* Page Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3">
+          <div className="mb-12">
+            <div className="flex items-center gap-3 mb-4">
               <div className="rounded-lg bg-purple-500/20 p-3 border border-purple-400/30 backdrop-blur-sm">
-                <Network className="h-6 w-6 text-purple-300" />
+                <BarChart3 className="h-6 w-6 text-purple-300" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white">Network Visualization</h1>
-                <p className="text-lg text-zinc-200 mt-1">Interactive network graphs and traffic analysis visualizations</p>
+                <h1 className="text-4xl font-bold text-white">Data Visualizations</h1>
+                <p className="text-lg text-zinc-200 mt-1">Choose your visualization type to explore different aspects of your data</p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-4 mb-6">
-            {/* Quick Stats Cards */}
-            <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-zinc-400">Network Nodes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
-                  <Network className="h-4 w-4 text-purple-400" />
-                  {loading ? (
-                    <span className="text-2xl font-bold text-white">...</span>
-                  ) : (
-                    <span className="text-2xl font-bold text-white">{stats?.network_nodes?.toLocaleString() || '0'}</span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-500 mt-1">
-                  {error ? "⚠️ Using fallback data" : "Real-time from Neo4j"}
-                </p>
-              </CardContent>
-            </Card>
+          {/* Visualization Type Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {visualizationTypes.map((type) => {
+              const IconComponent = type.icon
+              const isActive = type.status === "Active"
+              
+              return (
+                <Link 
+                  key={type.id} 
+                  href={isActive ? type.href : "#"} 
+                  className={`block group transition-all duration-300 ${isActive ? 'hover:scale-105 cursor-pointer' : 'cursor-not-allowed opacity-75'}`}
+                >
+                  <Card className={`${type.bgColor} border-2 ${type.borderColor} backdrop-blur-xl relative overflow-hidden h-full ${isActive ? 'hover:shadow-2xl hover:shadow-purple-500/25' : ''}`}>
+                    {/* Card gradient overlay */}
+                    <div className={`absolute inset-0 bg-gradient-to-br ${type.gradient} opacity-5`} />
+                    
+                    {/* Status badge */}
+                    <div className="absolute top-4 right-4">
+                      <Badge className={`${
+                        isActive 
+                          ? 'bg-green-500/20 text-green-400 border-green-500/30' 
+                          : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+                      }`}>
+                        {type.status}
+                      </Badge>
+                    </div>
 
-            <Card className="bg-gray-900/80 border-violet-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-zinc-400">Active Connections</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-violet-400" />
-                  {loading ? (
-                    <span className="text-2xl font-bold text-white">...</span>
-                  ) : (
-                    <span className="text-2xl font-bold text-white">{stats?.active_connections?.toLocaleString() || '0'}</span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-500 mt-1">
-                  {loading ? "Loading..." : `${stats?.total_flows || 0} total flows`}
-                </p>
-              </CardContent>
-            </Card>
+                    <CardHeader className="pb-4 relative z-10">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className={`rounded-lg bg-gradient-to-r ${type.gradient} p-2 shadow-lg`}>
+                          <IconComponent className="h-6 w-6 text-white" />
+                        </div>
+                        <CardTitle className="text-xl text-white group-hover:text-purple-200 transition-colors">
+                          {type.title}
+                        </CardTitle>
+                      </div>
+                      <CardDescription className="text-zinc-300 leading-relaxed">
+                        {type.description}
+                      </CardDescription>
+                    </CardHeader>
 
-            <Card className="bg-gray-900/80 border-fuchsia-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-zinc-400">Data Throughput</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-fuchsia-400" />
-                  {loading ? (
-                    <span className="text-2xl font-bold text-white">...</span>
-                  ) : (
-                    <span className="text-2xl font-bold text-white">{stats?.data_throughput || '0 GB/s'}</span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-500 mt-1">
-                  {loading ? "Calculating..." : `${stats?.total_hosts || 0} unique hosts`}
-                </p>
-              </CardContent>
-            </Card>
+                    <CardContent className="relative z-10">
+                      <div className="space-y-3">
+                        <h4 className={`text-sm font-medium ${type.textColor}`}>Key Features:</h4>
+                        <ul className="space-y-2">
+                          {type.features.map((feature, index) => (
+                            <li key={index} className="flex items-center gap-2 text-zinc-400">
+                              <Zap className="h-3 w-3 text-purple-400" />
+                              <span className="text-sm">{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        
+                        {!isActive && (
+                          <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                            <p className="text-sm text-orange-300">
+                              This visualization type is coming soon. Stay tuned for updates!
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
 
-            <Card className="bg-gray-900/80 border-emerald-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-zinc-400">Security Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-emerald-400" />
-                  {loading ? (
-                    <span className="text-2xl font-bold text-white">...</span>
-                  ) : (
-                    <span className="text-2xl font-bold text-white">{stats?.malicious_flows || 0}</span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-500 mt-1">
-                  {loading ? "Analyzing..." : "Malicious flows detected"}
-                </p>
-              </CardContent>
-            </Card>
+                    {/* Hover effect overlay */}
+                    {isActive && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-violet-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    )}
+                  </Card>
+                </Link>
+              )
+            })}
           </div>
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-            {/* Main Network Graph */}
-            <div className="xl:col-span-2">
-              <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl h-[600px] relative z-10">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-white flex items-center gap-2">
-                        <Network className="h-5 w-5 text-purple-400" />
-                        Interactive Network Graph
-                      </CardTitle>
-                      <CardDescription>
-                        Real-time network topology with threat indicators
-                      </CardDescription>
-                    </div>
-                    
-                    {/* Graph Controls */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-300 text-sm">Limit:</span>
-                        <select 
-                          value={networkGraphRef.current?.nodeLimit || 200}
-                          onChange={(e) => networkGraphRef.current?.handleLimitChange(parseInt(e.target.value))}
-                          className="bg-gray-800 text-white px-2 py-1 rounded border border-gray-600 focus:border-purple-400 focus:outline-none text-sm"
-                        >
-                          <option value={50}>50</option>
-                          <option value={100}>100</option>
-                          <option value={200}>200</option>
-                          <option value={500}>500</option>
-                          <option value={1000}>1000</option>
-                        </select>
-                      </div>
-                      <button
-                        onClick={() => networkGraphRef.current?.refreshGraph()}
-                        disabled={networkGraphRef.current?.loading}
-                        className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-3 py-1 rounded border border-purple-500 hover:border-purple-400 transition-colors flex items-center gap-1 text-sm"
-                      >
-                        {networkGraphRef.current?.loading ? '⏳' : '🔄'}
-                        <span>{networkGraphRef.current?.loading ? 'Loading...' : 'Refresh'}</span>
-                      </button>
-                      <button
-                        onClick={() => networkGraphRef.current?.centerGraph()}
-                        className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded border border-blue-500 hover:border-blue-400 transition-colors flex items-center gap-1 text-sm"
-                      >
-                        🎯
-                        <span>Center</span>
-                      </button>
-                    </div>
+          {/* Quick Stats Section */}
+          <div className="mt-12">
+            <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Globe className="h-5 w-5 text-purple-400" />
+                  Visualization Overview
+                </CardTitle>
+                <CardDescription>
+                  Quick overview of available visualization capabilities
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-purple-300 mb-1">5</div>
+                    <div className="text-sm text-zinc-400">Visualization Types</div>
                   </div>
-                </CardHeader>
-                <CardContent className="p-0 h-[500px] relative">
-                  <div className="w-full h-full">
-                    <NetworkGraph ref={networkGraphRef} />
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-green-300 mb-1">5</div>
+                    <div className="text-sm text-zinc-400">Currently Active</div>
                   </div>
-                </CardContent>
-              </Card>
-              
-              {/* Network Graph Legend - Outside the card */}
-              <Card className="bg-gray-900/80 border-gray-400/40 backdrop-blur-xl mt-4">
-                <CardContent className="p-4">
-                  <div className="text-sm">
-                    <div className="font-medium mb-3 text-gray-300">Node Legend:</div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                        <span className="text-white">📤 Source Hosts</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                        <span className="text-white">📥 Destination Hosts</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-red-500 border border-red-400"></div>
-                        <span className="text-white">⚠️ Malicious Nodes</span>
-                      </div>
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-gray-600 text-gray-400 grid grid-cols-3 gap-4">
-                      <div>💜 Animated particles = Data flow</div>
-                      <div>🔍 Zoom in to see IP labels</div>
-                      <div>🎯 Use Center button if nodes go off-screen</div>
-                    </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-300 mb-1">0</div>
+                    <div className="text-sm text-zinc-400">Coming Soon</div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Sidebar with additional visualizations */}
-            <div className="space-y-6">
-              {/* Traffic Analysis */}
-              <Card className="bg-gray-900/80 border-violet-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white text-lg">Traffic Analysis</CardTitle>
-                  <CardDescription>Real-time traffic patterns</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">HTTP Traffic</span>
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Normal</Badge>
-                    </div>
-                    <div className="w-full bg-gray-800 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full" style={{ width: '65%' }}></div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">HTTPS Traffic</span>
-                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">High</Badge>
-                    </div>
-                    <div className="w-full bg-gray-800 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full" style={{ width: '85%' }}></div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Suspicious Traffic</span>
-                      <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Alert</Badge>
-                    </div>
-                    <div className="w-full bg-gray-800 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full" style={{ width: '15%' }}></div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Top Threats */}
-              <Card className="bg-gray-900/80 border-fuchsia-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white text-lg">Top Threats</CardTitle>
-                  <CardDescription>Most active threat sources</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {loading ? (
-                      <div className="text-center text-zinc-400">Loading threat indicators...</div>
-                    ) : stats?.threat_indicators && stats.threat_indicators.length > 0 ? (
-                      stats.threat_indicators.slice(0, 3).map((threat, index) => {
-                        const severityColor = threat.count > 10 ? "red" : threat.count > 5 ? "orange" : "yellow"
-                        const isHighThreat = threat.count > 10
-                        const isMediumThreat = threat.count > 5 && threat.count <= 10
-                        const isLowThreat = threat.count <= 5
-                        
-                        return (
-                          <div key={threat.ip} className={`flex items-center justify-between p-2 rounded-lg border ${
-                            isHighThreat ? 'bg-red-500/10 border-red-500/20' :
-                            isMediumThreat ? 'bg-orange-500/10 border-orange-500/20' :
-                            'bg-yellow-500/10 border-yellow-500/20'
-                          }`}>
-                            <div>
-                              <p className="text-sm font-medium text-white">{threat.ip}</p>
-                              <p className={`text-xs ${
-                                isHighThreat ? 'text-red-400' :
-                                isMediumThreat ? 'text-orange-400' :
-                                'text-yellow-400'
-                              }`}>{threat.threat_type}</p>
-                            </div>
-                            <Badge className={`${
-                              isHighThreat ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                              isMediumThreat ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
-                              'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                            }`}>
-                              {threat.count > 10 ? "High" : threat.count > 5 ? "Medium" : "Low"}
-                            </Badge>
-                          </div>
-                        )
-                      })
-                    ) : (
-                      <div className="text-center text-zinc-400">No active threats detected</div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Network Health */}
-              <Card className="bg-gray-900/80 border-emerald-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white text-lg">Network Health</CardTitle>
-                  <CardDescription>Overall system status</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Neo4j Database</span>
-                      <Badge className={stats && !error ? 
-                        'bg-green-500/20 text-green-400 border-green-500/30' : 
-                        'bg-red-500/20 text-red-400 border-red-500/30'
-                      }>
-                        {stats && !error ? 'Connected' : 'Error'}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Total Protocols</span>
-                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-                        {loading ? "..." : stats?.total_protocols || 0}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Graph Nodes</span>
-                      <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
-                        {loading ? "..." : stats?.network_nodes?.toLocaleString() || 0}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Security Analysis</span>
-                      <Badge className={(stats?.malicious_flows || 0) > 0 ? 
-                        'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 
-                        'bg-green-500/20 text-green-400 border-green-500/30'
-                      }>
-                        {loading ? "..." : (stats?.malicious_flows || 0) > 0 ? "Threats Found" : "Clean"}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative">
+      <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative mt-16">
         <div className="mx-auto max-w-7xl px-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
