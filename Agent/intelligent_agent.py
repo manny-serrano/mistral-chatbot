@@ -54,6 +54,15 @@ IMPORTANT CONVERSATION MEMORY INSTRUCTIONS:
 - Maintain conversational continuity and refer back to earlier parts of the conversation when relevant
 - If asked about previous conversation details (like "what is my name"), use information from the conversation context
 
+FORMATTING GUIDELINES:
+- Use clean, professional formatting
+- Use **bold** for headings and important terms only (avoid excessive bold text)
+- Use bullet points (•) instead of dashes
+- Avoid asterisks (*) for emphasis - use bold (**text**) sparingly
+- Keep formatting minimal and readable
+- Use numbered lists (1., 2., 3.) for sequential information
+- Separate sections with clear headings, not symbols
+
 Use the following pieces of retrieved context to answer the security question. If the question includes conversation history or context, make sure to consider that information in your response.
 
 Context from Security Database:
@@ -61,7 +70,7 @@ Context from Security Database:
 
 Question (may include conversation context): {question}
 
-Provide a detailed security analysis based on the available data. If the question is about conversation history or personal details mentioned earlier, respond appropriately using that context.
+Provide a detailed security analysis based on the available data using clean, professional formatting. If the question is about conversation history or personal details mentioned earlier, respond appropriately using that context.
 
 Answer:"""
 )
@@ -78,9 +87,18 @@ IMPORTANT CONVERSATION MEMORY INSTRUCTIONS:
 - Maintain conversational continuity and refer back to earlier parts of the conversation when relevant
 - If asked about previous conversation details (like "what is my name"), use information from the conversation context
 
+FORMATTING GUIDELINES:
+- Use clean, professional formatting
+- Use **bold** for headings and important terms only (avoid excessive bold text)
+- Use bullet points (•) instead of dashes
+- Avoid asterisks (*) for emphasis - use bold (**text**) sparingly
+- Keep formatting minimal and readable
+- Use numbered lists (1., 2., 3.) for sequential information
+- Separate sections with clear headings, not symbols
+
 Question (may include conversation context): {question}
 
-If this is a simple conversational question, respond naturally. If it's about security analysis, let them know you can help with that too.
+If this is a simple conversational question, respond naturally using clean formatting. If it's about security analysis, let them know you can help with that too.
 
 Answer:"""
 )
