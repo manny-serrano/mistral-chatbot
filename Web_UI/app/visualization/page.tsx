@@ -188,9 +188,9 @@ export default function VisualizationPage() {
                         <h4 className={`text-sm font-medium ${type.textColor}`}>Key Features:</h4>
                         <ul className="space-y-2">
                           {type.features.map((feature, index) => (
-                            <li key={index} className="flex items-center gap-2 text-zinc-400">
+                            <li key={index} className="flex items-center gap-2 text-zinc-200">
                               <Zap className="h-3 w-3 text-purple-400" />
-                              <span className="text-sm">{feature}</span>
+                              <span className="text-sm font-medium">{feature}</span>
                             </li>
                           ))}
                         </ul>
