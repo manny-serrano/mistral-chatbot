@@ -19,6 +19,129 @@ interface ChatProps {
   isExpanded?: boolean
 }
 
+// Helper function to render formatted content
+function formatMessageContent(content: string): React.ReactElement {
+  // Split content into main response and analysis summary
+  const parts = content.split('**📊 Analysis Summary:**')
+  const mainContent = parts[0]
+  const analysisSummary = parts[1]
+
+  // Convert markdown-like formatting to JSX
+  const formatText = (text: string): React.ReactElement => {
+    const lines = text.split('\n')
+    
+    return (
+      <div className="space-y-2">
+        {lines.map((line, index) => {
+          // Skip empty lines
+          if (!line.trim()) return <div key={index} className="h-2" />
+          
+          // Handle headings
+          if (line.startsWith('**') && line.endsWith('**') && !line.includes(':')) {
+            const heading = line.replace(/\*\*/g, '')
+            return (
+              <h3 key={index} className="text-lg font-semibold text-blue-300 mt-4 mb-2">
+                {heading}
+              </h3>
+            )
+          }
+          
+          // Handle subheadings
+          if (line.startsWith('### ')) {
+            return (
+              <h4 key={index} className="text-base font-medium text-green-300 mt-3 mb-1">
+                {line.replace('### ', '')}
+              </h4>
+            )
+          }
+          
+          // Handle numbered lists
+          if (/^\d+\./.test(line.trim())) {
+            return (
+              <div key={index} className="ml-2 text-zinc-100">
+                <span className="font-medium text-yellow-300">{line.match(/^\d+\./)?.[0]}</span>
+                {line.replace(/^\d+\.\s*/, ' ')}
+              </div>
+            )
+          }
+          
+          // Handle bullet points
+          if (line.trim().startsWith('•')) {
+            return (
+              <div key={index} className="ml-4 text-zinc-100 flex items-start gap-2">
+                <span className="text-purple-400 mt-1">•</span>
+                <span>{line.replace(/^\s*•\s*/, '')}</span>
+              </div>
+            )
+          }
+          
+          // Handle bold inline text
+          if (line.includes('**')) {
+            const parts = line.split(/(\*\*[^*]+\*\*)/)
+            return (
+              <div key={index} className="text-zinc-100">
+                {parts.map((part, partIndex) => {
+                  if (part.startsWith('**') && part.endsWith('**')) {
+                    return (
+                      <span key={partIndex} className="font-semibold text-white">
+                        {part.replace(/\*\*/g, '')}
+                      </span>
+                    )
+                  }
+                  return part
+                })}
+              </div>
+            )
+          }
+          
+          // Regular text
+          return (
+            <div key={index} className="text-zinc-100">
+              {line}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Main content */}
+      <div>{formatText(mainContent)}</div>
+      
+      {/* Analysis summary section */}
+      {analysisSummary && (
+        <div className="mt-6 p-4 bg-zinc-900/50 rounded-lg border border-zinc-700">
+          <h4 className="text-sm font-medium text-purple-300 mb-3 flex items-center gap-2">
+            📊 Analysis Summary
+          </h4>
+          <div className="space-y-1 text-sm">
+            {analysisSummary.split('\n').filter(line => line.trim()).map((line, index) => (
+              <div key={index} className="text-zinc-300">
+                {line.includes('**') ? (
+                  line.split(/(\*\*[^*]+\*\*)/).map((part, partIndex) => {
+                    if (part.startsWith('**') && part.endsWith('**')) {
+                      return (
+                        <span key={partIndex} className="font-medium text-white">
+                          {part.replace(/\*\*/g, '')}
+                        </span>
+                      )
+                    }
+                    return part
+                  })
+                ) : (
+                  line
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Chat({ onToggleExpansion, isExpanded = false }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -202,9 +325,15 @@ export function Chat({ onToggleExpansion, isExpanded = false }: ChatProps) {
                       message.role === "user" ? "bg-purple-600 text-white" : "bg-zinc-800 text-zinc-100"
                     }`}
                   >
-                    <div className="whitespace-pre-wrap text-sm">
-                      {message.content}
-                    </div>
+                    {message.role === "user" ? (
+                      <div className="whitespace-pre-wrap text-sm">
+                        {message.content}
+                      </div>
+                    ) : (
+                      <div className="text-sm">
+                        {formatMessageContent(message.content)}
+                      </div>
+                    )}
                   </div>
                   {message.role === "user" && (
                     <Avatar className="h-8 w-8">
