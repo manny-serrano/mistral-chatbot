@@ -11,6 +11,20 @@ interface LocationData {
   lon: number
   threats: number
   flows: number
+  severity?: "critical" | "high" | "medium" | "low"
+  alertCount?: number
+  lastSeen?: string
+  region?: string
+  timezone?: string
+  isp?: string
+  org?: string
+  security?: {
+    anonymous: boolean
+    proxy: boolean
+    vpn: boolean
+    tor: boolean
+    hosting: boolean
+  }
 }
 
 interface GeolocationMapProps {
@@ -21,12 +35,6 @@ interface GeolocationMapProps {
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json"
 
 export default function GeolocationMap({ locations, onLocationSelect }: GeolocationMapProps) {
-  // Create a color scale based on threat levels
-  const maxThreats = Math.max(...locations.map(l => l.threats), 1)
-  const threatColorScale = scaleLinear<string>()
-    .domain([0, maxThreats / 4, maxThreats / 2, maxThreats])
-    .range(["#10b981", "#f59e0b", "#f97316", "#ef4444"])
-
   const getMarkerSize = (threats: number, flows: number) => {
     const baseSize = 4
     const threatMultiplier = Math.min(threats / 5, 3) // Cap at 3x for very high threats
@@ -34,8 +42,19 @@ export default function GeolocationMap({ locations, onLocationSelect }: Geolocat
     return baseSize + (threatMultiplier * 2) + (flowMultiplier * 1)
   }
 
-  const getMarkerColor = (threats: number) => {
-    return threatColorScale(threats)
+  const getMarkerColor = (severity?: string) => {
+    switch (severity) {
+      case 'critical':
+        return '#ef4444' // Red
+      case 'high':
+        return '#f97316' // Orange
+      case 'medium':
+        return '#f59e0b' // Yellow
+      case 'low':
+        return '#3b82f6' // Blue
+      default:
+        return '#6b7280' // Gray
+    }
   }
 
   const handleMarkerClick = (location: LocationData) => {
@@ -86,15 +105,26 @@ export default function GeolocationMap({ locations, onLocationSelect }: Geolocat
             >
               <circle
                 r={getMarkerSize(location.threats, location.flows)}
-                fill={getMarkerColor(location.threats)}
+                fill={getMarkerColor(location.severity)}
                 stroke="#ffffff"
                 strokeWidth={1}
                 opacity={0.8}
-                style={{ cursor: "pointer" }}
+                style={{ 
+                  cursor: "pointer",
+                  transition: "all 0.2s ease-in-out"
+                }}
                 onClick={() => handleMarkerClick(location)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = "1"
+                  e.currentTarget.style.strokeWidth = "2"
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = "0.8"
+                  e.currentTarget.style.strokeWidth = "1"
+                }}
               >
                 <title>
-                  {`${location.ip} (${location.city}, ${location.country})\nThreats: ${location.threats}\nFlows: ${location.flows}`}
+                  {`🌐 ${location.ip}\n📍 ${location.city}, ${location.country}\n⚠️ Severity: ${location.severity?.toUpperCase() || 'Unknown'}\n🔥 Alerts: ${location.alertCount || location.threats}\n🌐 Flows: ${location.flows}\n\n👆 Click for detailed analysis`}
                 </title>
               </circle>
               
@@ -103,14 +133,21 @@ export default function GeolocationMap({ locations, onLocationSelect }: Geolocat
                 <circle
                   r={getMarkerSize(location.threats, location.flows) + 3}
                   fill="none"
-                  stroke={getMarkerColor(location.threats)}
+                  stroke={getMarkerColor(location.severity)}
                   strokeWidth={2}
                   opacity={0.5}
                   style={{ 
                     cursor: "pointer",
-                    animation: "pulse 2s infinite"
+                    animation: "pulse 2s infinite",
+                    transition: "all 0.2s ease-in-out"
                   }}
                   onClick={() => handleMarkerClick(location)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.opacity = "0.8"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.opacity = "0.5"
+                  }}
                 />
               )}
             </Marker>
