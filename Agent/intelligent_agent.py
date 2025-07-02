@@ -94,11 +94,11 @@ class CypherGenerator:
 You are a cybersecurity graph database expert.
 
 The Neo4j schema contains nodes:
-- (Host {{ip}})
-- (Port {{port}})
-- (Flow {{flowId, protocolIdentifier, flowStartMilliseconds, malicious, honeypot, ...}})
-- (Protocol {{name}})
-- (ProcessedFile {{name}})
+- (Host) with properties like ip
+- (Port) with properties like port number  
+- (Flow) with properties like flowId, protocolIdentifier, flowStartMilliseconds, malicious, honeypot
+- (Protocol) with properties like name
+- (ProcessedFile) with properties like name
 
 Relationships:
 - (Host)-[:SENT]->(Flow)
@@ -118,7 +118,7 @@ Important notes:
 Example 1:
 User query: "List all hosts sending traffic on port 80"
 Cypher query:
-MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(p:Port {port: 80})
+MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(p:Port {{port: 80}})
 RETURN DISTINCT src.ip
 LIMIT 25
 
@@ -133,7 +133,7 @@ LIMIT 25
 Example 3:
 User query: "Find the path between host 192.168.1.10 and 10.0.0.5"
 Cypher query:
-MATCH path = shortestPath((src:Host {ip: "192.168.1.10"})-[:SENT*..5]-(dst:Host {ip: "10.0.0.5"}))
+MATCH path = shortestPath((src:Host {{ip: "192.168.1.10"}})-[:SENT*..5]-(dst:Host {{ip: "10.0.0.5"}}))
 RETURN path
 
 User query:
@@ -145,12 +145,18 @@ Cypher query (only the code, no explanations):
     def generate(self, query: str) -> str:
         prompt = self.prompt_template.format(query=query)
         try:
+            logger.info(f"Generating Cypher for query: {query}")
             cypher = self.llm.invoke(prompt).strip()
+            logger.info(f"LLM generated Cypher: {cypher}")
             if not cypher.lower().startswith("match"):
+                logger.warning(f"Invalid Cypher generated (doesn't start with MATCH): {cypher}")
                 raise ValueError("Invalid Cypher generated")
             return cypher
         except Exception as e:
-            return "MATCH (n) RETURN n LIMIT 5  // Fallback Cypher due to error"
+            logger.error(f"Error in Cypher generation: {e}")
+            fallback = "MATCH (n) RETURN n LIMIT 5"
+            logger.info(f"Using fallback Cypher: {fallback}")
+            return fallback
 
 class QueryClassifier:
     """Classifies queries to determine which database to use and whether they need database retrieval at all."""
@@ -204,6 +210,7 @@ class Neo4jRetriever(BaseRetriever):
     
     # Use PrivateAttr for non-config attributes
     _driver: Any = PrivateAttr()
+    _cypher_generator: Any = PrivateAttr()
     
     def __init__(self, uri: str, user: str, password: str, llm=None, **kwargs):
         super().__init__(**kwargs)
@@ -219,7 +226,7 @@ class Neo4jRetriever(BaseRetriever):
         if llm is None:
             raise ValueError("LLM instance must be provided for Cypher generation.")
 
-        self.cypher_generator = CypherGenerator(llm)
+        self._cypher_generator = CypherGenerator(llm)
     
     @property
     def driver(self):
@@ -228,6 +235,10 @@ class Neo4jRetriever(BaseRetriever):
     def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
         """Retrieve relevant documents from Neo4j based on the query."""
         try:
+            logger.info(f"Starting Neo4j query for: {query}")
+            logger.info(f"run_manager type: {type(run_manager)}")
+            logger.info(f"run_manager value: {run_manager}")
+            
             with self.driver.session() as session:
                 # Convert natural language query to Cypher
                 cypher_query, parameters = self._query_to_cypher(query)
@@ -238,6 +249,14 @@ class Neo4jRetriever(BaseRetriever):
 
                 
                 result = session.run(cypher_query, parameters)
+                
+                # Log the actual result structure for debugging
+                result_list = list(result)
+                logger.info(f"Query returned {len(result_list)} records")
+                if result_list:
+                    logger.info(f"Sample record keys: {list(result_list[0].keys())}")
+                    logger.info(f"Sample record values: {dict(result_list[0])}")
+                result = result_list  # Convert to list since we consumed the result
                 
                 documents = []
                 for record in result:
@@ -261,23 +280,110 @@ class Neo4jRetriever(BaseRetriever):
     #Now relies on the LLM to generate the Cypher query, ignoring the hardcoded logic
     def _query_to_cypher(self, query: str) -> tuple[str, dict]:
         """Generate Cypher query exclusively via LLM, ignoring hardcoded logic."""
-        if not self.cypher_generator:
+        if not self._cypher_generator:
             logger.warning("No CypherGenerator available, using default fallback.")
             return "MATCH (n) RETURN n LIMIT 5", {}
 
         logger.info("Generating Cypher query using LLM for user query.")
-        cypher_query = self.cypher_generator.generate(query)
-        # LLM returns plain Cypher, so no parameters expected
-        return cypher_query, {}
+        try:
+            logger.info("About to call cypher_generator.generate()")
+            cypher_query = self._cypher_generator.generate(query)
+            logger.info(f"Successfully generated Cypher: {cypher_query}")
+            # LLM returns plain Cypher, so no parameters expected
+            return cypher_query, {}
+        except Exception as e:
+            logger.error(f"Exception in _query_to_cypher: {e}")
+            logger.error(f"Exception type: {type(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return "MATCH (n) RETURN n LIMIT 5", {}
 
     
     def _format_neo4j_result(self, record) -> str:
         """Format Neo4j record into readable text."""
         try:
+            # Safely convert record to dict and handle Neo4j Node objects
             record_dict = dict(record)
             
+            # Extract properties from Neo4j Node objects
+            extracted_dict = {}
+            for key, value in record_dict.items():
+                if hasattr(value, 'labels') and hasattr(value, 'properties'):
+                    # This is a Neo4j Node object
+                    node_props = dict(value.properties)
+                    node_props['_labels'] = list(value.labels)
+                    node_props['_element_id'] = getattr(value, 'element_id', 'unknown')
+                    extracted_dict.update(node_props)
+                else:
+                    # Regular property
+                    extracted_dict[key] = value
+            
+            # Use the extracted properties for formatting
+            record_dict = extracted_dict
+            
+            # Handle Flow-specific results (most common case)
+            if any(key.endswith('IPv4Address') for key in record_dict.keys()):
+                src = record_dict.get('f.sourceIPv4Address') or record_dict.get('sourceIPv4Address') or record_dict.get('source_ip', 'unknown')
+                dst = record_dict.get('f.destinationIPv4Address') or record_dict.get('destinationIPv4Address') or record_dict.get('dest_ip', 'unknown')
+                src_port = record_dict.get('f.sourceTransportPort') or record_dict.get('sourceTransportPort') or record_dict.get('src_port')
+                dst_port = record_dict.get('f.destinationTransportPort') or record_dict.get('destinationTransportPort') or record_dict.get('dest_port')
+                protocol_id = record_dict.get('f.protocolIdentifier') or record_dict.get('protocolIdentifier')
+                flow_id = record_dict.get('f.flowId') or record_dict.get('flowId')
+                malicious = record_dict.get('f.malicious') or record_dict.get('malicious')
+                honeypot = record_dict.get('f.honeypot') or record_dict.get('honeypot')
+                
+                # Build result string
+                result = f"{src}"
+                if src_port:
+                    result += f":{src_port}"
+                result += f" → {dst}"
+                if dst_port:
+                    result += f":{dst_port}"
+                
+                # Add protocol info
+                if protocol_id is not None:
+                    protocol_name = {6: 'TCP', 17: 'UDP', 1: 'ICMP'}.get(protocol_id, f'Protocol-{protocol_id}')
+                    result += f" ({protocol_name})"
+                
+                # Add security indicators
+                if malicious:
+                    result += " [MALICIOUS]"
+                if honeypot:
+                    result += " [HONEYPOT]"
+                
+                # Add flow ID if available
+                if flow_id:
+                    result += f" FlowID: {flow_id}"
+                
+                return result
+            
+            # Handle Host results
+            elif 'ip' in record_dict:
+                ip = record_dict.get('ip')
+                hostname = record_dict.get('hostname')
+                os_info = record_dict.get('os')
+                
+                result = f"Host: {ip}"
+                if hostname:
+                    result += f" ({hostname})"
+                if os_info:
+                    result += f" OS: {os_info}"
+                
+                return result
+            
+            # Handle Port results  
+            elif 'port' in record_dict:
+                port = record_dict.get('port')
+                service = record_dict.get('service')
+                
+                result = f"Port: {port}"
+                if service:
+                    result += f" ({service})"
+                
+                return result
+            
             # Handle COUNT/NUMERICAL results
-            if 'total_nodes' in record_dict:
+            elif 'total_nodes' in record_dict:
                 total = record_dict.get('total_nodes', 0)
                 return f"Total nodes in graph database: {total:,}"
             
@@ -302,55 +408,7 @@ class Neo4jRetriever(BaseRetriever):
                 sample_text = f"\nSample hosts: {', '.join(samples[:5])}" if samples else ""
                 return f"Total unique hosts: {total}{sample_text}"
             
-            # Handle STATISTICAL results
-            elif 'avg_dest_port' in record_dict:
-                return f"Port statistics: Flows: {record_dict.get('total_flows', 0)}, " \
-                       f"Unique sources: {record_dict.get('unique_sources', 0)}, " \
-                       f"Unique dest ports: {record_dict.get('unique_dest_ports', 0)}, " \
-                       f"Avg port: {record_dict.get('avg_dest_port', 0):.1f}, " \
-                       f"Port range: {record_dict.get('min_dest_port', 0)}-{record_dict.get('max_dest_port', 0)}"
-            
-            # Handle PORT analysis
-            elif 'port' in record_dict and 'connection_count' in record_dict:
-                return f"Port {record_dict.get('port')}: {record_dict.get('connection_count')} connections"
-            
-            elif 'dest_port' in record_dict and 'flow_count' in record_dict:
-                return f"Port {record_dict.get('dest_port')}: {record_dict.get('flow_count')} flows, " \
-                       f"{record_dict.get('unique_sources', 0)} unique sources"
-            
-            # Handle PROTOCOL analysis
-            elif 'protocol' in record_dict and 'flow_count' in record_dict:
-                return f"Protocol {record_dict.get('protocol')}: {record_dict.get('flow_count')} flows"
-            
-            # Handle CONNECTION results
-            elif all(key in record_dict for key in ['source_ip', 'dest_ip']):
-                src = record_dict.get('source_ip', 'unknown')
-                dst = record_dict.get('dest_ip', 'unknown')
-                port = record_dict.get('dest_port', record_dict.get('dst_port', '?'))
-                protocol = record_dict.get('protocol', '?')
-                
-                base = f"{src} → {dst}:{port}"
-                if protocol != '?' and protocol is not None:
-                    base += f" ({protocol})"
-                
-                if 'timestamp' in record_dict:
-                    ts = record_dict.get('timestamp')
-                    if ts:
-                        try:
-                            from datetime import datetime
-                            dt = datetime.fromtimestamp(int(ts) / 1000)
-                            base += f" at {dt.strftime('%Y-%m-%d %H:%M:%S')}"
-                        except:
-                            base += f" at {ts}"
-                
-                return base
-            
-            # Handle PATH results
-            elif hasattr(record, 'path'):
-                nodes = [node['address'] for node in record.path.nodes if 'address' in node]
-                return f"Network path: {' -> '.join(nodes)}"
-            
-            # Handle simple key-value pairs
+            # Handle simple key-value pairs for any remaining cases
             elif len(record_dict) <= 3:
                 pairs = [f"{k}: {v}" for k, v in record_dict.items() if v is not None]
                 return ", ".join(pairs)
@@ -360,7 +418,9 @@ class Neo4jRetriever(BaseRetriever):
                 return json.dumps(record_dict, indent=2)
                 
         except Exception as e:
-            return f"Record formatting error: {str(record)} (Error: {e})"
+            logger.error(f"Error formatting Neo4j result: {e}")
+            logger.error(f"Record: {record_dict}")
+            return f"Raw result: {json.dumps(record_dict, default=str)}"
     
     async def _aget_relevant_documents(self, query: str, *, run_manager=None):
         return self._get_relevant_documents(query, run_manager=run_manager)
