@@ -503,11 +503,11 @@ export default function AlertsPage() {
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
-                      <SelectItem value="all">All Severities</SelectItem>
-                      <SelectItem value="critical">Critical</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="all" className="text-white">All Severities</SelectItem>
+                      <SelectItem value="critical" className="text-white">Critical</SelectItem>
+                      <SelectItem value="high" className="text-white">High</SelectItem>
+                      <SelectItem value="medium" className="text-white">Medium</SelectItem>
+                      <SelectItem value="low" className="text-white">Low</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -519,8 +519,8 @@ export default function AlertsPage() {
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
-                      <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="unique_ports_logistic">Unique Ports</SelectItem>
+                      <SelectItem value="all" className="text-white">All Types</SelectItem>
+                      <SelectItem value="unique_ports_logistic" className="text-white">Unique Ports</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -532,8 +532,8 @@ export default function AlertsPage() {
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="all" className="text-white">All Status</SelectItem>
+                      <SelectItem value="active" className="text-white">Active</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -545,11 +545,11 @@ export default function AlertsPage() {
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
-                      <SelectItem value="all">All Time</SelectItem>
-                      <SelectItem value="5">Last 5 minutes</SelectItem>
-                      <SelectItem value="30">Last 30 minutes</SelectItem>
-                      <SelectItem value="60">Last hour</SelectItem>
-                      <SelectItem value="1440">Last 24 hours</SelectItem>
+                      <SelectItem value="all" className="text-white">All Time</SelectItem>
+                      <SelectItem value="5" className="text-white">Last 5 minutes</SelectItem>
+                      <SelectItem value="30" className="text-white">Last 30 minutes</SelectItem>
+                      <SelectItem value="60" className="text-white">Last hour</SelectItem>
+                      <SelectItem value="1440" className="text-white">Last 24 hours</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -564,10 +564,10 @@ export default function AlertsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-800 border-zinc-700">
-                        <SelectItem value="timestamp">Time</SelectItem>
-                        <SelectItem value="severity">Severity</SelectItem>
-                        <SelectItem value="riskScore">Risk Score</SelectItem>
-                        <SelectItem value="title">Title</SelectItem>
+                        <SelectItem value="timestamp" className="text-white">Time</SelectItem>
+                        <SelectItem value="severity" className="text-white">Severity</SelectItem>
+                        <SelectItem value="riskScore" className="text-white">Risk Score</SelectItem>
+                        <SelectItem value="title" className="text-white">Title</SelectItem>
                       </SelectContent>
                     </Select>
                     <Button
