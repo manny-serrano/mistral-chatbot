@@ -6,6 +6,38 @@ function logistic_regression(num_ports, pcr, por, coef_ports, coef_pcr, coef_por
   return 1 / (1 + Math.exp(-z));
 }
 
+function isPrivateIP(ip: string): boolean {
+  const privateRanges = [
+    /^10\./,
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+    /^192\.168\./,
+    /^127\./,
+    /^169\.254\./,
+    /^::1$/,
+    /^fc00:/,
+    /^fe80:/
+  ];
+  
+  return privateRanges.some(range => range.test(ip));
+}
+
+function getIPCategory(ip: string): string {
+  if (isPrivateIP(ip)) {
+    if (ip.startsWith('192.168.')) return 'Private (192.168.x.x)';
+    if (ip.startsWith('10.')) return 'Private (10.x.x.x)';
+    if (ip.startsWith('172.')) return 'Private (172.16-31.x.x)';
+    if (ip.startsWith('127.')) return 'Localhost (127.x.x.x)';
+    return 'Private (Other)';
+  }
+  
+  // Categorize public IPs by region (rough estimates)
+  const firstOctet = parseInt(ip.split('.')[0]);
+  if (firstOctet >= 1 && firstOctet <= 126) return 'Public (Americas)';
+  if (firstOctet >= 128 && firstOctet <= 191) return 'Public (Europe/Asia)';
+  if (firstOctet >= 192 && firstOctet <= 223) return 'Public (Asia/Pacific)';
+  return 'Public (Other)';
+}
+
 export async function GET() {
   let driver, session;
   try {
@@ -31,7 +63,7 @@ export async function GET() {
       const reverse_bytes = record.get('reverse_bytes') || 0;
       const packets = record.get('packets') || 0;
       const flow_start = record.get('flow_start');
-      // Use date string for grouping
+      
       let date = 'unknown';
       if (flow_start !== null && flow_start !== undefined && !isNaN(Number(flow_start))) {
         const d = new Date(Number(flow_start));
@@ -76,7 +108,7 @@ export async function GET() {
       );
     }
 
-    // Generate alerts based on p_value thresholds
+    // Generate alerts and analyze IP distribution
     const alerts = Object.values(unique_ports).map((entry) => {
       let severity = 'low';
       if (entry.p_value >= 0.8) severity = 'critical';
@@ -93,9 +125,59 @@ export async function GET() {
         severity,
         message: `IP ${entry.src_ip} on ${entry.date} connected to ${entry.num_ports} unique ports (p_value: ${entry.p_value.toFixed(3)})`
       };
-    }); // Show all suspicious IPs regardless of unique port count
+    });
 
-    return NextResponse.json({ alerts });
+    // Analyze IP categories
+    const ipAnalysis = {
+      total_alerts: alerts.length,
+      unique_ips: new Set(alerts.map(a => a.ip)).size,
+      ip_categories: {},
+      private_ips: [],
+      public_ips: [],
+      severity_breakdown: {
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0
+      }
+    };
+
+    const uniqueIPs = [...new Set(alerts.map(a => a.ip))];
+    
+    uniqueIPs.forEach(ip => {
+      const category = getIPCategory(ip);
+      ipAnalysis.ip_categories[category] = (ipAnalysis.ip_categories[category] || 0) + 1;
+      
+      if (isPrivateIP(ip)) {
+        ipAnalysis.private_ips.push(ip);
+      } else {
+        ipAnalysis.public_ips.push(ip);
+      }
+    });
+
+    alerts.forEach(alert => {
+      ipAnalysis.severity_breakdown[alert.severity]++;
+    });
+
+    // Sample IPs from each category
+    const samples = {};
+    Object.keys(ipAnalysis.ip_categories).forEach(category => {
+      samples[category] = uniqueIPs
+        .filter(ip => getIPCategory(ip) === category)
+        .slice(0, 5); // Show first 5 IPs as examples
+    });
+
+    return NextResponse.json({
+      analysis: ipAnalysis,
+      sample_ips: samples,
+      explanation: {
+        why_geolocation_shows_fewer: "Geolocation map only shows public IPs that can be geolocated. Private IPs (192.168.x.x, 10.x.x.x, etc.) are filtered out.",
+        private_ip_count: ipAnalysis.private_ips.length,
+        public_ip_count: ipAnalysis.public_ips.length,
+        ratio: `${((ipAnalysis.public_ips.length / uniqueIPs.length) * 100).toFixed(1)}% of IPs are public and can be geolocated`
+      }
+    });
+
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
   } finally {
