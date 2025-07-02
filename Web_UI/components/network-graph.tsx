@@ -63,10 +63,6 @@ export const NetworkGraph = forwardRef<NetworkGraphRef>((props, ref) => {
         // Force graph to use full space and reconfigure forces
         setTimeout(() => {
           if (graphRef.current) {
-            // Update graph dimensions
-            graphRef.current.width(width)
-            graphRef.current.height(height)
-            
             // Restart simulation to adapt to new dimensions
             if (graphRef.current.d3ReheatSimulation) {
               graphRef.current.d3ReheatSimulation()

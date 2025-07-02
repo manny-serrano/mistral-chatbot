@@ -267,158 +267,164 @@ export default function AlertsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
-      {/* Animated background elements */}
+      {/* Animated background elements - Responsive sizes */}
       <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-40 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
+        <div className="absolute top-20 left-10 w-32 sm:w-72 h-32 sm:h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-40 right-20 w-48 sm:w-96 h-48 sm:h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute bottom-20 left-1/3 w-40 sm:w-80 h-40 sm:h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
       </div>
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
-      {/* Header */}
+      
+      {/* Header - Responsive */}
       <header className="border-b border-purple-500/20 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-50 relative">
-        <div className="mx-auto max-w-7xl px-6 py-4">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
-                <ShieldCheck className="h-5 w-5 text-white" />
+                <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+              <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
                 CyberSense AI
               </h1>
             </Link>
-            <nav className="hidden md:flex items-center gap-6">
-              <Link href="/" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                Home
-              </Link>
+            
+            {/* Responsive Navigation - Always visible with smaller text on mobile */}
+            <nav className="flex items-center gap-2 sm:gap-4 md:gap-6">
               <Link
                 href="/dashboard"
-                className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+                className="text-xs sm:text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
               >
                 Dashboard
               </Link>
-              <span className="text-sm font-medium text-purple-300">Alerts</span>
+              <span className="text-xs sm:text-sm font-medium text-purple-300">Alerts</span>
               <Link
                 href="/reports"
-                className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+                className="text-xs sm:text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
               >
                 Reports
               </Link>
               <Link
                 href="/visualization"
-                className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+                className="text-xs sm:text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
               >
-                Visualization
+                <span className="hidden sm:inline">Visualization</span>
+                <span className="sm:hidden">Visual</span>
               </Link>
               <ProfileDropdown />
             </nav>
           </div>
         </div>
       </header>
-      {/* Main Content */}
-      <main className="relative py-8">
+      
+      {/* Main Content - Responsive */}
+      <main className="relative py-6 sm:py-8">
         {/* Enhanced background for better contrast */}
         <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent" />
-        <div className="relative mx-auto max-w-7xl px-6">
-          {/* Page Header */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
+        
+        <div className="relative mx-auto max-w-7xl px-3 sm:px-6">
+          {/* Page Header - Responsive */}
+          <div className="mb-6 sm:mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-red-500/20 p-3 border border-red-400/30 backdrop-blur-sm">
-                  <AlertTriangle className="h-6 w-6 text-red-300" />
+                <div className="rounded-lg bg-red-500/20 p-2 sm:p-3 border border-red-400/30 backdrop-blur-sm">
+                  <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6 text-red-300" />
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold text-white">Security Alerts</h1>
-                  <p className="text-lg text-zinc-200 mt-1">Monitor and respond to security threats in real-time</p>
+                  <h1 className="text-3xl sm:text-4xl font-bold text-white">Security Alerts</h1>
+                  <p className="text-base sm:text-lg text-zinc-200 mt-1">Monitor and respond to security threats in real-time</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <Button
                   variant="outline"
-                  className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent backdrop-blur-sm"
+                  size="sm"
+                  className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent backdrop-blur-sm text-xs sm:text-sm"
                   onClick={() => window.location.reload()}
                 >
-                  <RefreshCw className="h-4 w-4 mr-2" />
+                  <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   Refresh
                 </Button>
-                <Button className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Alerts
+                <Button size="sm" className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-xs sm:text-sm">
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  Export
                 </Button>
               </div>
             </div>
           </div>
-          {/* Alert Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+
+          {/* Alert Summary Cards - Responsive Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
             <Card className="bg-gray-900/80 border-red-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-zinc-300">Critical</CardTitle>
-                  <AlertCircle className="h-4 w-4 text-red-400" />
+                  <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Critical</CardTitle>
+                  <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-red-400" />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-400">{filteredAlertCounts.critical}</div>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-xl sm:text-2xl font-bold text-red-400">{filteredAlertCounts.critical}</div>
                 <p className="text-xs text-red-300 mt-1">Immediate action required</p>
               </CardContent>
             </Card>
             <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-zinc-300">High</CardTitle>
-                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                  <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">High</CardTitle>
+                  <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-amber-400" />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-amber-400">{filteredAlertCounts.high}</div>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-xl sm:text-2xl font-bold text-amber-400">{filteredAlertCounts.high}</div>
                 <p className="text-xs text-amber-300 mt-1">Action needed soon</p>
               </CardContent>
             </Card>
             <Card className="bg-gray-900/80 border-yellow-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-zinc-300">Medium</CardTitle>
-                  <Activity className="h-4 w-4 text-yellow-400" />
+                  <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Medium</CardTitle>
+                  <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-400" />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-400">{filteredAlertCounts.medium}</div>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-xl sm:text-2xl font-bold text-yellow-400">{filteredAlertCounts.medium}</div>
                 <p className="text-xs text-yellow-300 mt-1">Monitor closely</p>
               </CardContent>
             </Card>
             <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-zinc-300">Low</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-blue-400" />
+                  <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Low</CardTitle>
+                  <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-400">{filteredAlertCounts.low}</div>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-xl sm:text-2xl font-bold text-blue-400">{filteredAlertCounts.low}</div>
                 <p className="text-xs text-blue-300 mt-1">Informational</p>
               </CardContent>
             </Card>
-            <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-3">
+            <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl col-span-2 sm:col-span-1">
+              <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-zinc-300">Total</CardTitle>
-                  <Shield className="h-4 w-4 text-purple-400" />
+                  <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Total</CardTitle>
+                  <Shield className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400" />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-white">{filteredAlertCounts.total}</div>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-xl sm:text-2xl font-bold text-white">{filteredAlertCounts.total}</div>
                 <p className="text-xs text-zinc-300 mt-1">{hasActiveFilters ? "Filtered" : "All"} alerts</p>
               </CardContent>
             </Card>
           </div>
-          {/* Filters and Controls */}
-          <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl mb-6">
-            <CardHeader>
-              <div className="flex items-center justify-between">
+
+          {/* Filters and Controls - Responsive */}
+          <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl mb-4 sm:mb-6">
+            <CardHeader className="p-3 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Filter className="h-4 w-4 text-purple-400" />
-                  <CardTitle className="text-lg text-white">Filter & Search Alerts</CardTitle>
+                  <CardTitle className="text-base sm:text-lg text-white">Filter & Search Alerts</CardTitle>
                   {hasActiveFilters && (
                     <Badge variant="outline" className="text-xs border-purple-400/30 text-purple-300">
                       {filteredAlerts.length} of {alertsData.length} alerts
@@ -428,14 +434,14 @@ export default function AlertsPage() {
                 <div className="flex items-center gap-2">
                   {selectedAlerts.length > 0 && (
                     <>
-                      <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                      <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs">
                         {selectedAlerts.length} selected
                       </Badge>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={clearSelection}
-                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent text-xs"
                       >
                         Clear
                       </Button>
@@ -443,27 +449,27 @@ export default function AlertsPage() {
                         <DropdownMenuTrigger asChild>
                           <Button
                             size="sm"
-                            className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700"
+                            className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-xs"
                           >
                             Bulk Actions
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="bg-gray-800 border-purple-400/30">
-                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
-                            <CheckCircle className="h-4 w-4 mr-2" />
+                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40 text-xs">
+                            <CheckCircle className="h-3 w-3 mr-2" />
                             Mark as Resolved
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
-                            <Archive className="h-4 w-4 mr-2" />
+                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40 text-xs">
+                            <Archive className="h-3 w-3 mr-2" />
                             Archive
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
-                            <Flag className="h-4 w-4 mr-2" />
+                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40 text-xs">
+                            <Flag className="h-3 w-3 mr-2" />
                             Escalate
                           </DropdownMenuItem>
                           <DropdownMenuSeparator className="bg-purple-500/20" />
-                          <DropdownMenuItem className="text-red-400 hover:bg-red-900/40">
-                            <Trash2 className="h-4 w-4 mr-2" />
+                          <DropdownMenuItem className="text-red-400 hover:bg-red-900/40 text-xs">
+                            <Trash2 className="h-3 w-3 mr-2" />
                             Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -473,18 +479,19 @@ export default function AlertsPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+            <CardContent className="p-3 sm:p-6 pt-0">
+              {/* Responsive Filter Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 mb-4">
                 {/* Search */}
-                <div className="md:col-span-2 space-y-2">
+                <div className="sm:col-span-2 space-y-2">
                   <Label className="text-xs font-medium text-zinc-400">Search</Label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-zinc-400" />
                     <Input
                       placeholder="Search alerts, IDs, tags..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 bg-zinc-800 border-zinc-700 text-white focus:border-purple-400"
+                      className="pl-8 sm:pl-10 bg-zinc-800 border-zinc-700 text-white focus:border-purple-400 text-xs sm:text-sm"
                     />
                   </div>
                 </div>
@@ -492,7 +499,7 @@ export default function AlertsPage() {
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-zinc-400">Severity</Label>
                   <Select value={severityFilter} onValueChange={setSeverityFilter}>
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white text-xs sm:text-sm">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
@@ -508,7 +515,7 @@ export default function AlertsPage() {
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-zinc-400">Type</Label>
                   <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white text-xs sm:text-sm">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
@@ -521,7 +528,7 @@ export default function AlertsPage() {
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-zinc-400">Status</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white text-xs sm:text-sm">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
@@ -534,7 +541,7 @@ export default function AlertsPage() {
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-zinc-400">Time Range</Label>
                   <Select value={timeRangeFilter} onValueChange={setTimeRangeFilter}>
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white text-xs sm:text-sm">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
@@ -553,7 +560,7 @@ export default function AlertsPage() {
                   <div className="flex items-center gap-2">
                     <Label className="text-xs font-medium text-zinc-400">Sort by:</Label>
                     <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger className="w-32 bg-zinc-800 border-zinc-700 text-white">
+                      <SelectTrigger className="w-32 bg-zinc-800 border-zinc-700 text-white text-xs sm:text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-800 border-zinc-700">
@@ -567,16 +574,16 @@ export default function AlertsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent text-xs"
                     >
-                      {sortOrder === "asc" ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                      {sortOrder === "asc" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                     </Button>
                   </div>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={selectAllAlerts}
-                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent text-xs"
                   >
                     Select All
                   </Button>
@@ -586,7 +593,7 @@ export default function AlertsPage() {
                     variant="outline"
                     size="sm"
                     onClick={clearFilters}
-                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent text-xs"
                   >
                     <RotateCcw className="h-3 w-3 mr-2" />
                     Clear Filters

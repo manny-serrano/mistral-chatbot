@@ -37,191 +37,201 @@ import { ProfileDropdown } from "@/components/profile-dropdown"
 export default function ReportsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
-      {/* Animated background elements */}
+      {/* Animated background elements - Responsive sizes */}
       <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-40 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
+        <div className="absolute top-20 left-10 w-32 sm:w-72 h-32 sm:h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-40 right-20 w-48 sm:w-96 h-48 sm:h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute bottom-20 left-1/3 w-40 sm:w-80 h-40 sm:h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
       </div>
 
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
 
-      {/* Header */}
+      {/* Header - Responsive */}
       <header className="border-b border-purple-500/20 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-50 relative">
-        <div className="mx-auto max-w-7xl px-6 py-4">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
-                <ShieldCheck className="h-5 w-5 text-white" />
+                <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+              <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
                 CyberSense AI
               </h1>
             </Link>
-            <nav className="hidden md:flex items-center gap-6">
-              <Link href="/" className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors">
-                Home
-              </Link>
+
+            {/* Responsive Navigation - Always visible with smaller text on mobile */}
+            <nav className="flex items-center gap-2 sm:gap-4 md:gap-6">
               <Link
                 href="/dashboard"
-                className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors"
+                className="text-xs sm:text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors"
               >
                 Dashboard
               </Link>
-              <Link href="/about" className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors">
-                About
+              <Link
+                href="/alerts"
+                className="text-xs sm:text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors"
+              >
+                Alerts
               </Link>
-              <span className="text-sm font-medium text-purple-300">Reports</span>
+              <span className="text-xs sm:text-sm font-medium text-purple-300">Reports</span>
+              <Link
+                href="/visualization"
+                className="text-xs sm:text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors"
+              >
+                <span className="hidden sm:inline">Visualization</span>
+                <span className="sm:hidden">Visual</span>
+              </Link>
               <ProfileDropdown />
             </nav>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="relative py-8">
+      {/* Main Content - Responsive */}
+      <main className="relative py-6 sm:py-8">
         {/* Enhanced background for better contrast */}
         <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent" />
 
-        <div className="relative mx-auto max-w-7xl px-6">
-          {/* Page Header */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
+        <div className="relative mx-auto max-w-7xl px-3 sm:px-6">
+          {/* Page Header - Responsive */}
+          <div className="mb-6 sm:mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-purple-500/20 p-3 border border-purple-400/30 backdrop-blur-sm">
-                  <FileText className="h-6 w-6 text-purple-300" />
+                <div className="rounded-lg bg-purple-500/20 p-2 sm:p-3 border border-purple-400/30 backdrop-blur-sm">
+                  <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-purple-300" />
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold text-white">Security Reports</h1>
-                  <p className="text-lg text-zinc-200 mt-1">Generate and analyze comprehensive security reports</p>
+                  <h1 className="text-3xl sm:text-4xl font-bold text-white">Security Reports</h1>
+                  <p className="text-base sm:text-lg text-zinc-200 mt-1">Generate and analyze comprehensive security reports</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <Button
                   variant="outline"
-                  className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent backdrop-blur-sm"
+                  size="sm"
+                  className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent backdrop-blur-sm text-xs sm:text-sm"
                 >
-                  <Settings className="h-4 w-4 mr-2" />
+                  <Settings className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   Configure
                 </Button>
-                <Button className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700">
-                  <Download className="h-4 w-4 mr-2" />
+                <Button size="sm" className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-xs sm:text-sm">
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   Generate Report
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Reports Tabs */}
-          <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5 bg-gray-900/80 border border-purple-500/20 backdrop-blur-xl">
+          {/* Reports Tabs - Responsive */}
+          <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-gray-900/80 border border-purple-500/20 backdrop-blur-xl">
               <TabsTrigger
                 value="overview"
-                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-xs sm:text-sm"
               >
-                <BarChart3 className="h-4 w-4 mr-2" />
+                <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Overview
               </TabsTrigger>
-              <TabsTrigger value="threats" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                <AlertTriangle className="h-4 w-4 mr-2" />
+              <TabsTrigger value="threats" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-xs sm:text-sm">
+                <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Threats
               </TabsTrigger>
               <TabsTrigger
                 value="incidents"
-                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-xs sm:text-sm"
               >
-                <Shield className="h-4 w-4 mr-2" />
+                <Shield className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Incidents
               </TabsTrigger>
               <TabsTrigger
                 value="compliance"
-                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-xs sm:text-sm"
               >
-                <CheckCircle className="h-4 w-4 mr-2" />
+                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Compliance
               </TabsTrigger>
-              <TabsTrigger value="custom" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                <FileBarChart className="h-4 w-4 mr-2" />
+              <TabsTrigger value="custom" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-xs sm:text-sm col-span-2 sm:col-span-1">
+                <FileBarChart className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Custom
               </TabsTrigger>
             </TabsList>
 
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-6">
-              {/* Quick Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* Overview Tab - Responsive */}
+            <TabsContent value="overview" className="space-y-4 sm:space-y-6">
+              {/* Quick Stats - Responsive Grid */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                  <CardHeader className="pb-3">
+                  <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-zinc-300">Total Reports</CardTitle>
-                      <FileText className="h-4 w-4 text-purple-400" />
+                      <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Total Reports</CardTitle>
+                      <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400" />
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-white">247</div>
+                  <CardContent className="p-3 sm:p-6 pt-0">
+                    <div className="text-xl sm:text-2xl font-bold text-white">247</div>
                     <p className="text-xs text-zinc-300 mt-1">+12 this month</p>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-gray-900/80 border-violet-400/40 backdrop-blur-xl">
-                  <CardHeader className="pb-3">
+                  <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-zinc-300">Scheduled Reports</CardTitle>
-                      <Calendar className="h-4 w-4 text-violet-400" />
+                      <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Scheduled Reports</CardTitle>
+                      <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-violet-400" />
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-white">18</div>
+                  <CardContent className="p-3 sm:p-6 pt-0">
+                    <div className="text-xl sm:text-2xl font-bold text-white">18</div>
                     <p className="text-xs text-zinc-300 mt-1">Active schedules</p>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-gray-900/80 border-fuchsia-400/40 backdrop-blur-xl">
-                  <CardHeader className="pb-3">
+                  <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-zinc-300">Avg. Generation Time</CardTitle>
-                      <Clock className="h-4 w-4 text-fuchsia-400" />
+                      <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Avg. Generation Time</CardTitle>
+                      <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-fuchsia-400" />
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-white">2.3s</div>
+                  <CardContent className="p-3 sm:p-6 pt-0">
+                    <div className="text-xl sm:text-2xl font-bold text-white">2.3s</div>
                     <p className="text-xs text-zinc-300 mt-1">-0.5s improvement</p>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-gray-900/80 border-emerald-400/40 backdrop-blur-xl">
-                  <CardHeader className="pb-3">
+                  <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-zinc-300">Data Coverage</CardTitle>
-                      <TrendingUp className="h-4 w-4 text-emerald-400" />
+                      <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Data Coverage</CardTitle>
+                      <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-400" />
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-white">99.7%</div>
+                  <CardContent className="p-3 sm:p-6 pt-0">
+                    <div className="text-xl sm:text-2xl font-bold text-white">99.7%</div>
                     <p className="text-xs text-zinc-300 mt-1">Network visibility</p>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Recent Reports */}
+              {/* Recent Reports - Responsive */}
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-xl text-white">Recent Reports</CardTitle>
+                <CardHeader className="p-3 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <CardTitle className="text-lg sm:text-xl text-white">Recent Reports</CardTitle>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent"
+                      className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent text-xs sm:text-sm"
                     >
-                      <RefreshCw className="h-4 w-4 mr-2" />
+                      <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                       Refresh
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
+                <CardContent className="p-3 sm:p-6 pt-0">
+                  <div className="space-y-3 sm:space-y-4">
                     <ReportItem
                       title="Weekly Threat Summary"
                       type="Threat Analysis"
@@ -261,32 +271,33 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* Report Templates */}
+              {/* Report Templates - Responsive */}
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-xl text-white">Quick Report Templates</CardTitle>
-                  <CardDescription className="text-zinc-300">
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-lg sm:text-xl text-white">Quick Report Templates</CardTitle>
+                  <CardDescription className="text-sm sm:text-base text-zinc-300">
                     Generate reports using pre-configured templates
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <CardContent className="p-3 sm:p-6 pt-0">
+                  {/* Responsive Grid: 1 col on mobile, 1 col on small tablets, 3 cols on desktop */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
                     <ReportTemplate
                       title="Executive Summary"
                       description="High-level security overview for leadership"
-                      icon={<TrendingUp className="h-6 w-6 text-purple-400" />}
+                      icon={<TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-purple-400" />}
                       estimatedTime="30 seconds"
                     />
                     <ReportTemplate
                       title="Technical Deep Dive"
                       description="Detailed technical analysis for security teams"
-                      icon={<Activity className="h-6 w-6 text-violet-400" />}
+                      icon={<Activity className="h-5 w-5 sm:h-6 sm:w-6 text-violet-400" />}
                       estimatedTime="2 minutes"
                     />
                     <ReportTemplate
                       title="Compliance Audit"
                       description="Regulatory compliance status and gaps"
-                      icon={<CheckCircle className="h-6 w-6 text-emerald-400" />}
+                      icon={<CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />}
                       estimatedTime="1 minute"
                     />
                   </div>
@@ -294,20 +305,20 @@ export default function ReportsPage() {
               </Card>
             </TabsContent>
 
-            {/* Threats Tab */}
-            <TabsContent value="threats" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Report Configuration */}
-                <div className="lg:col-span-1">
+            {/* Threats Tab - Responsive */}
+            <TabsContent value="threats" className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
+                {/* Report Configuration - Responsive */}
+                <div className="xl:col-span-1">
                   <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                    <CardHeader>
-                      <CardTitle className="text-lg text-white">Threat Report Configuration</CardTitle>
+                    <CardHeader className="p-3 sm:p-6">
+                      <CardTitle className="text-base sm:text-lg text-white">Threat Report Configuration</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
                       <div className="space-y-2">
-                        <Label className="text-white">Date Range</Label>
+                        <Label className="text-white text-xs sm:text-sm">Date Range</Label>
                         <Select defaultValue="7days">
-                          <SelectTrigger className="bg-gray-800/50 border-purple-400/30 text-white">
+                          <SelectTrigger className="bg-gray-800/50 border-purple-400/30 text-white text-xs sm:text-sm">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-gray-800 border-purple-400/30">
@@ -321,9 +332,9 @@ export default function ReportsPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-white">Threat Severity</Label>
+                        <Label className="text-white text-xs sm:text-sm">Threat Severity</Label>
                         <Select defaultValue="all">
-                          <SelectTrigger className="bg-gray-800/50 border-purple-400/30 text-white">
+                          <SelectTrigger className="bg-gray-800/50 border-purple-400/30 text-white text-xs sm:text-sm">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-gray-800 border-purple-400/30">
@@ -336,9 +347,9 @@ export default function ReportsPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-white">Report Format</Label>
+                        <Label className="text-white text-xs sm:text-sm">Report Format</Label>
                         <Select defaultValue="pdf">
-                          <SelectTrigger className="bg-gray-800/50 border-purple-400/30 text-white">
+                          <SelectTrigger className="bg-gray-800/50 border-purple-400/30 text-white text-xs sm:text-sm">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-gray-800 border-purple-400/30">
@@ -353,87 +364,87 @@ export default function ReportsPage() {
                       <Separator className="bg-purple-500/20" />
 
                       <div className="space-y-3">
-                        <Label className="text-white">Include Sections</Label>
+                        <Label className="text-white text-xs sm:text-sm">Include Sections</Label>
                         <div className="space-y-2">
                           <label className="flex items-center space-x-2">
                             <input type="checkbox" defaultChecked className="rounded border-purple-400" />
-                            <span className="text-sm text-zinc-300">Executive Summary</span>
+                            <span className="text-xs sm:text-sm text-zinc-300">Executive Summary</span>
                           </label>
                           <label className="flex items-center space-x-2">
                             <input type="checkbox" defaultChecked className="rounded border-purple-400" />
-                            <span className="text-sm text-zinc-300">Threat Timeline</span>
+                            <span className="text-xs sm:text-sm text-zinc-300">Threat Timeline</span>
                           </label>
                           <label className="flex items-center space-x-2">
                             <input type="checkbox" defaultChecked className="rounded border-purple-400" />
-                            <span className="text-sm text-zinc-300">Geographic Analysis</span>
+                            <span className="text-xs sm:text-sm text-zinc-300">Geographic Analysis</span>
                           </label>
                           <label className="flex items-center space-x-2">
                             <input type="checkbox" className="rounded border-purple-400" />
-                            <span className="text-sm text-zinc-300">Technical Details</span>
+                            <span className="text-xs sm:text-sm text-zinc-300">Technical Details</span>
                           </label>
                           <label className="flex items-center space-x-2">
                             <input type="checkbox" defaultChecked className="rounded border-purple-400" />
-                            <span className="text-sm text-zinc-300">Recommendations</span>
+                            <span className="text-xs sm:text-sm text-zinc-300">Recommendations</span>
                           </label>
                         </div>
                       </div>
 
-                      <Button className="w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700">
-                        <Download className="h-4 w-4 mr-2" />
+                      <Button className="w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-xs sm:text-sm">
+                        <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                         Generate Threat Report
                       </Button>
                     </CardContent>
                   </Card>
                 </div>
 
-                {/* Threat Summary */}
-                <div className="lg:col-span-2 space-y-6">
+                {/* Threat Summary - Responsive */}
+                <div className="xl:col-span-2 space-y-4 sm:space-y-6">
                   <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                    <CardHeader>
-                      <CardTitle className="text-lg text-white">Threat Summary (Last 7 Days)</CardTitle>
+                    <CardHeader className="p-3 sm:p-6">
+                      <CardTitle className="text-base sm:text-lg text-white">Threat Summary (Last 7 Days)</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 gap-4 mb-6">
-                        <div className="text-center p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
-                          <div className="text-3xl font-bold text-red-400">23</div>
-                          <div className="text-sm text-red-300">Critical Threats</div>
+                    <CardContent className="p-3 sm:p-6 pt-0">
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                        <div className="text-center p-3 sm:p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
+                          <div className="text-2xl sm:text-3xl font-bold text-red-400">23</div>
+                          <div className="text-xs sm:text-sm text-red-300">Critical Threats</div>
                         </div>
-                        <div className="text-center p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg">
-                          <div className="text-3xl font-bold text-amber-400">67</div>
-                          <div className="text-sm text-amber-300">High Priority</div>
+                        <div className="text-center p-3 sm:p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg">
+                          <div className="text-2xl sm:text-3xl font-bold text-amber-400">67</div>
+                          <div className="text-xs sm:text-sm text-amber-300">High Priority</div>
                         </div>
                       </div>
 
-                      <div className="space-y-4">
-                        <h4 className="text-white font-medium">Top Threat Categories</h4>
+                      <div className="space-y-3 sm:space-y-4">
+                        <h4 className="text-white font-medium text-sm sm:text-base">Top Threat Categories</h4>
                         <div className="space-y-3">
                           <ThreatCategoryItem
                             category="Malware"
                             count={34}
                             percentage={38}
                             color="red"
-                            icon={<Zap className="h-4 w-4" />}
+                            icon={<Zap className="h-3 w-3 sm:h-4 sm:w-4" />}
                           />
                           <ThreatCategoryItem
                             category="Network Intrusion"
                             count={28}
                             percentage={31}
                             color="orange"
-                            icon={<Globe className="h-4 w-4" />}
+                            icon={<Globe className="h-3 w-3 sm:h-4 sm:w-4" />}
                           />
                           <ThreatCategoryItem
                             category="Data Exfiltration"
                             count={18}
                             percentage={20}
                             color="yellow"
-                            icon={<Database className="h-4 w-4" />}
+                            icon={<Database className="h-3 w-3 sm:h-4 sm:w-4" />}
                           />
                           <ThreatCategoryItem
                             category="Authentication"
                             count={10}
                             percentage={11}
                             color="purple"
-                            icon={<Users className="h-4 w-4" />}
+                            icon={<Users className="h-3 w-3 sm:h-4 sm:w-4" />}
                           />
                         </div>
                       </div>
@@ -441,27 +452,27 @@ export default function ReportsPage() {
                   </Card>
 
                   <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                    <CardHeader>
-                      <CardTitle className="text-lg text-white">Recent Threat Reports</CardTitle>
+                    <CardHeader className="p-3 sm:p-6">
+                      <CardTitle className="text-base sm:text-lg text-white">Recent Threat Reports</CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-3 sm:p-6 pt-0">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-red-500/20 rounded-lg border border-red-500/30">
-                              <AlertTriangle className="h-4 w-4 text-red-400" />
+                              <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-red-400" />
                             </div>
                             <div>
-                              <h5 className="font-medium text-white">Critical Threat Analysis - Week 52</h5>
-                              <p className="text-sm text-zinc-400">Generated 2 hours ago • 3.2 MB</p>
+                              <h5 className="font-medium text-white text-xs sm:text-sm">Critical Threat Analysis - Week 52</h5>
+                              <p className="text-xs text-zinc-400">Generated 2 hours ago • 3.2 MB</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Button size="sm" variant="ghost" className="text-zinc-400 hover:text-white">
-                              <Eye className="h-4 w-4" />
+                              <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                             <Button size="sm" variant="ghost" className="text-zinc-400 hover:text-white">
-                              <Download className="h-4 w-4" />
+                              <Download className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                           </div>
                         </div>
@@ -469,19 +480,19 @@ export default function ReportsPage() {
                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
-                              <Shield className="h-4 w-4 text-amber-400" />
+                              <Shield className="h-3 w-3 sm:h-4 sm:w-4 text-amber-400" />
                             </div>
                             <div>
-                              <h5 className="font-medium text-white">Monthly Threat Landscape</h5>
-                              <p className="text-sm text-zinc-400">Generated yesterday • 5.8 MB</p>
+                              <h5 className="font-medium text-white text-xs sm:text-sm">Monthly Threat Landscape</h5>
+                              <p className="text-xs text-zinc-400">Generated yesterday • 5.8 MB</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Button size="sm" variant="ghost" className="text-zinc-400 hover:text-white">
-                              <Eye className="h-4 w-4" />
+                              <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                             <Button size="sm" variant="ghost" className="text-zinc-400 hover:text-white">
-                              <Download className="h-4 w-4" />
+                              <Download className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                           </div>
                         </div>

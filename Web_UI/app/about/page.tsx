@@ -28,38 +28,38 @@ export default function AboutPage() {
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
-      {/* Animated background elements */}
+      {/* Animated background elements - Responsive sizes */}
       <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-40 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
+        <div className="absolute top-20 left-10 w-32 sm:w-72 h-32 sm:h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-40 right-20 w-48 sm:w-96 h-48 sm:h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute bottom-20 left-1/3 w-40 sm:w-80 h-40 sm:h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
       </div>
 
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
 
-      {/* Header */}
+      {/* Header - Responsive */}
       <header className="border-b border-purple-500/20 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-50 relative">
-        <div className="mx-auto max-w-7xl px-6 py-4">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
-                <ShieldCheck className="h-5 w-5 text-white" />
+                <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+              <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
                 CyberSense AI
               </h1>
             </Link>
-            <nav className="hidden md:flex items-center gap-6">
-              <Link href="/" className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors">
+            <nav className="flex items-center gap-2 sm:gap-4 md:gap-6">
+              <Link href="/" className="text-xs sm:text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors">
                 Home
               </Link>
               {showBasicNav ? (
                 // Basic navigation for SSR/loading state
                 <>
-                  <span className="text-sm font-medium text-purple-300">About</span>
+                  <span className="text-xs sm:text-sm font-medium text-purple-300">About</span>
                   <Link href="/login">
-                    <Button className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 shadow-lg shadow-purple-500/25">
+                    <Button size="sm" className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 shadow-lg shadow-purple-500/25 text-xs sm:text-sm">
                       Get Started
                     </Button>
                   </Link>
@@ -69,26 +69,20 @@ export default function AboutPage() {
                 <>
                   <Link
                     href="/dashboard"
-                    className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors"
+                    className="text-xs sm:text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors"
                   >
                     Dashboard
                   </Link>
-                  <span className="text-sm font-medium text-purple-300">About</span>
-                  <Link
-                    href="/reports"
-                    className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors"
-                  >
-                    Reports
-                  </Link>
-                  <div className="flex items-center gap-3 ml-2">
-                    <span className="text-sm text-zinc-300">
+                  <span className="text-xs sm:text-sm font-medium text-purple-300">About</span>
+                  <div className="flex items-center gap-2 sm:gap-3 ml-2">
+                    <span className="text-xs sm:text-sm text-zinc-300 hidden sm:inline">
                       {user?.displayName || user?.givenName || 'User'}
                     </span>
                     <Button 
                       onClick={logout}
                       variant="outline"
                       size="sm"
-                      className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent"
+                      className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent text-xs sm:text-sm"
                     >
                       Logout
                     </Button>
@@ -97,9 +91,9 @@ export default function AboutPage() {
               ) : (
                 // Unauthenticated navigation
                 <>
-                  <span className="text-sm font-medium text-purple-300">About</span>
+                  <span className="text-xs sm:text-sm font-medium text-purple-300">About</span>
                   <Link href="/login">
-                    <Button className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 shadow-lg shadow-purple-500/25">
+                    <Button size="sm" className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 shadow-lg shadow-purple-500/25 text-xs sm:text-sm">
                       Get Started
                     </Button>
                   </Link>
@@ -110,29 +104,29 @@ export default function AboutPage() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="relative py-8">
+      {/* Main Content - Responsive */}
+      <main className="relative py-6 sm:py-8">
         {/* Enhanced background for better contrast */}
         <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent" />
 
-        <div className="relative mx-auto max-w-7xl px-6">
-          {/* Hero Section */}
-          <section className="pt-16 pb-16 flex items-start justify-center">
+        <div className="relative mx-auto max-w-7xl px-3 sm:px-6">
+          {/* Hero Section - Responsive */}
+          <section className="pt-12 sm:pt-16 pb-12 sm:pb-16 flex items-start justify-center">
             <div className="text-center w-full">
               <Badge
                 variant="outline"
-                className="mb-6 border-purple-400/30 bg-purple-500/10 text-purple-300 backdrop-blur-sm"
+                className="mb-4 sm:mb-6 border-purple-400/30 bg-purple-500/10 text-purple-300 backdrop-blur-sm text-xs sm:text-sm"
               >
                 About CyberSense AI
               </Badge>
-              <h1 className="text-5xl font-bold tracking-tight sm:text-7xl lg:text-8xl text-white mb-6">
+              <h1 className="text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight text-white mb-4 sm:mb-6">
                 Protecting the{" "}
                 <span className="bg-gradient-to-r from-purple-400 via-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
                   Digital World
                 </span>
               </h1>
-              <p className="mx-auto max-w-3xl text-2xl leading-relaxed text-zinc-200 mb-8">
+              <p className="mx-auto max-w-3xl text-base sm:text-xl lg:text-2xl leading-relaxed text-zinc-200 mb-6 sm:mb-8 px-4 sm:px-0">
                 We're a team of cybersecurity experts and AI researchers dedicated to making advanced threat detection
                 accessible to organizations of all sizes. Our mission is to democratize cybersecurity through
                 intelligent automation.
@@ -140,7 +134,7 @@ export default function AboutPage() {
 
               {/* Scroll Hint */}
               <div 
-                className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200 mb-8"
+                className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200 mb-6 sm:mb-8"
                 style={{
                   animation: 'bounce 3s infinite'
                 }}
@@ -150,14 +144,14 @@ export default function AboutPage() {
                   });
                 }}
               >
-                <p className="text-sm text-zinc-400 mb-2 font-medium">Learn more about us</p>
-                <div className="w-6 h-6 border-r-2 border-b-2 border-purple-400 transform rotate-45 opacity-70"></div>
+                <p className="text-xs sm:text-sm text-zinc-400 mb-2 font-medium">Learn more about us</p>
+                <div className="w-5 h-5 sm:w-6 sm:h-6 border-r-2 border-b-2 border-purple-400 transform rotate-45 opacity-70"></div>
               </div>
 
-              {/* Hero Illustration - Smaller and positioned under the arrow */}
+              {/* Hero Illustration - Responsive size */}
               <div className="flex justify-center">
                 <svg 
-                  className="w-40 h-40 md:w-48 md:h-48 opacity-60"
+                  className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 opacity-60"
                   viewBox="0 0 200 200" 
                   fill="none" 
                   xmlns="http://www.w3.org/2000/svg"
@@ -208,36 +202,36 @@ export default function AboutPage() {
             </div>
           </section>
 
-          {/* Mission & Vision */}
-          <section id="mission-vision" className="py-20">
-            <div className="grid grid-cols-1 gap-12 max-w-4xl mx-auto">
+          {/* Mission & Vision - Responsive */}
+          <section id="mission-vision" className="py-12 sm:py-20">
+            <div className="grid grid-cols-1 gap-8 sm:gap-12 max-w-4xl mx-auto">
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                <CardHeader>
+                <CardHeader className="p-4 sm:p-6">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="rounded-lg bg-purple-500/20 p-3 border border-purple-400/30">
-                      <Target className="h-6 w-6 text-purple-300" />
+                    <div className="rounded-lg bg-purple-500/20 p-2 sm:p-3 border border-purple-400/30">
+                      <Target className="h-5 w-5 sm:h-6 sm:w-6 text-purple-300" />
                     </div>
-                    <CardTitle className="text-2xl text-white">Our Mission</CardTitle>
+                    <CardTitle className="text-xl sm:text-2xl text-white">Our Mission</CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-xl text-zinc-200 leading-relaxed">
+                <CardContent className="p-4 sm:p-6 pt-0">
+                  <p className="text-base sm:text-xl text-zinc-200 leading-relaxed">
                     To empower cybersecurity professionals with AI-driven tools that deliver real-time intelligence, automated analysis, and actionable insights. We believe advanced cybersecurity must be accessible, intuitive, and effective for teams of all sizes. We foster a security-first culture that helps every organization stay ahead of emerging threats.
                   </p>
                 </CardContent>
               </Card>
 
               <Card className="bg-gray-900/80 border-violet-400/40 backdrop-blur-xl">
-                <CardHeader>
+                <CardHeader className="p-4 sm:p-6">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="rounded-lg bg-violet-500/20 p-3 border border-violet-400/30">
-                      <Globe className="h-6 w-6 text-violet-300" />
+                    <div className="rounded-lg bg-violet-500/20 p-2 sm:p-3 border border-violet-400/30">
+                      <Globe className="h-5 w-5 sm:h-6 sm:w-6 text-violet-300" />
                     </div>
-                    <CardTitle className="text-2xl text-white">Our Vision</CardTitle>
+                    <CardTitle className="text-xl sm:text-2xl text-white">Our Vision</CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-xl text-zinc-200 leading-relaxed">
+                <CardContent className="p-4 sm:p-6 pt-0">
+                  <p className="text-base sm:text-xl text-zinc-200 leading-relaxed">
                     A world where organizations can proactively defend against cyber threats using intelligent systems
                     that learn, adapt, and respond faster than human analysts alone. We envision seamless, AI-driven defenses woven into every layer of global digital infrastructure, enabling secure innovation without compromise.
                   </p>
@@ -247,50 +241,51 @@ export default function AboutPage() {
 
             {/* Scroll Hint */}
             <div 
-              className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200 mt-12 mb-8"
+              className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200 mt-8 sm:mt-12 mb-6 sm:mb-8"
               style={{ animation: 'bounce 3s infinite' }}
               onClick={() => {
                 document.getElementById('technology')?.scrollIntoView({ behavior: 'smooth' });
               }}
             >
-              <p className="text-sm text-zinc-400 mb-3 font-medium">See our impact</p>
-              <div className="w-6 h-6 border-r-2 border-b-2 border-purple-400 transform rotate-45 opacity-70"></div>
+              <p className="text-xs sm:text-sm text-zinc-400 mb-2 sm:mb-3 font-medium">See our impact</p>
+              <div className="w-5 h-5 sm:w-6 sm:h-6 border-r-2 border-b-2 border-purple-400 transform rotate-45 opacity-70"></div>
             </div>
           </section>
 
-          {/* Technology & Innovation */}
-          <section id="technology" className="py-20">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold text-white mb-4">Innovation at Our Core</h2>
-              <p className="text-xl text-zinc-200 max-w-3xl mx-auto">
+          {/* Technology & Innovation - Responsive */}
+          <section id="technology" className="py-12 sm:py-20">
+            <div className="text-center mb-12 sm:mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Innovation at Our Core</h2>
+              <p className="text-base sm:text-xl text-zinc-200 max-w-3xl mx-auto px-4 sm:px-0">
                 We leverage cutting-edge technologies to stay ahead of evolving cyber threats
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Responsive Grid: 1 col on mobile, 1 col on small tablets, 3 cols on desktop */}
+            <div className="grid grid-cols-1 gap-6 sm:gap-8 lg:grid-cols-3">
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <div className="rounded-lg bg-purple-500/20 p-3 w-fit border border-purple-500/20 mb-4">
-                    <Brain className="h-8 w-8 text-purple-400" />
+                <CardHeader className="p-4 sm:p-6">
+                  <div className="rounded-lg bg-purple-500/20 p-2 sm:p-3 w-fit border border-purple-500/20 mb-4">
+                    <Brain className="h-6 w-6 sm:h-8 sm:w-8 text-purple-400" />
                   </div>
-                  <CardTitle className="text-xl text-white">Advanced AI Models</CardTitle>
+                  <CardTitle className="text-lg sm:text-xl text-white">Advanced AI Models</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-zinc-200 mb-4">
+                <CardContent className="p-4 sm:p-6 pt-0">
+                  <p className="text-sm sm:text-base text-zinc-200 mb-4">
                     Our proprietary machine learning models are trained on the MISTRAL research dataset and continuously
                     updated with the latest threat intelligence.
                   </p>
                   <ul className="space-y-2">
-                    <li className="flex items-center gap-2 text-sm text-zinc-300">
-                      <CheckCircle className="h-4 w-4 text-purple-400" />
+                    <li className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400 flex-shrink-0" />
                       Deep learning threat classification
                     </li>
-                    <li className="flex items-center gap-2 text-sm text-zinc-300">
-                      <CheckCircle className="h-4 w-4 text-purple-400" />
+                    <li className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400 flex-shrink-0" />
                       Behavioral anomaly detection
                     </li>
-                    <li className="flex items-center gap-2 text-sm text-zinc-300">
-                      <CheckCircle className="h-4 w-4 text-purple-400" />
+                    <li className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400 flex-shrink-0" />
                       Predictive threat modeling
                     </li>
                   </ul>
@@ -298,28 +293,28 @@ export default function AboutPage() {
               </Card>
 
               <Card className="bg-gray-900/80 border-violet-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <div className="rounded-lg bg-violet-500/20 p-3 w-fit border border-violet-500/20 mb-4">
-                    <Zap className="h-8 w-8 text-violet-400" />
+                <CardHeader className="p-4 sm:p-6">
+                  <div className="rounded-lg bg-violet-500/20 p-2 sm:p-3 w-fit border border-violet-500/20 mb-4">
+                    <Zap className="h-6 w-6 sm:h-8 sm:w-8 text-violet-400" />
                   </div>
-                  <CardTitle className="text-xl text-white">Real-time Processing</CardTitle>
+                  <CardTitle className="text-lg sm:text-xl text-white">Real-time Processing</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-zinc-200 mb-4">
+                <CardContent className="p-4 sm:p-6 pt-0">
+                  <p className="text-sm sm:text-base text-zinc-200 mb-4">
                     Our distributed architecture processes thousands of network events per second, providing instant
                     threat detection and response capabilities.
                   </p>
                   <ul className="space-y-2">
-                    <li className="flex items-center gap-2 text-sm text-zinc-300">
-                      <CheckCircle className="h-4 w-4 text-violet-400" />
+                    <li className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-violet-400 flex-shrink-0" />
                       Stream processing engine
                     </li>
-                    <li className="flex items-center gap-2 text-sm text-zinc-300">
-                      <CheckCircle className="h-4 w-4 text-violet-400" />
+                    <li className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-violet-400 flex-shrink-0" />
                       Edge computing deployment
                     </li>
-                    <li className="flex items-center gap-2 text-sm text-zinc-300">
-                      <CheckCircle className="h-4 w-4 text-violet-400" />
+                    <li className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-violet-400 flex-shrink-0" />
                       Auto-scaling infrastructure
                     </li>
                   </ul>
@@ -327,28 +322,28 @@ export default function AboutPage() {
               </Card>
 
               <Card className="bg-gray-900/80 border-fuchsia-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <div className="rounded-lg bg-fuchsia-500/20 p-3 w-fit border border-fuchsia-500/20 mb-4">
-                    <Shield className="h-8 w-8 text-fuchsia-400" />
+                <CardHeader className="p-4 sm:p-6">
+                  <div className="rounded-lg bg-fuchsia-500/20 p-2 sm:p-3 w-fit border border-fuchsia-500/20 mb-4">
+                    <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-fuchsia-400" />
                   </div>
-                  <CardTitle className="text-xl text-white">Security by Design</CardTitle>
+                  <CardTitle className="text-lg sm:text-xl text-white">Security by Design</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-zinc-200 mb-4">
+                <CardContent className="p-4 sm:p-6 pt-0">
+                  <p className="text-sm sm:text-base text-zinc-200 mb-4">
                     Built with security-first principles, our platform ensures data remains protected while
                     providing comprehensive threat visibility.
                   </p>
                   <ul className="space-y-2">
-                    <li className="flex items-center gap-2 text-sm text-zinc-300">
-                      <CheckCircle className="h-4 w-4 text-fuchsia-400" />
+                    <li className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-fuchsia-400 flex-shrink-0" />
                       End-to-end encryption
                     </li>
-                    <li className="flex items-center gap-2 text-sm text-zinc-300">
-                      <CheckCircle className="h-4 w-4 text-fuchsia-400" />
+                    <li className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-fuchsia-400 flex-shrink-0" />
                       Zero-trust architecture
                     </li>
-                    <li className="flex items-center gap-2 text-sm text-zinc-300">
-                      <CheckCircle className="h-4 w-4 text-fuchsia-400" />
+                    <li className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-fuchsia-400 flex-shrink-0" />
                       SOC 2 Type II compliant
                     </li>
                   </ul>
@@ -358,7 +353,7 @@ export default function AboutPage() {
 
             {/* Scroll Hint */}
             <div 
-              className="mt-16 flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200"
+              className="mt-12 sm:mt-16 flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200"
               style={{
                 animation: 'bounce 3s infinite'
               }}
@@ -368,24 +363,24 @@ export default function AboutPage() {
                 });
               }}
             >
-              <p className="text-sm text-zinc-400 mb-2 font-medium">Meet our team</p>
-              <div className="w-6 h-6 border-r-2 border-b-2 border-purple-400 transform rotate-45 opacity-70"></div>
+              <p className="text-xs sm:text-sm text-zinc-400 mb-2 font-medium">Meet our team</p>
+              <div className="w-5 h-5 sm:w-6 sm:h-6 border-r-2 border-b-2 border-purple-400 transform rotate-45 opacity-70"></div>
             </div>
           </section>
 
-          {/* Team Section */}
-          <section id="team" className="py-20">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold text-white mb-4">Meet Our Team</h2>
-              <p className="text-xl text-zinc-200">
+          {/* Team Section - Responsive */}
+          <section id="team" className="py-12 sm:py-20">
+            <div className="text-center mb-12 sm:mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Meet Our Team</h2>
+              <p className="text-base sm:text-xl text-zinc-200 px-4 sm:px-0">
                 Cybersecurity experts, AI researchers, and engineers working together to protect the digital world
               </p>
             </div>
 
             {/* Team Leads */}
-            <div className="mb-12">
-              <h3 className="text-2xl font-bold text-purple-300 text-center mb-8">Team Leads</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <div className="mb-8 sm:mb-12">
+              <h3 className="text-xl sm:text-2xl font-bold text-purple-300 text-center mb-6 sm:mb-8">Team Leads</h3>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 max-w-4xl mx-auto">
                 <TeamMember
                   name="Alex Merck"
                   role="Project Lead"
@@ -413,10 +408,10 @@ export default function AboutPage() {
 
             {/* Developers */}
             <div>
-              <h3 className="text-2xl font-bold text-violet-300 text-center mb-8">Developers</h3>
+              <h3 className="text-xl sm:text-2xl font-bold text-violet-300 text-center mb-6 sm:mb-8">Developers</h3>
               
-              {/* First row - 3 developers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
+              {/* First row - 3 developers - Responsive grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-6 sm:mb-8">
                 <TeamMember
                   name="Andy Chen"
                   role="Developer"
@@ -453,7 +448,7 @@ export default function AboutPage() {
               </div>
               
               {/* Second row - 2 developers centered */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 max-w-4xl mx-auto">
                 <TeamMember
                   name="Fahad Al-Athel"
                   role="Developer"
@@ -481,7 +476,7 @@ export default function AboutPage() {
 
             {/* Scroll Hint */}
             <div 
-              className="mt-16 flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200"
+              className="mt-12 sm:mt-16 flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity duration-200"
               style={{
                 animation: 'bounce 3s infinite'
               }}
@@ -492,8 +487,8 @@ export default function AboutPage() {
                 });
               }}
             >
-              <p className="text-sm text-zinc-400 mb-2 font-medium">Back to top</p>
-              <div className="w-6 h-6 border-l-2 border-t-2 border-purple-400 transform rotate-45 opacity-70"></div>
+              <p className="text-xs sm:text-sm text-zinc-400 mb-2 font-medium">Back to top</p>
+              <div className="w-5 h-5 sm:w-6 sm:h-6 border-l-2 border-t-2 border-purple-400 transform rotate-45 opacity-70"></div>
             </div>
           </section>
 
@@ -501,9 +496,9 @@ export default function AboutPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative">
-        <div className="mx-auto max-w-7xl px-6">
+      {/* Footer - Responsive */}
+      <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-8 sm:py-12 relative">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
