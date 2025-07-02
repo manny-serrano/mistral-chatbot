@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Bot, Send } from "lucide-react"
+import { Bot, Send, Maximize2, Minimize2 } from "lucide-react"
 
 interface Message {
   id: string
@@ -14,7 +14,12 @@ interface Message {
   timestamp: Date
 }
 
-export function Chat() {
+interface ChatProps {
+  onToggleExpansion?: () => void
+  isExpanded?: boolean
+}
+
+export function Chat({ onToggleExpansion, isExpanded = false }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -118,7 +123,24 @@ export function Chat() {
   return (
     <Card className="flex h-[600px] flex-col bg-zinc-950 border-zinc-800">
       <CardHeader className="border-b border-zinc-800 px-4 py-3 flex-shrink-0">
-        <CardTitle className="text-lg font-medium text-white">Network Traffic Analysis</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg font-medium text-white">Network Traffic Analysis</CardTitle>
+          {onToggleExpansion && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleExpansion}
+              className="h-8 w-8 p-0 text-zinc-400 hover:text-white hover:bg-zinc-800"
+              title={isExpanded ? "Collapse chat" : "Expand chat"}
+            >
+              {isExpanded ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-y-auto p-4 min-h-0">
         <div className="space-y-4">
@@ -136,7 +158,7 @@ export function Chat() {
                 <h3 className="text-lg font-medium text-white">CyberSense AI Assistant</h3>
                 <p className="text-sm text-zinc-400 max-w-md">
                   Ask me about network traffic, suspicious IPs, or potential threats. I can analyze patterns and suggest
-                  mitigation steps.
+                  mitigation steps. {isExpanded ? "Expanded view for detailed analysis." : "Click the expand button for more space."}
                 </p>
               </div>
               <div className="w-full max-w-md space-y-2">
@@ -216,7 +238,10 @@ export function Chat() {
       <CardFooter className="border-t border-zinc-800 p-4 flex-shrink-0">
         <form onSubmit={handleSubmit} className="flex w-full gap-2">
           <Input
-            placeholder="Ask about network traffic or potential threats..."
+            placeholder={isExpanded 
+              ? "Ask detailed questions about network traffic, threats, or security analysis..." 
+              : "Ask about network traffic or potential threats..."
+            }
             value={input}
             onChange={handleInputChange}
             className="flex-1 bg-zinc-900 border-zinc-800 focus-visible:ring-purple-500 text-white placeholder:text-zinc-400"
