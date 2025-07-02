@@ -99,96 +99,107 @@ export default function NetworkVisualizationPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
-      {/* Animated background elements */}
+      {/* Animated background elements - Responsive sizes */}
       <div className="absolute inset-0 opacity-30 pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-40 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
+        <div className="absolute top-20 left-10 w-32 sm:w-72 h-32 sm:h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-40 right-20 w-48 sm:w-96 h-48 sm:h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute bottom-20 left-1/3 w-40 sm:w-80 h-40 sm:h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
       </div>
 
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px] pointer-events-none"></div>
 
-      {/* Header */}
+      {/* Header - Responsive */}
       <header className="border-b border-purple-500/20 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-50 relative">
-        <div className="mx-auto max-w-7xl px-6 py-4">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
-                <ShieldCheck className="h-5 w-5 text-white" />
+                <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+              <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
                 CyberSense AI
               </h1>
             </Link>
-            <nav className="flex items-center gap-6">
-              <Link href="/dashboard" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+
+            {/* Responsive Navigation - Always visible with smaller text on mobile */}
+            <nav className="flex items-center gap-2 sm:gap-4 md:gap-6">
+              <Link
+                href="/dashboard"
+                className="text-xs sm:text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+              >
                 Dashboard
               </Link>
-              <Link href="/alerts" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+              <Link
+                href="/alerts"
+                className="text-xs sm:text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+              >
                 Alerts
               </Link>
-              <Link href="/reports" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+              <Link
+                href="/reports"
+                className="text-xs sm:text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+              >
                 Reports
               </Link>
-              <Link href="/visualization" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                Visualization
+              <Link
+                href="/visualization"
+                className="text-xs sm:text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors"
+              >
+                <span className="hidden sm:inline">Visualization</span>
+                <span className="sm:hidden">Visual</span>
               </Link>
-            </nav>
-            <div className="flex items-center gap-4">
-              <button className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20">
-                <Bell className="h-5 w-5" />
-              </button>
               <ProfileDropdown />
-            </div>
+            </nav>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="relative py-8">
+      {/* Main Content - Responsive */}
+      <main className="relative py-6 sm:py-8">
         {/* Enhanced background for better contrast */}
         <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-purple-950/50 to-gray-950/90 pointer-events-none" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/40 via-transparent to-transparent pointer-events-none" />
 
-        <div className="relative mx-auto max-w-7xl px-6">
-          {/* Breadcrumb Navigation */}
-          <div className="mb-6">
+        <div className="relative mx-auto max-w-7xl px-3 sm:px-6">
+          {/* Breadcrumb Navigation - Responsive */}
+          <div className="mb-4 sm:mb-6">
             <Link 
               href="/visualization" 
-              className="inline-flex items-center gap-2 text-purple-300 hover:text-purple-200 transition-colors text-sm font-medium"
+              className="inline-flex items-center gap-2 text-purple-300 hover:text-purple-200 transition-colors text-xs sm:text-sm font-medium"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
               Back to Visualizations
             </Link>
           </div>
 
-          {/* Page Header */}
-          <div className="mb-8">
+          {/* Page Header - Responsive */}
+          <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-purple-500/20 p-3 border border-purple-400/30 backdrop-blur-sm">
-                <Network className="h-6 w-6 text-purple-300" />
+              <div className="rounded-lg bg-purple-500/20 p-2 sm:p-3 border border-purple-400/30 backdrop-blur-sm">
+                <Network className="h-5 w-5 sm:h-6 sm:w-6 text-purple-300" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white">Network Visualization</h1>
-                <p className="text-lg text-zinc-200 mt-1">Interactive network graphs and traffic analysis visualizations</p>
+                <h1 className="text-3xl sm:text-4xl font-bold text-white">Network Visualization</h1>
+                <p className="text-base sm:text-lg text-zinc-200 mt-1">Interactive network graphs and traffic analysis visualizations</p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-4 mb-6">
+          {/* Quick Stats Cards - Responsive Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-4 sm:mb-6">
             {/* Quick Stats Cards */}
             <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-zinc-400">Network Nodes</CardTitle>
+              <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                <CardTitle className="text-xs sm:text-sm font-medium text-zinc-400">Network Nodes</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="flex items-center gap-2">
-                  <Network className="h-4 w-4 text-purple-400" />
+                  <Network className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400" />
                   {loading ? (
-                    <span className="text-2xl font-bold text-white">...</span>
+                    <span className="text-lg sm:text-2xl font-bold text-white">...</span>
                   ) : (
-                    <span className="text-2xl font-bold text-white">{stats?.network_nodes?.toLocaleString() || '0'}</span>
+                    <span className="text-lg sm:text-2xl font-bold text-white">{stats?.network_nodes?.toLocaleString() || '0'}</span>
                   )}
                 </div>
                 <p className="text-xs text-zinc-500 mt-1">
@@ -198,16 +209,16 @@ export default function NetworkVisualizationPage() {
             </Card>
 
             <Card className="bg-gray-900/80 border-violet-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-zinc-400">Active Connections</CardTitle>
+              <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                <CardTitle className="text-xs sm:text-sm font-medium text-zinc-400">Active Connections</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-violet-400" />
+                  <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-violet-400" />
                   {loading ? (
-                    <span className="text-2xl font-bold text-white">...</span>
+                    <span className="text-lg sm:text-2xl font-bold text-white">...</span>
                   ) : (
-                    <span className="text-2xl font-bold text-white">{stats?.active_connections?.toLocaleString() || '0'}</span>
+                    <span className="text-lg sm:text-2xl font-bold text-white">{stats?.active_connections?.toLocaleString() || '0'}</span>
                   )}
                 </div>
                 <p className="text-xs text-zinc-500 mt-1">
@@ -217,16 +228,16 @@ export default function NetworkVisualizationPage() {
             </Card>
 
             <Card className="bg-gray-900/80 border-fuchsia-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-zinc-400">Data Throughput</CardTitle>
+              <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                <CardTitle className="text-xs sm:text-sm font-medium text-zinc-400">Data Throughput</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-fuchsia-400" />
+                  <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-fuchsia-400" />
                   {loading ? (
-                    <span className="text-2xl font-bold text-white">...</span>
+                    <span className="text-lg sm:text-2xl font-bold text-white">...</span>
                   ) : (
-                    <span className="text-2xl font-bold text-white">{stats?.data_throughput || '0 GB/s'}</span>
+                    <span className="text-lg sm:text-2xl font-bold text-white">{stats?.data_throughput || '0 GB/s'}</span>
                   )}
                 </div>
                 <p className="text-xs text-zinc-500 mt-1">
@@ -236,16 +247,16 @@ export default function NetworkVisualizationPage() {
             </Card>
 
             <Card className="bg-gray-900/80 border-emerald-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-zinc-400">Security Status</CardTitle>
+              <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                <CardTitle className="text-xs sm:text-sm font-medium text-zinc-400">Security Status</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-emerald-400" />
+                  <Cpu className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-400" />
                   {loading ? (
-                    <span className="text-2xl font-bold text-white">...</span>
+                    <span className="text-lg sm:text-2xl font-bold text-white">...</span>
                   ) : (
-                    <span className="text-2xl font-bold text-white">{stats?.malicious_flows || 0}</span>
+                    <span className="text-lg sm:text-2xl font-bold text-white">{stats?.malicious_flows || 0}</span>
                   )}
                 </div>
                 <p className="text-xs text-zinc-500 mt-1">
@@ -255,30 +266,31 @@ export default function NetworkVisualizationPage() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          {/* Responsive Layout - Stack on mobile, side-by-side on larger screens */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
             {/* Main Network Graph */}
             <div className="xl:col-span-2">
-              <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl h-[600px] relative z-10">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
+              <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl h-[500px] sm:h-[600px] relative z-10">
+                <CardHeader className="p-3 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <CardTitle className="text-white flex items-center gap-2">
-                        <Network className="h-5 w-5 text-purple-400" />
+                      <CardTitle className="text-white flex items-center gap-2 text-base sm:text-lg">
+                        <Network className="h-4 w-4 sm:h-5 sm:w-5 text-purple-400" />
                         Interactive Network Graph
                       </CardTitle>
-                      <CardDescription>
+                      <CardDescription className="text-xs sm:text-sm">
                         Real-time network topology with threat indicators
                       </CardDescription>
                     </div>
                     
-                    {/* Graph Controls */}
-                    <div className="flex items-center gap-3">
+                    {/* Graph Controls - Responsive */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-300 text-sm">Limit:</span>
+                        <span className="text-gray-300 text-xs sm:text-sm">Limit:</span>
                         <select 
                           value={networkGraphRef.current?.nodeLimit || 200}
                           onChange={(e) => networkGraphRef.current?.handleLimitChange(parseInt(e.target.value))}
-                          className="bg-gray-800 text-white px-2 py-1 rounded border border-gray-600 focus:border-purple-400 focus:outline-none text-sm"
+                          className="bg-gray-800 text-white px-2 py-1 rounded border border-gray-600 focus:border-purple-400 focus:outline-none text-xs sm:text-sm"
                         >
                           <option value={50}>50</option>
                           <option value={100}>100</option>
@@ -287,25 +299,27 @@ export default function NetworkVisualizationPage() {
                           <option value={1000}>1000</option>
                         </select>
                       </div>
-                      <button
-                        onClick={() => networkGraphRef.current?.refreshGraph()}
-                        disabled={networkGraphRef.current?.loading}
-                        className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-3 py-1 rounded border border-purple-500 hover:border-purple-400 transition-colors flex items-center gap-1 text-sm"
-                      >
-                        {networkGraphRef.current?.loading ? '⏳' : '🔄'}
-                        <span>{networkGraphRef.current?.loading ? 'Loading...' : 'Refresh'}</span>
-                      </button>
-                      <button
-                        onClick={() => networkGraphRef.current?.centerGraph()}
-                        className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded border border-blue-500 hover:border-blue-400 transition-colors flex items-center gap-1 text-sm"
-                      >
-                        🎯
-                        <span>Center</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => networkGraphRef.current?.refreshGraph()}
+                          disabled={networkGraphRef.current?.loading}
+                          className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-2 sm:px-3 py-1 rounded border border-purple-500 hover:border-purple-400 transition-colors flex items-center gap-1 text-xs sm:text-sm"
+                        >
+                          {networkGraphRef.current?.loading ? '⏳' : '🔄'}
+                          <span className="hidden sm:inline">{networkGraphRef.current?.loading ? 'Loading...' : 'Refresh'}</span>
+                        </button>
+                        <button
+                          onClick={() => networkGraphRef.current?.centerGraph()}
+                          className="bg-blue-600 hover:bg-blue-700 px-2 sm:px-3 py-1 rounded border border-blue-500 hover:border-blue-400 transition-colors flex items-center gap-1 text-xs sm:text-sm"
+                        >
+                          🎯
+                          <span className="hidden sm:inline">Center</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-0 h-[500px] relative">
+                <CardContent className="p-0 h-[400px] sm:h-[500px] relative">
                   <div className="w-full h-full">
                     <NetworkGraph ref={networkGraphRef} />
                   </div>
@@ -313,25 +327,25 @@ export default function NetworkVisualizationPage() {
               </Card>
               
               {/* Network Graph Legend - Outside the card */}
-              <Card className="bg-gray-900/80 border-gray-400/40 backdrop-blur-xl mt-4">
-                <CardContent className="p-4">
-                  <div className="text-sm">
-                    <div className="font-medium mb-3 text-gray-300">Node Legend:</div>
-                    <div className="grid grid-cols-3 gap-4">
+              <Card className="bg-gray-900/80 border-gray-400/40 backdrop-blur-xl mt-3 sm:mt-4">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="text-xs sm:text-sm">
+                    <div className="font-medium mb-2 sm:mb-3 text-gray-300">Node Legend:</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-blue-500"></div>
                         <span className="text-white">📤 Source Hosts</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500"></div>
                         <span className="text-white">📥 Destination Hosts</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-red-500 border border-red-400"></div>
+                        <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500 border border-red-400"></div>
                         <span className="text-white">⚠️ Malicious Nodes</span>
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-gray-600 text-gray-400 grid grid-cols-3 gap-4">
+                    <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-gray-600 text-gray-400 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
                       <div>💜 Animated particles = Data flow</div>
                       <div>🔍 Zoom in to see IP labels</div>
                       <div>🎯 Use Center button if nodes go off-screen</div>
@@ -342,34 +356,34 @@ export default function NetworkVisualizationPage() {
             </div>
 
             {/* Sidebar with additional visualizations */}
-            <div className="space-y-6">
-              {/* Traffic Analysis */}
+            <div className="space-y-4 sm:space-y-6">
+              {/* Traffic Analysis - Responsive */}
               <Card className="bg-gray-900/80 border-violet-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white text-lg">Traffic Analysis</CardTitle>
-                  <CardDescription>Real-time traffic patterns</CardDescription>
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-white text-base sm:text-lg">Traffic Analysis</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Real-time traffic patterns</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
+                <CardContent className="p-3 sm:p-6 pt-0">
+                  <div className="space-y-3 sm:space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">HTTP Traffic</span>
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Normal</Badge>
+                      <span className="text-xs sm:text-sm text-zinc-400">HTTP Traffic</span>
+                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">Normal</Badge>
                     </div>
                     <div className="w-full bg-gray-800 rounded-full h-2">
                       <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full" style={{ width: '65%' }}></div>
                     </div>
                     
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">HTTPS Traffic</span>
-                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">High</Badge>
+                      <span className="text-xs sm:text-sm text-zinc-400">HTTPS Traffic</span>
+                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">High</Badge>
                     </div>
                     <div className="w-full bg-gray-800 rounded-full h-2">
                       <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full" style={{ width: '85%' }}></div>
                     </div>
                     
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Suspicious Traffic</span>
-                      <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Alert</Badge>
+                      <span className="text-xs sm:text-sm text-zinc-400">Suspicious Traffic</span>
+                      <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">Alert</Badge>
                     </div>
                     <div className="w-full bg-gray-800 rounded-full h-2">
                       <div className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full" style={{ width: '15%' }}></div>
@@ -378,16 +392,16 @@ export default function NetworkVisualizationPage() {
                 </CardContent>
               </Card>
 
-              {/* Top Threats */}
+              {/* Top Threats - Responsive */}
               <Card className="bg-gray-900/80 border-fuchsia-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white text-lg">Top Threats</CardTitle>
-                  <CardDescription>Most active threat sources</CardDescription>
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-white text-base sm:text-lg">Top Threats</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Most active threat sources</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
+                <CardContent className="p-3 sm:p-6 pt-0">
+                  <div className="space-y-2 sm:space-y-3">
                     {loading ? (
-                      <div className="text-center text-zinc-400">Loading threat indicators...</div>
+                      <div className="text-center text-zinc-400 text-xs sm:text-sm">Loading threat indicators...</div>
                     ) : stats?.threat_indicators && stats.threat_indicators.length > 0 ? (
                       stats.threat_indicators.slice(0, 3).map((threat, index) => {
                         const severityColor = threat.count > 10 ? "red" : threat.count > 5 ? "orange" : "yellow"
@@ -396,20 +410,20 @@ export default function NetworkVisualizationPage() {
                         const isLowThreat = threat.count <= 5
                         
                         return (
-                          <div key={threat.ip} className={`flex items-center justify-between p-2 rounded-lg border ${
+                          <div key={threat.ip} className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border ${
                             isHighThreat ? 'bg-red-500/10 border-red-500/20' :
                             isMediumThreat ? 'bg-orange-500/10 border-orange-500/20' :
                             'bg-yellow-500/10 border-yellow-500/20'
                           }`}>
                             <div>
-                              <p className="text-sm font-medium text-white">{threat.ip}</p>
+                              <p className="text-xs sm:text-sm font-medium text-white">{threat.ip}</p>
                               <p className={`text-xs ${
                                 isHighThreat ? 'text-red-400' :
                                 isMediumThreat ? 'text-orange-400' :
                                 'text-yellow-400'
                               }`}>{threat.threat_type}</p>
                             </div>
-                            <Badge className={`${
+                            <Badge className={`text-xs ${
                               isHighThreat ? 'bg-red-500/20 text-red-400 border-red-500/30' :
                               isMediumThreat ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
                               'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
@@ -420,46 +434,46 @@ export default function NetworkVisualizationPage() {
                         )
                       })
                     ) : (
-                      <div className="text-center text-zinc-400">No active threats detected</div>
+                      <div className="text-center text-zinc-400 text-xs sm:text-sm">No active threats detected</div>
                     )}
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Network Health */}
+              {/* Network Health - Responsive */}
               <Card className="bg-gray-900/80 border-emerald-400/40 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white text-lg">Network Health</CardTitle>
-                  <CardDescription>Overall system status</CardDescription>
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-white text-base sm:text-lg">Network Health</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Overall system status</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
+                <CardContent className="p-3 sm:p-6 pt-0">
+                  <div className="space-y-2 sm:space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Neo4j Database</span>
+                      <span className="text-xs sm:text-sm text-zinc-400">Neo4j Database</span>
                       <Badge className={stats && !error ? 
-                        'bg-green-500/20 text-green-400 border-green-500/30' : 
-                        'bg-red-500/20 text-red-400 border-red-500/30'
+                        'bg-green-500/20 text-green-400 border-green-500/30 text-xs' : 
+                        'bg-red-500/20 text-red-400 border-red-500/30 text-xs'
                       }>
                         {stats && !error ? 'Connected' : 'Error'}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Total Protocols</span>
-                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+                      <span className="text-xs sm:text-sm text-zinc-400">Total Protocols</span>
+                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
                         {loading ? "..." : stats?.total_protocols || 0}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Graph Nodes</span>
-                      <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                      <span className="text-xs sm:text-sm text-zinc-400">Graph Nodes</span>
+                      <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
                         {loading ? "..." : stats?.network_nodes?.toLocaleString() || 0}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-400">Security Analysis</span>
+                      <span className="text-xs sm:text-sm text-zinc-400">Security Analysis</span>
                       <Badge className={(stats?.malicious_flows || 0) > 0 ? 
-                        'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 
-                        'bg-green-500/20 text-green-400 border-green-500/30'
+                        'bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs' : 
+                        'bg-green-500/20 text-green-400 border-green-500/30 text-xs'
                       }>
                         {loading ? "..." : (stats?.malicious_flows || 0) > 0 ? "Threats Found" : "Clean"}
                       </Badge>
@@ -472,19 +486,19 @@ export default function NetworkVisualizationPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="flex items-center justify-between">
+      {/* Footer - Responsive */}
+      <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-8 sm:py-12 relative">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
-                <ShieldCheck className="h-4 w-4 text-white" />
+                <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
               </div>
-              <span className="font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+              <span className="text-sm sm:text-base font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
                 CyberSense AI
               </span>
             </div>
-            <p className="text-sm text-zinc-400">© 2025 CyberSense AI. Built for cybersecurity professionals.</p>
+            <p className="text-xs sm:text-sm text-zinc-400 text-center sm:text-right">© 2025 CyberSense AI. Built for cybersecurity professionals.</p>
           </div>
         </div>
       </footer>
