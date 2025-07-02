@@ -16,8 +16,11 @@ export async function GET() {
     session = driver.session();
 
     // Query all flows with required properties
+    // Filter to show only legitimate flow data, excluding honeypot and malicious data
     const result = await session.run(`
       MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port)
+      WHERE (f.malicious IS NULL OR f.malicious = false) 
+        AND (f.honeypot IS NULL OR f.honeypot = false)
       RETURN src.ip AS src_ip, f.flowStartMilliseconds AS flow_start, dst_port.port AS dst_port,
              f.protocolIdentifier AS protocol, f.packets AS packets, f.reversePackets AS reverse_packets,
              f.bytes AS bytes, f.reverseBytes AS reverse_bytes
