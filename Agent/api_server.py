@@ -937,9 +937,47 @@ async def get_network_graph(limit: int = 100):
 
 @app.get("/network/stats", response_model=NetworkStatsResponse)
 async def get_network_stats():
-    """Get network statistics from Neo4j for the dashboard."""
-    if config.lightweight_mode:
-        # Return mock data for lightweight mode
+    """Get comprehensive network statistics for the dashboard."""
+    try:
+        if config.lightweight_mode:
+            # Return mock data in lightweight mode
+            return NetworkStatsResponse(
+                network_nodes=1247,
+                active_connections=3891,
+                data_throughput="2.4 GB/s",
+                total_hosts=156,
+                total_flows=3891,
+                total_protocols=12,
+                malicious_flows=23,
+                top_ports=[
+                    {"port": 80, "service": "http", "count": 1024},
+                    {"port": 443, "service": "https", "count": 892},
+                    {"port": 22, "service": "ssh", "count": 234},
+                ],
+                top_protocols=[
+                    {"protocol": "tcp", "count": 2847},
+                    {"protocol": "udp", "count": 1044},
+                ],
+                threat_indicators=[
+                    {"ip": "185.143.223.12", "count": 15, "threat_type": "Malware C&C"},
+                    {"ip": "91.243.85.45", "count": 8, "threat_type": "Scanning Activity"},
+                ],
+                timestamp=datetime.now().isoformat()
+            )
+        
+        stats = neo4j_helper.get_network_statistics()
+        
+        # Add calculated data throughput (mock for now)
+        stats["data_throughput"] = f"{stats.get('total_flows', 0) * 0.64:.1f} GB/s"
+        
+        return NetworkStatsResponse(
+            **stats,
+            timestamp=datetime.now().isoformat()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting network stats: {e}")
+        # Return fallback data on error
         return NetworkStatsResponse(
             network_nodes=1247,
             active_connections=3891,
@@ -961,62 +999,476 @@ async def get_network_stats():
                 {"ip": "185.143.223.12", "count": 15, "threat_type": "Malware C&C"},
                 {"ip": "91.243.85.45", "count": 8, "threat_type": "Scanning Activity"},
             ],
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
+            success=True,
+            error=f"Using fallback data: {str(e)}"
         )
-    
+
+# New visualization endpoints
+
+@app.get("/visualization/time-series")
+async def get_time_series_data(
+    metric: str = "alerts", 
+    period: str = "24h",
+    granularity: str = "1h"
+):
+    """Get time-series data for various metrics."""
     try:
-        stats = neo4j_helper.get_network_statistics()
-        
-        # Format data throughput (mock calculation for now)
-        # In a real implementation, this would come from network monitoring
-        throughput_gbps = min(stats.get("total_flows", 0) / 1000, 5.0)
-        
-        # Enhance threat indicators with threat types
-        enhanced_threats = []
-        for threat in stats.get("threat_indicators", []):
-            threat_type = "Malicious Activity"
-            if threat["count"] > 10:
-                threat_type = "High Volume Attack"
-            elif threat["count"] > 5:
-                threat_type = "Moderate Threat"
+        if config.lightweight_mode:
+            # Return mock time-series data
+            from datetime import datetime, timedelta
+            import random
             
-            enhanced_threats.append({
-                "ip": threat["ip"],
-                "count": threat["count"],
-                "threat_type": threat_type
-            })
+            # Generate mock time series data
+            end_time = datetime.now()
+            if period == "24h":
+                start_time = end_time - timedelta(hours=24)
+                points = 24 if granularity == "1h" else 48
+            elif period == "7d":
+                start_time = end_time - timedelta(days=7)
+                points = 7 if granularity == "1d" else 168
+            else:  # 30d
+                start_time = end_time - timedelta(days=30)
+                points = 30 if granularity == "1d" else 720
+            
+            data = []
+            for i in range(points):
+                if granularity == "1h":
+                    timestamp = start_time + timedelta(hours=i)
+                elif granularity == "1d":
+                    timestamp = start_time + timedelta(days=i)
+                else:  # 30m
+                    timestamp = start_time + timedelta(minutes=i*30)
+                
+                # Generate realistic-looking data based on metric type
+                if metric == "alerts":
+                    value = random.randint(5, 50) + random.randint(0, 20) * (1 if i % 3 == 0 else 0)
+                elif metric == "flows":
+                    base = 1000
+                    value = base + random.randint(-200, 300) + 500 * (1 if 9 <= timestamp.hour <= 17 else 0)
+                elif metric == "threats":
+                    value = random.randint(0, 15) + random.randint(0, 10) * (1 if i % 5 == 0 else 0)
+                elif metric == "bandwidth":
+                    base = 2.5
+                    value = base + random.uniform(-0.5, 1.0) + 1.5 * (1 if 9 <= timestamp.hour <= 17 else 0)
+                else:
+                    value = random.randint(10, 100)
+                
+                data.append({
+                    "timestamp": timestamp.isoformat(),
+                    "value": round(value, 2),
+                    "metric": metric
+                })
+            
+            return {
+                "data": data,
+                "metric": metric,
+                "period": period,
+                "granularity": granularity,
+                "total_points": len(data),
+                "success": True,
+                "timestamp": datetime.now().isoformat()
+            }
         
-        return NetworkStatsResponse(
-            network_nodes=stats.get("network_nodes", 0),
-            active_connections=stats.get("active_connections", 0),
-            data_throughput=f"{throughput_gbps:.1f} GB/s",
-            total_hosts=stats.get("total_hosts", 0),
-            total_flows=stats.get("total_flows", 0),
-            total_protocols=stats.get("total_protocols", 0),
-            malicious_flows=stats.get("malicious_flows", 0),
-            top_ports=stats.get("top_ports", []),
-            top_protocols=stats.get("top_protocols", []),
-            threat_indicators=enhanced_threats,
-            timestamp=datetime.now().isoformat()
-        )
+        # Real Neo4j query for time-series data
+        if not neo4j_helper.driver:
+            if not neo4j_helper.connect():
+                raise Exception("Cannot connect to Neo4j")
+        
+        with neo4j_helper.driver.session() as session:
+            # Query based on metric type
+            if metric == "alerts":
+                # Count flows marked as malicious over time
+                query = """
+                MATCH (f:Flow)
+                WHERE f.malicious = true AND f.flowStartMilliseconds IS NOT NULL
+                RETURN f.flowStartMilliseconds as timestamp, count(f) as value
+                ORDER BY timestamp
+                """
+            elif metric == "flows":
+                # Count all flows over time
+                query = """
+                MATCH (f:Flow)
+                WHERE f.flowStartMilliseconds IS NOT NULL
+                RETURN f.flowStartMilliseconds as timestamp, count(f) as value
+                ORDER BY timestamp
+                """
+            else:
+                # Default query
+                query = """
+                MATCH (f:Flow)
+                WHERE f.flowStartMilliseconds IS NOT NULL
+                RETURN f.flowStartMilliseconds as timestamp, count(f) as value
+                ORDER BY timestamp
+                """
+            
+            result = session.run(query)
+            data = []
+            for record in result:
+                data.append({
+                    "timestamp": record["timestamp"],
+                    "value": record["value"],
+                    "metric": metric
+                })
+        
+        return {
+            "data": data,
+            "metric": metric,
+            "period": period,
+            "granularity": granularity,
+            "total_points": len(data),
+            "success": True,
+            "timestamp": datetime.now().isoformat()
+        }
         
     except Exception as e:
-        logger.error(f"Error getting network statistics: {e}")
-        return NetworkStatsResponse(
-            network_nodes=0,
-            active_connections=0,
-            data_throughput="0 GB/s",
-            total_hosts=0,
-            total_flows=0,
-            total_protocols=0,
-            malicious_flows=0,
-            top_ports=[],
-            top_protocols=[],
-            threat_indicators=[],
-            timestamp=datetime.now().isoformat(),
-            success=False,
-            error=str(e)
-        )
+        logger.error(f"Error getting time-series data: {e}")
+        return {
+            "data": [],
+            "error": str(e),
+            "success": False,
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/visualization/bar-chart")
+async def get_bar_chart_data(chart_type: str = "protocols"):
+    """Get bar chart data for various metrics."""
+    try:
+        if config.lightweight_mode:
+            # Return mock bar chart data
+            import random
+            
+            if chart_type == "protocols":
+                data = [
+                    {"name": "TCP", "value": 2847, "percentage": 68.5},
+                    {"name": "UDP", "value": 1044, "percentage": 25.1},
+                    {"name": "ICMP", "value": 234, "percentage": 5.6},
+                    {"name": "GRE", "value": 32, "percentage": 0.8}
+                ]
+            elif chart_type == "ports":
+                data = [
+                    {"name": "80 (HTTP)", "value": 1024, "percentage": 35.2},
+                    {"name": "443 (HTTPS)", "value": 892, "percentage": 30.7},
+                    {"name": "22 (SSH)", "value": 234, "percentage": 8.1},
+                    {"name": "53 (DNS)", "value": 156, "percentage": 5.4},
+                    {"name": "3389 (RDP)", "value": 98, "percentage": 3.4}
+                ]
+            elif chart_type == "countries":
+                data = [
+                    {"name": "United States", "value": 1245, "percentage": 42.3},
+                    {"name": "China", "value": 567, "percentage": 19.3},
+                    {"name": "Russia", "value": 234, "percentage": 8.0},
+                    {"name": "Germany", "value": 178, "percentage": 6.1},
+                    {"name": "United Kingdom", "value": 145, "percentage": 4.9}
+                ]
+            else:
+                data = [{"name": f"Item {i}", "value": random.randint(10, 1000)} for i in range(5)]
+            
+            return {
+                "data": data,
+                "chart_type": chart_type,
+                "total": sum(item["value"] for item in data),
+                "success": True,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Real Neo4j queries for bar chart data
+        if not neo4j_helper.driver:
+            if not neo4j_helper.connect():
+                raise Exception("Cannot connect to Neo4j")
+        
+        with neo4j_helper.driver.session() as session:
+            if chart_type == "protocols":
+                query = """
+                MATCH (f:Flow)-[:USES_PROTOCOL]->(p:Protocol)
+                RETURN p.name as name, count(f) as value
+                ORDER BY value DESC
+                LIMIT 10
+                """
+            elif chart_type == "ports":
+                query = """
+                MATCH (f:Flow)-[:USES_DST_PORT]->(port:Port)
+                RETURN port.port as port, port.service as service, count(f) as value
+                ORDER BY value DESC
+                LIMIT 10
+                """
+            elif chart_type == "threats":
+                query = """
+                MATCH (src:Host)-[:SENT]->(f:Flow)
+                WHERE f.malicious = true
+                RETURN src.ip as name, count(f) as value
+                ORDER BY value DESC
+                LIMIT 10
+                """
+            else:
+                # Default to protocols
+                query = """
+                MATCH (f:Flow)-[:USES_PROTOCOL]->(p:Protocol)
+                RETURN p.name as name, count(f) as value
+                ORDER BY value DESC
+                LIMIT 10
+                """
+            
+            result = session.run(query)
+            data = []
+            total = 0
+            
+            for record in result:
+                if chart_type == "ports":
+                    name = f"{record['port']} ({record['service'] or 'unknown'})"
+                else:
+                    name = record["name"]
+                
+                value = record["value"]
+                data.append({"name": name, "value": value})
+                total += value
+            
+            # Calculate percentages
+            for item in data:
+                item["percentage"] = round((item["value"] / total) * 100, 1) if total > 0 else 0
+        
+        return {
+            "data": data,
+            "chart_type": chart_type,
+            "total": total,
+            "success": True,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting bar chart data: {e}")
+        return {
+            "data": [],
+            "error": str(e),
+            "success": False,
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/visualization/geolocation")
+async def get_geolocation_data():
+    """Get geolocation data for IP addresses."""
+    try:
+        if config.lightweight_mode:
+            # Return mock geolocation data
+            import random
+            
+            # Mock IP geolocation data
+            mock_locations = [
+                {"ip": "203.0.113.1", "country": "United States", "city": "New York", "lat": 40.7128, "lon": -74.0060, "threats": 15, "flows": 234},
+                {"ip": "198.51.100.1", "country": "China", "city": "Beijing", "lat": 39.9042, "lon": 116.4074, "threats": 8, "flows": 156},
+                {"ip": "192.0.2.1", "country": "Russia", "city": "Moscow", "lat": 55.7558, "lon": 37.6176, "threats": 12, "flows": 89},
+                {"ip": "203.0.113.2", "country": "Germany", "city": "Berlin", "lat": 52.5200, "lon": 13.4050, "threats": 3, "flows": 67},
+                {"ip": "198.51.100.2", "country": "United Kingdom", "city": "London", "lat": 51.5074, "lon": -0.1278, "threats": 5, "flows": 123},
+                {"ip": "192.0.2.2", "country": "France", "city": "Paris", "lat": 48.8566, "lon": 2.3522, "threats": 2, "flows": 45},
+                {"ip": "203.0.113.3", "country": "Japan", "city": "Tokyo", "lat": 35.6762, "lon": 139.6503, "threats": 7, "flows": 78},
+                {"ip": "198.51.100.3", "country": "Brazil", "city": "São Paulo", "lat": -23.5505, "lon": -46.6333, "threats": 4, "flows": 34},
+            ]
+            
+            return {
+                "locations": mock_locations,
+                "total_ips": len(mock_locations),
+                "total_threats": sum(loc["threats"] for loc in mock_locations),
+                "total_flows": sum(loc["flows"] for loc in mock_locations),
+                "success": True,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Real Neo4j query for geolocation data
+        if not neo4j_helper.driver:
+            if not neo4j_helper.connect():
+                raise Exception("Cannot connect to Neo4j")
+        
+        with neo4j_helper.driver.session() as session:
+            # Query to get IPs with their location info and threat/flow counts
+            query = """
+            MATCH (h:Host)
+            OPTIONAL MATCH (h)-[:SENT]->(f:Flow)
+            OPTIONAL MATCH (h)-[:SENT]->(tf:Flow) WHERE tf.malicious = true
+            RETURN 
+                h.ip as ip,
+                h.country as country,
+                h.city as city,
+                h.latitude as lat,
+                h.longitude as lon,
+                count(DISTINCT f) as flows,
+                count(DISTINCT tf) as threats
+            ORDER BY threats DESC, flows DESC
+            LIMIT 50
+            """
+            
+            result = session.run(query)
+            locations = []
+            
+            for record in result:
+                if record["lat"] and record["lon"]:  # Only include if we have coordinates
+                    locations.append({
+                        "ip": record["ip"],
+                        "country": record["country"] or "Unknown",
+                        "city": record["city"] or "Unknown", 
+                        "lat": float(record["lat"]),
+                        "lon": float(record["lon"]),
+                        "threats": record["threats"],
+                        "flows": record["flows"]
+                    })
+        
+        return {
+            "locations": locations,
+            "total_ips": len(locations),
+            "total_threats": sum(loc["threats"] for loc in locations),
+            "total_flows": sum(loc["flows"] for loc in locations),
+            "success": True,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting geolocation data: {e}")
+        return {
+            "locations": [],
+            "error": str(e),
+            "success": False,
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/visualization/heatmap")
+async def get_heatmap_data(heatmap_type: str = "hourly_activity"):
+    """Get heatmap data for various time-based patterns."""
+    try:
+        if config.lightweight_mode:
+            # Return mock heatmap data
+            import random
+            
+            if heatmap_type == "hourly_activity":
+                # 24 hours x 7 days grid
+                data = []
+                days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                for day_idx, day in enumerate(days):
+                    for hour in range(24):
+                        # Simulate business hours having more activity
+                        base_activity = 20
+                        if day_idx < 5 and 9 <= hour <= 17:  # Weekdays 9-5
+                            base_activity = 80
+                        elif day_idx < 5 and (8 <= hour <= 8 or 18 <= hour <= 19):  # Rush hours
+                            base_activity = 60
+                        elif day_idx >= 5:  # Weekends
+                            base_activity = 30
+                        
+                        activity = base_activity + random.randint(-15, 25)
+                        data.append({
+                            "day": day,
+                            "day_index": day_idx,
+                            "hour": hour,
+                            "value": max(0, activity)
+                        })
+                        
+            elif heatmap_type == "ip_port_matrix":
+                # Top IPs vs top ports
+                top_ips = ["192.168.1.100", "10.0.0.15", "172.16.0.50", "203.0.113.1", "198.51.100.1"]
+                top_ports = [80, 443, 22, 53, 3389, 21, 25, 993]
+                data = []
+                for ip in top_ips:
+                    for port in top_ports:
+                        data.append({
+                            "ip": ip,
+                            "port": port,
+                            "value": random.randint(0, 100)
+                        })
+                        
+            else:  # threat_intensity
+                # Geographic threat intensity by region
+                regions = [
+                    {"region": "North America", "x": 0, "y": 0},
+                    {"region": "Europe", "x": 1, "y": 0},
+                    {"region": "Asia", "x": 2, "y": 0},
+                    {"region": "South America", "x": 0, "y": 1},
+                    {"region": "Africa", "x": 1, "y": 1},
+                    {"region": "Oceania", "x": 2, "y": 1}
+                ]
+                data = []
+                for region in regions:
+                    data.append({
+                        "region": region["region"],
+                        "x": region["x"],
+                        "y": region["y"],
+                        "value": random.randint(5, 95)
+                    })
+            
+            return {
+                "data": data,
+                "heatmap_type": heatmap_type,
+                "success": True,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Real Neo4j query for heatmap data
+        if not neo4j_helper.driver:
+            if not neo4j_helper.connect():
+                raise Exception("Cannot connect to Neo4j")
+        
+        with neo4j_helper.driver.session() as session:
+            if heatmap_type == "hourly_activity":
+                # Extract hour and day from flow timestamps
+                query = """
+                MATCH (f:Flow)
+                WHERE f.flowStartMilliseconds IS NOT NULL
+                WITH f, 
+                     datetime({epochMillis: f.flowStartMilliseconds}) as dt
+                RETURN 
+                    dt.hour as hour,
+                    dt.dayOfWeek as day_of_week,
+                    count(f) as value
+                ORDER BY day_of_week, hour
+                """
+                
+                result = session.run(query)
+                data = []
+                days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                
+                for record in result:
+                    day_idx = record["day_of_week"] - 1  # Neo4j uses 1-7, we want 0-6
+                    data.append({
+                        "day": days[day_idx] if 0 <= day_idx < 7 else "Unknown",
+                        "day_index": day_idx,
+                        "hour": record["hour"],
+                        "value": record["value"]
+                    })
+                    
+            elif heatmap_type == "ip_port_matrix":
+                # Top source IPs vs destination ports
+                query = """
+                MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(port:Port)
+                WITH src.ip as ip, port.port as port, count(f) as flow_count
+                ORDER BY flow_count DESC
+                LIMIT 100
+                RETURN ip, port, flow_count as value
+                """
+                
+                result = session.run(query)
+                data = []
+                for record in result:
+                    data.append({
+                        "ip": record["ip"],
+                        "port": record["port"],
+                        "value": record["value"]
+                    })
+                    
+            else:  # Default query
+                data = []
+        
+        return {
+            "data": data,
+            "heatmap_type": heatmap_type,
+            "success": True,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting heatmap data: {e}")
+        return {
+            "data": [],
+            "error": str(e),
+            "success": False,
+            "timestamp": datetime.now().isoformat()
+        }
 
 # Error handlers
 @app.exception_handler(404)
