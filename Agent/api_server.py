@@ -1200,6 +1200,15 @@ async def get_bar_chart_data(chart_type: str = "protocols"):
                 ORDER BY value DESC
                 LIMIT 10
                 """
+            elif chart_type == "countries":
+                # Query for geographic/country data
+                query = """
+                MATCH (h:Host)-[:SENT]->(f:Flow)
+                WHERE h.country IS NOT NULL AND h.country <> ""
+                RETURN h.country as name, count(f) as value
+                ORDER BY value DESC
+                LIMIT 10
+                """
             else:
                 # Default to protocols
                 query = """
@@ -1226,6 +1235,11 @@ async def get_bar_chart_data(chart_type: str = "protocols"):
             # Calculate percentages
             for item in data:
                 item["percentage"] = round((item["value"] / total) * 100, 1) if total > 0 else 0
+            
+            # Handle case where no geolocation data is available for countries
+            if chart_type == "countries" and len(data) == 0:
+                data = [{"name": "N/A - No geolocation data available", "value": 0, "percentage": 0}]
+                total = 0
         
         return {
             "data": data,
