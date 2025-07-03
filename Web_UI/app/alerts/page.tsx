@@ -52,6 +52,8 @@ import {
   Shield,
   Wifi,
   Server,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 
@@ -66,9 +68,11 @@ interface ApiAlert {
   p_value: number
   severity: "critical" | "high" | "medium" | "low"
   message: string
+  target_ports: number[]
+  target_ips: string[]
 }
 
-// UI Alert type
+// UI Alert type with geolocation
 interface AlertUI {
   id: string
   severity: "critical" | "high" | "medium" | "low"
@@ -88,6 +92,20 @@ interface AlertUI {
   firstSeen: string
   lastSeen: string
   riskScore: number
+  p_value: number
+  target_ports: number[]
+  target_ips: string[]
+  // New geolocation fields
+  geolocation?: {
+    country: string
+    city: string
+    region?: string
+    lat?: number
+    lon?: number
+    isp?: string
+    org?: string
+    timezone?: string
+  }
 }
 
 export default function AlertsPage() {
@@ -106,16 +124,125 @@ export default function AlertsPage() {
   const [sortBy, setSortBy] = useState<string>("timestamp")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const alertsPerPage = 10
+
+  // Function to fetch geolocation data for IPs
+  const getGeolocationsForIPs = async (ips: string[]) => {
+    try {
+      const response = await fetch('/api/geolocation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ips })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Geolocation API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return data.results || []
+    } catch (error) {
+      console.error('Error fetching geolocations:', error)
+      return []
+    }
+  }
+
+  // Alert action handlers
+  const handleResolveAlert = async (alertId: string) => {
+    try {
+      // Update alert status to resolved
+      setAlertsData(prev => prev.map(alert => 
+        alert.id === alertId 
+          ? { ...alert, status: 'resolved', assignee: 'System' }
+          : alert
+      ))
+      // TODO: Add API call to persist status change
+      console.log(`Alert ${alertId} marked as resolved`)
+    } catch (error) {
+      console.error('Error resolving alert:', error)
+    }
+  }
+
+  const handleEscalateAlert = async (alertId: string) => {
+    try {
+      // Update alert status to escalated
+      setAlertsData(prev => prev.map(alert => 
+        alert.id === alertId 
+          ? { ...alert, status: 'escalated', assignee: 'Security Team' }
+          : alert
+      ))
+      // TODO: Add API call to persist status change
+      console.log(`Alert ${alertId} escalated`)
+    } catch (error) {
+      console.error('Error escalating alert:', error)
+    }
+  }
+
+  const handleInvestigateAlert = async (alertId: string) => {
+    try {
+      // Update alert status to investigating
+      setAlertsData(prev => prev.map(alert => 
+        alert.id === alertId 
+          ? { ...alert, status: 'investigating', assignee: 'Analyst' }
+          : alert
+      ))
+      // TODO: Add API call to persist status change
+      console.log(`Alert ${alertId} under investigation`)
+    } catch (error) {
+      console.error('Error investigating alert:', error)
+    }
+  }
+
   // Fetch alerts on mount
   useEffect(() => {
-    setLoading(true)
-    fetch("/api/alerts")
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to fetch alerts")
-        return res.json()
-      })
-      .then(data => {
-        // Map API alerts to UI alerts
+    const fetchAlertsWithGeolocation = async () => {
+      setLoading(true)
+      try {
+        // Fetch alerts from API
+        const response = await fetch("/api/alerts")
+        if (!response.ok) throw new Error("Failed to fetch alerts")
+        const data = await response.json()
+        
+        // Get unique IPs for geolocation lookup
+        const uniqueIPs = [...new Set((data.alerts || []).map((a: ApiAlert) => a.ip))]
+        
+        // Fetch geolocation data for all IPs
+        const geolocations = await getGeolocationsForIPs(uniqueIPs)
+        
+        // Create IP to geolocation mapping
+        const geoMap = new Map()
+        geolocations.forEach((geo: any) => {
+          // Handle timezone properly - it might be an object or string
+          let timezoneString = 'Unknown'
+          if (geo.timezone) {
+            if (typeof geo.timezone === 'string') {
+              timezoneString = geo.timezone
+            } else if (typeof geo.timezone === 'object') {
+              // Extract meaningful string from timezone object
+              timezoneString = geo.timezone.id || geo.timezone.utc || geo.timezone.abbr || 'Unknown'
+            }
+          }
+          
+          // Ensure all fields are properly converted to strings/numbers
+          const safeGeo = {
+            country: String(geo.country || 'Unknown'),
+            city: String(geo.city || 'Unknown'), 
+            region: geo.region ? String(geo.region) : undefined,
+            lat: geo.latitude && !isNaN(Number(geo.latitude)) ? Number(geo.latitude) : undefined,
+            lon: geo.longitude && !isNaN(Number(geo.longitude)) ? Number(geo.longitude) : undefined,
+            isp: geo.isp ? String(geo.isp) : undefined,
+            org: geo.org ? String(geo.org) : undefined,
+            timezone: timezoneString
+          }
+          
+          geoMap.set(geo.ip, safeGeo)
+        })
+
+        // Map API alerts to UI alerts with geolocation
         const now = Date.now()
         const mapped: AlertUI[] = (data.alerts || []).map((a: ApiAlert, idx: number) => {
           // Calculate timeValue (minutes ago)
@@ -133,6 +260,31 @@ export default function AlertsPage() {
           } catch {
             timestamp = a.date
           }
+          
+          // Get geolocation data for this IP
+          const geo = geoMap.get(a.ip)
+          const locationString = geo ? `${geo.city}, ${geo.country}` : "Unknown Location"
+          
+          // Create meaningful target description from ports and IPs
+          let targetString = "Unknown"
+          if (a.target_ports && a.target_ports.length > 0 && a.target_ips && a.target_ips.length > 0) {
+            // Show target IPs first, then ports
+            const ipPart = a.target_ips.length <= 2 
+              ? `${a.target_ips.join(', ')}`
+              : `${a.target_ips.slice(0, 2).join(', ')} (+${a.target_ips.length - 2} more)`
+            
+            const portPart = a.target_ports.length <= 3 
+              ? `ports ${a.target_ports.join(', ')}`
+              : `ports ${a.target_ports.slice(0, 3).join(', ')} (+${a.target_ports.length - 3} more)`
+            
+            targetString = `${ipPart} on ${portPart}`
+          } else if (a.target_ports && a.target_ports.length > 0) {
+            // Fallback to just ports if no IPs
+            targetString = a.target_ports.length <= 3 
+              ? `Ports: ${a.target_ports.join(', ')}`
+              : `Ports: ${a.target_ports.slice(0, 3).join(', ')} (+${a.target_ports.length - 3} more)`
+          }
+          
           return {
             id: `ALERT-${idx}-${a.ip}-${a.date}`,
             severity: a.severity,
@@ -142,25 +294,31 @@ export default function AlertsPage() {
             timestamp,
             timeValue,
             source: a.ip,
-            destination: "N/A",
+            destination: targetString, // Use actual target ports instead of "Multiple Targets"
             status: "active",
             assignee: "Unassigned",
             tags: [a.type],
             affectedAssets: a.unique_ports,
             confidence: Math.round(a.p_value * 100),
-            location: "-",
+            location: locationString,
             firstSeen: a.date,
             lastSeen: a.date,
-            riskScore: Math.round(a.p_value * 10 * 10) / 10 // 0-10, 1 decimal
+            riskScore: Math.round(a.p_value * 10 * 10) / 10, // Keep original risk score
+            p_value: a.p_value,
+            target_ports: a.target_ports,
+            target_ips: a.target_ips,
+            geolocation: geo
           }
         })
         setAlertsData(mapped)
         setLoading(false)
-      })
-      .catch(err => {
-        setError(err.message)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch alerts')
         setLoading(false)
-      })
+      }
+    }
+
+    fetchAlertsWithGeolocation()
   }, [])
 
   // Filter alerts based on current filters
@@ -234,6 +392,34 @@ export default function AlertsPage() {
     return counts
   }, [filteredAlerts])
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredAlerts.length / alertsPerPage)
+  const startIndex = (currentPage - 1) * alertsPerPage
+  const endIndex = startIndex + alertsPerPage
+  const currentPageAlerts = filteredAlerts.slice(startIndex, endIndex)
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [severityFilter, typeFilter, statusFilter, timeRangeFilter, searchQuery, sortBy, sortOrder])
+
+  // Pagination handlers
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)))
+  }
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1)
+    }
+  }
+
+  const goToPrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1)
+    }
+  }
+
   // Clear all filters
   const clearFilters = () => {
     setSeverityFilter("all")
@@ -242,6 +428,7 @@ export default function AlertsPage() {
     setTimeRangeFilter("all")
     setSearchQuery("")
     setSelectedAlerts([])
+    setCurrentPage(1)
   }
 
   // Check if any filters are active
@@ -258,7 +445,7 @@ export default function AlertsPage() {
   }
 
   const selectAllAlerts = () => {
-    setSelectedAlerts(filteredAlerts.map((alert) => alert.id))
+    setSelectedAlerts(currentPageAlerts.map((alert) => alert.id))
   }
 
   const clearSelection = () => {
@@ -365,7 +552,7 @@ export default function AlertsPage() {
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="text-xl sm:text-2xl font-bold text-red-400">{filteredAlertCounts.critical}</div>
-                <p className="text-xs text-red-300 mt-1">Immediate action required</p>
+                <p className="text-xs text-red-300 mt-1">p_value ≥ 0.8</p>
               </CardContent>
             </Card>
             <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
@@ -377,7 +564,7 @@ export default function AlertsPage() {
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="text-xl sm:text-2xl font-bold text-amber-400">{filteredAlertCounts.high}</div>
-                <p className="text-xs text-amber-300 mt-1">Action needed soon</p>
+                <p className="text-xs text-amber-300 mt-1">p_value ≥ 0.6</p>
               </CardContent>
             </Card>
             <Card className="bg-gray-900/80 border-yellow-400/40 backdrop-blur-xl">
@@ -389,7 +576,7 @@ export default function AlertsPage() {
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="text-xl sm:text-2xl font-bold text-yellow-400">{filteredAlertCounts.medium}</div>
-                <p className="text-xs text-yellow-300 mt-1">Monitor closely</p>
+                <p className="text-xs text-yellow-300 mt-1">p_value ≥ 0.4</p>
               </CardContent>
             </Card>
             <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
@@ -401,7 +588,7 @@ export default function AlertsPage() {
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="text-xl sm:text-2xl font-bold text-blue-400">{filteredAlertCounts.low}</div>
-                <p className="text-xs text-blue-300 mt-1">Informational</p>
+                <p className="text-xs text-blue-300 mt-1">p_value ≥ 0.1</p>
               </CardContent>
             </Card>
             <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl col-span-2 sm:col-span-1">
@@ -585,7 +772,7 @@ export default function AlertsPage() {
                     onClick={selectAllAlerts}
                     className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent text-xs"
                   >
-                    Select All
+                    Select All on Page
                   </Button>
                 </div>
                 {hasActiveFilters && (
@@ -610,7 +797,8 @@ export default function AlertsPage() {
                   {hasActiveFilters ? "Filtered Alerts" : "All Alerts"}
                 </CardTitle>
                 <span className="text-sm text-zinc-400">
-                  Showing {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? "s" : ""}
+                  Showing {startIndex + 1}-{Math.min(endIndex, filteredAlerts.length)} of {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? "s" : ""}
+                  {totalPages > 1 && ` • Page ${currentPage} of ${totalPages}`}
                 </span>
               </div>
             </CardHeader>
@@ -620,16 +808,19 @@ export default function AlertsPage() {
                   <div className="p-8 text-center text-zinc-400">Loading alerts...</div>
                 ) : error ? (
                   <div className="p-8 text-center text-red-400">Error: {error}</div>
-                ) : filteredAlerts.length > 0 ? (
-                  filteredAlerts.map((alert) => (
+                ) : currentPageAlerts.length > 0 ? (
+                  currentPageAlerts.map((alert) => (
                     <AlertItem
                       key={alert.id}
                       alert={alert}
                       isSelected={selectedAlerts.includes(alert.id)}
                       onToggleSelection={toggleAlertSelection}
+                      onResolve={handleResolveAlert}
+                      onEscalate={handleEscalateAlert}
+                      onInvestigate={handleInvestigateAlert}
                     />
                   ))
-                ) : (
+                ) : filteredAlerts.length === 0 ? (
                   <div className="p-8 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="rounded-full bg-zinc-800 p-3">
@@ -649,9 +840,94 @@ export default function AlertsPage() {
                       </Button>
                     </div>
                   </div>
+                ) : (
+                  <div className="p-8 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="rounded-full bg-zinc-800 p-3">
+                        <Search className="h-6 w-6 text-zinc-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-medium text-white">No alerts on this page</h3>
+                        <p className="text-sm text-zinc-400 mt-1">Navigate to a different page or adjust your filters</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(1)}
+                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                      >
+                        Go to first page
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             </CardContent>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-zinc-400">
+                    Showing {startIndex + 1}-{Math.min(endIndex, filteredAlerts.length)} of {filteredAlerts.length} results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToPrevPage}
+                      disabled={currentPage === 1}
+                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+                    
+                    {/* Page Numbers */}
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+                        
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => goToPage(pageNum)}
+                            className={`w-8 h-8 p-0 text-xs ${
+                              currentPage === pageNum
+                                ? "bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700"
+                                : "border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                            }`}
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToNextPage}
+                      disabled={currentPage === totalPages}
+                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent disabled:opacity-50"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
       </main>
@@ -680,9 +956,12 @@ interface AlertItemProps {
   alert: AlertUI
   isSelected: boolean
   onToggleSelection: (alertId: string) => void
+  onResolve: (alertId: string) => void
+  onEscalate: (alertId: string) => void
+  onInvestigate: (alertId: string) => void
 }
 
-function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
+function AlertItem({ alert, isSelected, onToggleSelection, onResolve, onEscalate, onInvestigate }: AlertItemProps) {
   const severityConfig = {
     critical: { color: "red", bgColor: "bg-red-900/20", borderColor: "border-red-500/30", textColor: "text-red-400" },
     high: {
@@ -752,12 +1031,19 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
                     <Eye className="h-4 w-4" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-gray-900 border-purple-400/40 max-w-2xl">
-                  <DialogHeader>
+                <DialogContent className="bg-gray-900 border-purple-400/40 max-w-2xl max-h-[80vh] overflow-hidden">
+                  <DialogHeader className="pb-4">
                     <DialogTitle className="text-white">{alert.title}</DialogTitle>
                     <DialogDescription className="text-zinc-300">{alert.description}</DialogDescription>
                   </DialogHeader>
-                  <AlertDetailsModal alert={alert} />
+                  <div className="overflow-y-auto max-h-[60vh] pr-2">
+                    <AlertDetailsModal 
+                      alert={alert} 
+                      onResolve={onResolve}
+                      onEscalate={onEscalate}
+                      onInvestigate={onInvestigate}
+                    />
+                  </div>
                 </DialogContent>
               </Dialog>
               <DropdownMenu>
@@ -767,19 +1053,32 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-gray-800 border-purple-400/30">
-                  <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
+                  <DropdownMenuItem 
+                    className="text-zinc-200 hover:bg-purple-900/40"
+                    onClick={() => onResolve(alert.id)}
+                  >
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    Mark as Resolved
+                    Resolve Alert
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
+                  <DropdownMenuItem 
+                    className="text-zinc-200 hover:bg-purple-900/40"
+                    onClick={() => onEscalate(alert.id)}
+                  >
                     <Flag className="h-4 w-4 mr-2" />
                     Escalate
                   </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className="text-zinc-200 hover:bg-purple-900/40"
+                    onClick={() => onInvestigate(alert.id)}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    Investigate
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-purple-500/20" />
                   <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
                     <MessageSquare className="h-4 w-4 mr-2" />
                     Add Comment
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-purple-500/20" />
                   <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
                     <Archive className="h-4 w-4 mr-2" />
                     Archive
@@ -794,42 +1093,73 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-zinc-400 mb-3">
             <div className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              <span>{alert.timestamp}</span>
+              <span>{String(alert.timestamp)}</span>
             </div>
             <div className="flex items-center gap-1">
               <Wifi className="h-3 w-3" />
-              <span>Source: {alert.source}</span>
+              <span>Source: {String(alert.source)}</span>
             </div>
             <div className="flex items-center gap-1">
               <Server className="h-3 w-3" />
-              <span>Target: {alert.destination}</span>
+              <span>Target: {String(alert.destination)}</span>
             </div>
             <div className="flex items-center gap-1">
               <MapPin className="h-3 w-3" />
-              <span>{alert.location}</span>
+              <span>{String(alert.location)}</span>
+            </div>
+            {/* Additional geolocation details */}
+            {alert.geolocation?.isp && (
+              <div className="flex items-center gap-1">
+                <Globe className="h-3 w-3" />
+                <span>ISP: {String(alert.geolocation.isp)}</span>
+              </div>
+            )}
+            {alert.geolocation?.timezone && (
+              <div className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                <span>TZ: {String(alert.geolocation.timezone)}</span>
+              </div>
+            )}
+            {alert.geolocation?.lat && alert.geolocation.lon && (
+              <div className="flex items-center gap-1">
+                <MapPin className="h-3 w-3" />
+                <span>Coords: {Number(alert.geolocation.lat).toFixed(2)}, {Number(alert.geolocation.lon).toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <Activity className="h-3 w-3" />
+              <span>Unique Ports: {alert.affectedAssets}</span>
             </div>
           </div>
           {/* Risk Score and Confidence */}
           <div className="flex items-center gap-6 mb-3">
             <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400">P-Value:</span>
+              <Badge
+                className={`text-xs ${alert.p_value >= 0.8 ? "bg-red-500/20 text-red-400 border-red-500/30" : alert.p_value >= 0.6 ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : alert.p_value >= 0.4 ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" : alert.p_value >= 0.1 ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-gray-500/20 text-gray-400 border-gray-500/30"}`}
+              >
+                {Number(alert.p_value).toFixed(3)}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
               <span className="text-xs text-zinc-400">Risk Score:</span>
               <Badge
                 className={`text-xs ${alert.riskScore >= 8 ? "bg-red-500/20 text-red-400 border-red-500/30" : alert.riskScore >= 6 ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-blue-500/20 text-blue-400 border-blue-500/30"}`}
               >
-                {alert.riskScore}/10
+                {Number(alert.riskScore)}/10
               </Badge>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-zinc-400">Confidence:</span>
-              <span className="text-xs text-white">{alert.confidence}%</span>
+              <span className="text-xs text-white">{Number(alert.confidence)}%</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-zinc-400">Affected Assets:</span>
-              <span className="text-xs text-white">{alert.affectedAssets}</span>
+              <span className="text-xs text-white">{Number(alert.affectedAssets)}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-zinc-400">Assignee:</span>
-              <span className="text-xs text-white">{alert.assignee}</span>
+              <span className="text-xs text-white">{String(alert.assignee)}</span>
             </div>
           </div>
           {/* Tags */}
@@ -847,7 +1177,7 @@ function AlertItem({ alert, isSelected, onToggleSelection }: AlertItemProps) {
 }
 
 // Alert Details Modal Component
-function AlertDetailsModal({ alert }: { alert: AlertUI }) {
+function AlertDetailsModal({ alert, onResolve, onEscalate, onInvestigate }: { alert: AlertUI, onResolve: (alertId: string) => void, onEscalate: (alertId: string) => void, onInvestigate: (alertId: string) => void }) {
   return (
     <div className="space-y-6">
       {/* Timeline */}
@@ -856,11 +1186,11 @@ function AlertDetailsModal({ alert }: { alert: AlertUI }) {
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-zinc-400">First Seen:</span>
-            <span className="text-white">{alert.firstSeen}</span>
+            <span className="text-white">{String(alert.firstSeen)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-zinc-400">Last Seen:</span>
-            <span className="text-white">{alert.lastSeen}</span>
+            <span className="text-white">{String(alert.lastSeen)}</span>
           </div>
         </div>
       </div>
@@ -870,33 +1200,138 @@ function AlertDetailsModal({ alert }: { alert: AlertUI }) {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="text-zinc-400">Source IP:</span>
-            <p className="text-white font-mono">{alert.source}</p>
+            <p className="text-white font-mono">{String(alert.source)}</p>
           </div>
           <div>
-            <span className="text-zinc-400">Destination:</span>
-            <p className="text-white font-mono">{alert.destination}</p>
+            <span className="text-zinc-400">Target:</span>
+            <p className="text-white font-mono">{String(alert.destination)}</p>
+          </div>
+          <div>
+            <span className="text-zinc-400">P-Value:</span>
+            <p className="text-white font-bold">{Number(alert.p_value).toFixed(3)}</p>
+          </div>
+          <div>
+            <span className="text-zinc-400">Unique Ports:</span>
+            <p className="text-white">{Number(alert.affectedAssets)}</p>
           </div>
           <div>
             <span className="text-zinc-400">Risk Score:</span>
-            <p className="text-white">{alert.riskScore}/10</p>
+            <p className="text-white">{Number(alert.riskScore)}/10</p>
           </div>
           <div>
             <span className="text-zinc-400">Confidence:</span>
-            <p className="text-white">{alert.confidence}%</p>
+            <p className="text-white">{Number(alert.confidence)}%</p>
+          </div>
+          <div>
+            <span className="text-zinc-400">Status:</span>
+            <p className="text-white capitalize">{String(alert.status)}</p>
           </div>
         </div>
       </div>
+      
+      {/* Target Ports Details */}
+      {alert.target_ports && alert.target_ports.length > 0 && (
+        <div>
+          <h3 className="text-lg font-medium text-white mb-3">Scanned Ports</h3>
+          <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+            <div className="flex flex-wrap gap-2">
+              {alert.target_ports.map((port, index) => (
+                <Badge 
+                  key={index} 
+                  variant="outline" 
+                  className="text-xs border-purple-500/30 text-purple-300 bg-purple-900/20"
+                >
+                  {port}
+                </Badge>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-400 mt-2">
+              Total of {alert.target_ports.length} unique ports accessed
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {/* Target IPs Details */}
+      {alert.target_ips && alert.target_ips.length > 0 && (
+        <div>
+          <h3 className="text-lg font-medium text-white mb-3">Target IP Addresses</h3>
+          <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+            <div className="flex flex-wrap gap-2">
+              {alert.target_ips.map((ip, index) => (
+                <Badge 
+                  key={index} 
+                  variant="outline" 
+                  className="text-xs border-blue-500/30 text-blue-300 bg-blue-900/20 font-mono"
+                >
+                  {ip}
+                </Badge>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-400 mt-2">
+              Total of {alert.target_ips.length} unique IP addresses targeted
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {/* Geolocation Details */}
+      {alert.geolocation && (
+        <div>
+          <h3 className="text-lg font-medium text-white mb-3">Geolocation Information</h3>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-zinc-400">Country:</span>
+              <p className="text-white">{String(alert.geolocation.country)}</p>
+            </div>
+            <div>
+              <span className="text-zinc-400">City:</span>
+              <p className="text-white">{String(alert.geolocation.city)}</p>
+            </div>
+            {alert.geolocation.region && (
+              <div>
+                <span className="text-zinc-400">Region:</span>
+                <p className="text-white">{String(alert.geolocation.region)}</p>
+              </div>
+            )}
+            {alert.geolocation.lat && alert.geolocation.lon && (
+              <div>
+                <span className="text-zinc-400">Coordinates:</span>
+                <p className="text-white font-mono">{Number(alert.geolocation.lat).toFixed(4)}, {Number(alert.geolocation.lon).toFixed(4)}</p>
+              </div>
+            )}
+            {alert.geolocation.isp && (
+              <div>
+                <span className="text-zinc-400">ISP:</span>
+                <p className="text-white">{String(alert.geolocation.isp)}</p>
+              </div>
+            )}
+            {alert.geolocation.org && (
+              <div>
+                <span className="text-zinc-400">Organization:</span>
+                <p className="text-white">{String(alert.geolocation.org)}</p>
+              </div>
+            )}
+            {alert.geolocation.timezone && (
+              <div>
+                <span className="text-zinc-400">Timezone:</span>
+                <p className="text-white">{String(alert.geolocation.timezone)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Actions */}
       <div className="flex gap-3">
-        <Button className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700">
+        <Button className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700" onClick={() => onResolve(alert.id)}>
           <CheckCircle className="h-4 w-4 mr-2" />
           Resolve Alert
         </Button>
-        <Button variant="outline" className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent">
+        <Button variant="outline" className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent" onClick={() => onEscalate(alert.id)}>
           <Flag className="h-4 w-4 mr-2" />
           Escalate
         </Button>
-        <Button variant="outline" className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent">
+        <Button variant="outline" className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent" onClick={() => onInvestigate(alert.id)}>
           <ExternalLink className="h-4 w-4 mr-2" />
           Investigate
         </Button>
