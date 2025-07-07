@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation"
 import { useState } from "react"
 
 // Dynamically import NetworkGraph to prevent SSR issues
-const NetworkGraph = dynamic(() => import("@/components/network-graph").then(mod => ({ default: mod.NetworkGraph })), {
+const CustomNetworkGraph = dynamic(() => import("@/components/custom-network-graph").then(mod => ({ default: mod.CustomNetworkGraph })), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-64 bg-zinc-900 rounded-lg border border-zinc-800"><p className="text-zinc-400">Loading network graph...</p></div>
 })
