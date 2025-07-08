@@ -85,19 +85,11 @@ export default function TimeSeriesVisualizationPage() {
   const selectedPeriodInfo = periods.find(p => p.id === selectedPeriod)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-40 right-20 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse delay-2000"></div>
-      </div>
-
+    <main className="flex min-h-screen flex-col bg-gradient-to-br from-black via-purple-950/40 to-gray-950 text-zinc-100 relative">
       {/* Grid pattern overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px] pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
 
-      {/* Header */}
-      <header className="border-b border-purple-500/20 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-50 relative">
+      <header className="border-b border-purple-500/20 bg-black/80 backdrop-blur-xl sticky top-0 z-50 relative">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -108,20 +100,28 @@ export default function TimeSeriesVisualizationPage() {
                 CyberSense AI
               </h1>
             </Link>
-            <nav className="flex items-center gap-6">
-              <Link href="/dashboard" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                Dashboard
-              </Link>
-              <Link href="/alerts" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                Alerts
-              </Link>
-              <Link href="/reports" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                Reports
-              </Link>
-              <Link href="/visualization" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                Visualization
-              </Link>
-            </nav>
+
+            {/* Centered Navigation */}
+            <div className="absolute left-1/2 transform -translate-x-1/2">
+              <nav className="flex items-center gap-6">
+                <Link href="/dashboard" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                  Dashboard
+                </Link>
+                <Link href="/chat" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                  Chat
+                </Link>
+                <Link href="/alerts" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                  Alerts
+                </Link>
+                <Link href="/reports" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                  Reports
+                </Link>
+                <Link href="/visualization" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                  Visualization
+                </Link>
+              </nav>
+            </div>
+
             <div className="flex items-center gap-4">
               <button className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20">
                 <Bell className="h-5 w-5" />
@@ -402,6 +402,6 @@ export default function TimeSeriesVisualizationPage() {
           </div>
         </div>
       </footer>
-    </div>
+    </main>
   )
 } 

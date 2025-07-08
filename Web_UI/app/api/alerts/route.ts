@@ -21,7 +21,7 @@ export async function GET() {
       MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port)
       WHERE (f.malicious IS NULL OR f.malicious = false) 
         AND (f.honeypot IS NULL OR f.honeypot = false)
-      RETURN src.ip AS src_ip, f.flowStartMilliseconds AS flow_start, dst_port.port AS dst_port,
+      RETURN src.ip AS src_ip, f.destinationIPv4Address AS dst_ip, f.flowStartMilliseconds AS flow_start, dst_port.port AS dst_port,
              f.protocolIdentifier AS protocol, f.packets AS packets, f.reversePackets AS reverse_packets,
              f.bytes AS bytes, f.reverseBytes AS reverse_bytes
     `);
@@ -29,7 +29,10 @@ export async function GET() {
     const unique_ports = {};
     for (const record of result.records) {
       const src_ip = record.get('src_ip');
-      const dst_port = record.get('dst_port');
+      const dst_ip = record.get('dst_ip');
+      const dst_port_raw = record.get('dst_port');
+      // Convert Neo4j integer to JavaScript number
+      const dst_port = Number(dst_port_raw);
       const bytes = record.get('bytes') || 0;
       const reverse_bytes = record.get('reverse_bytes') || 0;
       const packets = record.get('packets') || 0;
@@ -49,6 +52,7 @@ export async function GET() {
           src_ip,
           date,
           dest_port_string: new Set(),
+          dest_ip_string: new Set(), // Track destination IPs
           bytes: 0,
           reverse_bytes: 0,
           packets: 0,
@@ -58,9 +62,10 @@ export async function GET() {
         };
       }
       unique_ports[key].dest_port_string.add(dst_port);
-      unique_ports[key].bytes += bytes;
-      unique_ports[key].reverse_bytes += reverse_bytes;
-      unique_ports[key].packets += packets;
+      unique_ports[key].dest_ip_string.add(String(dst_ip)); // Ensure string conversion for IPs
+      unique_ports[key].bytes += Number(bytes);
+      unique_ports[key].reverse_bytes += Number(reverse_bytes);
+      unique_ports[key].packets += Number(packets);
       if (unique_ports[key].reverse_bytes !== 0) {
         unique_ports[key].pcr = unique_ports[key].bytes / unique_ports[key].reverse_bytes;
       }
@@ -82,9 +87,14 @@ export async function GET() {
     // Generate alerts based on p_value thresholds
     const alerts = Object.values(unique_ports).map((entry) => {
       let severity = 'low';
-      if (entry.p_value >= 0.8) severity = 'critical';
-      else if (entry.p_value >= 0.6) severity = 'high';
-      else if (entry.p_value >= 0.4) severity = 'medium';
+      
+      // Threat level calculation based on p_value
+      if (entry.p_value >= 0.8) severity = 'critical';        // >= 0.8 Critical
+      else if (entry.p_value >= 0.6) severity = 'high';       // >= 0.6 High  
+      else if (entry.p_value >= 0.4) severity = 'medium';     // >= 0.4 Medium
+      else if (entry.p_value >= 0.1) severity = 'low';        // >= 0.1 Low
+      else return null; // Filter out alerts with p_value < 0.1
+      
       return {
         type: 'unique_ports_logistic',
         ip: entry.src_ip,
@@ -94,9 +104,11 @@ export async function GET() {
         por: entry.por,
         p_value: entry.p_value,
         severity,
-        message: `IP ${entry.src_ip} on ${entry.date} connected to ${entry.num_ports} unique ports (p_value: ${entry.p_value.toFixed(3)})`
+        target_ports: Array.from(entry.dest_port_string).slice(0, 10), // Include up to 10 ports as examples
+        target_ips: Array.from(entry.dest_ip_string).slice(0, 10), // Include up to 10 destination IPs as examples
+        message: `IP ${entry.src_ip} on ${entry.date} connected to ${entry.num_ports} unique ports (p_value: ${entry.p_value.toFixed(3)}, Threat Level: ${severity.toUpperCase()})`
       };
-    }); // Show all suspicious IPs regardless of unique port count
+    }).filter(alert => alert !== null); // Remove filtered out alerts
 
     return NextResponse.json({ alerts });
   } catch (error) {

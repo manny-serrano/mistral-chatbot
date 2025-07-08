@@ -7,9 +7,17 @@ export async function GET(request: NextRequest) {
     // Extract query parameters from the request
     const { searchParams } = new URL(request.url)
     const limit = searchParams.get('limit') || '100'
+    const ipAddress = searchParams.get('ip_address')
+    
+    // Build backend URL with parameters
+    let backendUrl = `${API_BASE_URL}/network/graph?limit=${limit}`
+    if (ipAddress) {
+      backendUrl += `&ip_address=${encodeURIComponent(ipAddress)}`
+    }
+    
+    console.log('Proxying request to backend:', backendUrl)
     
     // Make request to FastAPI backend
-    const backendUrl = `${API_BASE_URL}/network/graph?limit=${limit}`
     const response = await fetch(backendUrl, {
       method: 'GET',
       headers: {
@@ -22,26 +30,23 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json()
+    console.log('Backend response:', data)
     
+    // Forward the backend response directly without fallback data
+    // The backend already handles validation and appropriate messaging
     return NextResponse.json(data)
+    
   } catch (error) {
     console.error('Error proxying network graph request:', error)
     
-    // Return fallback data if backend is not available
+    // Return error response instead of fallback data
     return NextResponse.json({
-      nodes: [
-        { id: "192.168.1.1", type: "host", label: "192.168.1.1", group: "source_host", ip: "192.168.1.1" },
-        { id: "10.0.0.1", type: "host", label: "10.0.0.1", group: "dest_host", ip: "10.0.0.1" },
-        { id: "172.16.0.1", type: "host", label: "172.16.0.1", group: "dest_host", ip: "172.16.0.1" },
-      ],
-      links: [
-        { source: "192.168.1.1", target: "10.0.0.1", type: "FLOW" },
-        { source: "192.168.1.1", target: "172.16.0.1", type: "FLOW" },
-      ],
-      statistics: { total_nodes: 3, total_links: 2, malicious_flows: 0 },
+      nodes: [],
+      links: [],
+      statistics: {},
       timestamp: new Date().toISOString(),
-      success: true,
-      error: null
-    })
+      success: false,
+      error: `Failed to fetch network data: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }, { status: 500 })
   }
 } 

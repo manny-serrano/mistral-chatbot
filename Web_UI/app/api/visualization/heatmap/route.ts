@@ -1,32 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000'
+import neo4j from 'neo4j-driver'
 
 export async function GET(request: NextRequest) {
+  let driver, session;
   try {
     const { searchParams } = new URL(request.url)
     const heatmapType = searchParams.get('heatmap_type') || 'hourly_activity'
     
-    // Make request to FastAPI backend
-    const backendUrl = `${API_BASE_URL}/visualization/heatmap?heatmap_type=${heatmapType}`
-    const response = await fetch(backendUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    driver = neo4j.driver(
+      'bolt://localhost:7687',
+      neo4j.auth.basic('neo4j', 'password123')
+    );
+    session = driver.session();
 
-    if (!response.ok) {
-      throw new Error(`Backend API error: ${response.status}`)
+    let query = '';
+    let data = [];
+
+    if (heatmapType === 'hourly_activity') {
+      // Activity by day of week and hour
+      query = `
+        MATCH (f:Flow)
+        WHERE (f.malicious IS NULL OR f.malicious = false) 
+          AND (f.honeypot IS NULL OR f.honeypot = false)
+        WITH f, datetime({epochMillis: f.flowStartMilliseconds}) as dt
+        WITH dt.dayOfWeek as dayOfWeek, dt.hour as hour, count(f) as value
+        RETURN dayOfWeek, hour, value
+        ORDER BY dayOfWeek, hour
+      `;
+      
+      const result = await session.run(query);
+      const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      
+      for (const record of result.records) {
+        const dayOfWeek = record.get('dayOfWeek').toNumber();
+        const hour = record.get('hour').toNumber();
+        const value = record.get('value').toNumber();
+        
+        data.push({
+          day: days[dayOfWeek],
+          day_index: dayOfWeek,
+          hour: hour,
+          value: value
+        });
+      }
+    } else if (heatmapType === 'ip_activity') {
+      // Activity by source IP and hour
+      query = `
+        MATCH (src:Host)-[:SENT]->(f:Flow)
+        WHERE (f.malicious IS NULL OR f.malicious = false) 
+          AND (f.honeypot IS NULL OR f.honeypot = false)
+        WITH src.ip as ip, datetime({epochMillis: f.flowStartMilliseconds}) as dt, count(f) as value
+        WITH ip, dt.hour as hour, sum(value) as value
+        RETURN ip, hour, value
+        ORDER BY value DESC, ip, hour
+        LIMIT 200
+      `;
+      
+      const result = await session.run(query);
+      
+      for (const record of result.records) {
+        const ip = record.get('ip');
+        const hour = record.get('hour').toNumber();
+        const value = record.get('value').toNumber();
+        
+        data.push({
+          ip: ip,
+          hour: hour,
+          value: value
+        });
+      }
     }
 
-    const data = await response.json()
-    
-    return NextResponse.json(data)
+    return NextResponse.json({
+      data,
+      heatmap_type: heatmapType,
+      success: true,
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
-    console.error('Error proxying heatmap request:', error)
+    console.error('Error fetching heatmap data:', error)
     
-    // Return fallback data if backend is not available
+    // Return fallback data if database query fails
     const mockData = []
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
@@ -44,9 +98,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: mockData,
       heatmap_type: heatmapType,
-      success: true,
+      success: false,
       timestamp: new Date().toISOString(),
-      error: `Backend unavailable: ${error}`
+      error: error instanceof Error ? error.message : 'Unknown error'
     })
+  } finally {
+    if (session) await session.close();
+    if (driver) await driver.close();
   }
 } 

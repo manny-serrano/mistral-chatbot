@@ -17,6 +17,7 @@ from datetime import datetime
 import json
 from neo4j.time import DateTime as Neo4jDateTime
 from contextlib import asynccontextmanager
+import ipaddress  # Add this import for IP validation
 
 # Configure logging
 logging.basicConfig(
@@ -109,7 +110,7 @@ class Neo4jVisualizationHelper:
         if self.driver:
             self.driver.close()
     
-    def get_network_graph_data(self, limit: int = 100):
+    def get_network_graph_data(self, limit: int = 100, ip_address: Optional[str] = None):
         """Get network graph data optimized for visualization"""
         if not self.driver:
             if not self.connect():
@@ -120,80 +121,89 @@ class Neo4jVisualizationHelper:
         
         try:
             with self.driver.session() as session:
-                # Get a sample of hosts, flows, and their relationships
-                query = """
-                MATCH (src:Host)-[:SENT]->(f:Flow)-[:RECEIVED]-(dst:Host)
-                OPTIONAL MATCH (f)-[:USES_PROTOCOL]->(p:Protocol)
-                OPTIONAL MATCH (f)-[:USES_DST_PORT]->(port:Port)
-                WITH src, dst, f, p, port
-                LIMIT $limit
-                RETURN 
-                    src.ip as src_ip,
-                    dst.ip as dst_ip,
-                    f.flowId as flow_id,
-                    f.malicious as malicious,
-                    f.honeypot as honeypot,
-                    p.name as protocol,
-                    port.port as dst_port,
-                    port.service as service
-                """
-                
-                result = session.run(query, limit=limit)
+                # If searching for a specific IP
+                if ip_address and ip_address.strip():
+                    ip_address = ip_address.strip()
+                    
+                    # First check if the IP exists
+                    check_query = """
+                    MATCH (n:IP {address: $ip_address})
+                    RETURN n
+                    """
+                    check_result = session.run(check_query, ip_address=ip_address)
+                    ip_exists = check_result.single()
+                    
+                    if not ip_exists:
+                        # IP not found in database
+                        return {
+                            "nodes": [],
+                            "links": [],
+                            "success": True,
+                            "message": f"IP address '{ip_address}' not found in the database."
+                        }
+                    
+                    # IP exists, get its connections
+                    query = """
+                    MATCH (n1:IP {address: $ip_address})-[r:CONNECTED_TO]-(n2:IP)
+                    RETURN n1, r, n2
+                    LIMIT $limit
+                    """
+                    result = session.run(query, ip_address=ip_address, limit=limit)
+                else:
+                    # Default query to get a general graph
+                    query = """
+                    MATCH (n1:IP)-[r:CONNECTED_TO]->(n2:IP)
+                    RETURN n1, r, n2
+                    LIMIT $limit
+                    """
+                    result = session.run(query, limit=limit)
                 
                 node_set = set()
                 
                 for record in result:
-                    src_ip = record["src_ip"]
-                    dst_ip = record["dst_ip"]
-                    flow_id = record["flow_id"]
-                    malicious = record.get("malicious", False)
-                    protocol = record.get("protocol", "unknown")
-                    dst_port = record.get("dst_port")
-                    service = record.get("service")
-                    
-                    # Add source host node
-                    if src_ip not in node_set:
+                    n1_data = record["n1"]
+                    n2_data = record["n2"]
+
+                    # Add source node if not already added
+                    if n1_data.element_id not in node_set:
                         nodes.append(NetworkNode(
-                            id=src_ip,
-                            type="host",
-                            label=src_ip,
+                            id=n1_data['address'],
+                            type="ip",
+                            label=n1_data.get('hostname') or n1_data['address'],
                             group="source_host",
-                            ip=src_ip,
-                            malicious=malicious
+                            ip=n1_data['address'],
+                            malicious=n1_data.get('malicious', False)
                         ))
-                        node_set.add(src_ip)
-                    
-                    # Add destination host node  
-                    if dst_ip not in node_set:
+                        node_set.add(n1_data.element_id)
+
+                    # Add target node if not already added
+                    if n2_data.element_id not in node_set:
                         nodes.append(NetworkNode(
-                            id=dst_ip,
-                            type="host", 
-                            label=dst_ip,
+                            id=n2_data['address'],
+                            type="ip",
+                            label=n2_data.get('hostname') or n2_data['address'],
                             group="dest_host",
-                            ip=dst_ip,
-                            malicious=malicious
+                            ip=n2_data['address'],
+                            malicious=n2_data.get('malicious', False)
                         ))
-                        node_set.add(dst_ip)
+                        node_set.add(n2_data.element_id)
                     
-                    # Add flow connection
+                    # Add the connection
                     links.append(NetworkLink(
-                        source=src_ip,
-                        target=dst_ip,
-                        type="FLOW",
-                        metadata={
-                            "flow_id": flow_id,
-                            "malicious": malicious,
-                            "protocol": protocol,
-                            "dst_port": dst_port,
-                            "service": service
-                        }
+                        source=n1_data['address'],
+                        target=n2_data['address'],
+                        type="CONNECTED_TO"
                     ))
+                
+                return {
+                    "nodes": nodes,
+                    "links": links,
+                    "success": True
+                }
         
         except Exception as e:
             logger.error(f"Error getting network graph data: {e}")
             raise
-        
-        return nodes, links
     
     def get_network_statistics(self):
         """Get network statistics for the dashboard"""
@@ -424,6 +434,7 @@ class NetworkGraphResponse(BaseModel):
     timestamp: str
     success: bool = True
     error: Optional[str] = None
+    message: Optional[str] = None
 
 class NetworkStatsResponse(BaseModel):
     network_nodes: int
@@ -876,9 +887,12 @@ async def get_query_examples():
     }
 
 @app.get("/network/graph", response_model=NetworkGraphResponse)
-async def get_network_graph(limit: int = 100):
+async def get_network_graph(limit: int = 100, ip_address: Optional[str] = None):
     """Get network graph data from Neo4j for visualization."""
+    logger.info(f"Network graph request received - limit: {limit}, ip_address: {ip_address}")
+    
     if config.lightweight_mode:
+        logger.info("Running in lightweight mode, returning mock data")
         # Return mock data for lightweight mode
         mock_nodes = [
             NetworkNode(id="192.168.1.1", type="host", label="192.168.1.1", group="source_host", ip="192.168.1.1"),
@@ -899,34 +913,78 @@ async def get_network_graph(limit: int = 100):
         )
     
     try:
-        nodes, links = neo4j_helper.get_network_graph_data(limit=limit)
+        # Validate IP address if provided
+        if ip_address:
+            ip_address = ip_address.strip()
+            logger.info(f"Validating IP address: {ip_address}")
+            
+            # Check if the IP address has the correct format (x.x.x.x)
+            ip_parts = ip_address.split('.')
+            if len(ip_parts) != 4:
+                logger.warning(f"Invalid IP address format (wrong number of octets): {ip_address}")
+                return NetworkGraphResponse(
+                    nodes=[],
+                    links=[],
+                    statistics={},
+                    message=f"Invalid IP address format: '{ip_address}'. Must be in format: xxx.xxx.xxx.xxx",
+                    timestamp=datetime.now().isoformat(),
+                    success=True
+                )
+            
+            try:
+                # Validate each octet
+                for part in ip_parts:
+                    num = int(part)
+                    if num < 0 or num > 255:
+                        raise ValueError("Octet out of range")
+                
+                # Final validation using ipaddress module
+                ipaddress.ip_address(ip_address)
+                logger.info(f"IP address {ip_address} is valid")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid IP address format: {ip_address}")
+                return NetworkGraphResponse(
+                    nodes=[],
+                    links=[],
+                    statistics={},
+                    message=f"Invalid IP address format: '{ip_address}'. Each octet must be a number between 0 and 255.",
+                    timestamp=datetime.now().isoformat(),
+                    success=True
+                )
+
+        logger.info("Fetching graph data from Neo4j")
+        result = neo4j_helper.get_network_graph_data(limit=limit, ip_address=ip_address)
+        logger.info(f"Neo4j result: {len(result.get('nodes', []))} nodes, {len(result.get('links', [])) } links")
         
         # Generate basic statistics
         node_types = {}
         malicious_count = 0
-        for node in nodes:
+        for node in result["nodes"]:
             node_types[node.type] = node_types.get(node.type, 0) + 1
             if node.malicious:
                 malicious_count += 1
         
         statistics = {
-            "total_nodes": len(nodes),
-            "total_links": len(links),
+            "total_nodes": len(result["nodes"]),
+            "total_links": len(result["links"]),
             "node_types": node_types,
             "malicious_flows": malicious_count,
             "limit_applied": limit
         }
         
-        return NetworkGraphResponse(
-            nodes=nodes,
-            links=links,
+        response = NetworkGraphResponse(
+            nodes=result["nodes"],
+            links=result["links"],
             statistics=statistics,
+            message=result.get("message"),
             timestamp=datetime.now().isoformat()
         )
+        logger.info(f"Returning successful response with {len(response.nodes)} nodes")
+        return response
         
     except Exception as e:
         logger.error(f"Error getting network graph data: {e}")
-        return NetworkGraphResponse(
+        error_response = NetworkGraphResponse(
             nodes=[],
             links=[],
             statistics={},
@@ -934,6 +992,10 @@ async def get_network_graph(limit: int = 100):
             success=False,
             error=str(e)
         )
+        logger.info(f"Returning error response: {error_response}")
+        return error_response
+
+# Traffic analysis now handled by transforming existing network stats data in frontend
 
 @app.get("/network/stats", response_model=NetworkStatsResponse)
 async def get_network_stats():
