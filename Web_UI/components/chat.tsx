@@ -278,7 +278,7 @@ export function Chat({ onToggleExpansion, isExpanded = false }: ChatProps) {
                 <Bot className="h-8 w-8 text-purple-500" />
               </div>
               <div className="text-center space-y-2">
-                <h3 className="text-lg font-medium text-white">CyberSense AI Assistant</h3>
+                <h3 className="text-lg font-medium text-white">LEVANT AI Assistant</h3>
                 <p className="text-sm text-zinc-400 max-w-md">
                   Ask me about network traffic, suspicious IPs, or potential threats. I can analyze patterns and suggest
                   mitigation steps. {isExpanded ? "Expanded view for detailed analysis." : "Click the expand button for more space."}

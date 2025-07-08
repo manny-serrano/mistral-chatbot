@@ -1,6 +1,6 @@
 # Duke SSO Authentication Setup
 
-This guide explains how to set up Duke Shibboleth SSO authentication for your CyberSense AI application.
+This guide explains how to set up Duke Shibboleth SSO authentication for your LEVANT AI application.
 
 ## Overview
 

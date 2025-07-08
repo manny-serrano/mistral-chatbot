@@ -1,10 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import neo4j from 'neo4j-driver'
 
-// Logistic regression function for alert correlation
+// Logistic regression function for threat detection
 function logistic_regression(num_ports: number, pcr: number, por: number, coef_ports: number, coef_pcr: number, coef_por: number, intercept: number) {
   const z = (coef_ports * num_ports) + (coef_pcr * pcr) + (coef_por * por) + intercept;
   return 1 / (1 + Math.exp(-z));
+}
+
+// Helper function to convert bytes to appropriate units and return in MB
+function formatBytesToMB(bytes: number): number {
+  // Convert bytes to megabytes (MB) for consistency
+  // 1 MB = 1,048,576 bytes (1024^2)
+  return Math.round((bytes / (1024 * 1024)) * 100) / 100; // Round to 2 decimal places
+}
+
+// Helper function to parse string timestamps from database
+function parseFlowTimestamp(timestampStr: string): number | null {
+  if (!timestampStr || typeof timestampStr !== 'string') return null;
+  
+  try {
+    // Handle format like "2024-05-31 08:04:03.647"
+    const date = new Date(timestampStr);
+    if (isNaN(date.getTime())) return null;
+    return date.getTime();
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -23,14 +44,84 @@ export async function GET(request: NextRequest) {
     );
     session = driver.session();
 
-    // Calculate time range based on period
-    const now = Date.now();
-    let startTime = now;
-    if (period === '24h') startTime = now - (24 * 60 * 60 * 1000);
-    else if (period === '7d') startTime = now - (7 * 24 * 60 * 60 * 1000);
-    else if (period === '30d') startTime = now - (30 * 24 * 60 * 60 * 1000);
+    // Get the actual data range from the database (timestamps are strings)
+    const dataRangeResult = await session.run(`
+      MATCH (f:Flow)
+      WHERE f.flowStartMilliseconds IS NOT NULL
+      RETURN min(f.flowStartMilliseconds) as minTimeStr, max(f.flowStartMilliseconds) as maxTimeStr, count(f) as totalFlows
+    `);
+    
+    const minTimeStr = dataRangeResult.records[0]?.get('minTimeStr');
+    const maxTimeStr = dataRangeResult.records[0]?.get('maxTimeStr');
+    const totalFlows = dataRangeResult.records[0]?.get('totalFlows').toNumber() || 0;
+    
+    // Return debug information early
+    if (metric === 'debug') {
+      return NextResponse.json({
+        debug: {
+          minTimeStr,
+          maxTimeStr,
+          totalFlows,
+          parsedMinTime: parseFlowTimestamp(minTimeStr),
+          parsedMaxTime: parseFlowTimestamp(maxTimeStr),
+          testDate: new Date("2024-05-31 08:04:03.647").getTime(),
+          testISODate: new Date("2024-05-31 08:04:03.647").toISOString()
+        }
+      });
+    }
+    
+    if (!minTimeStr || !maxTimeStr || totalFlows === 0) {
+      // No data available, return fallback
+      return NextResponse.json({
+        data: [],
+        metric,
+        period,
+        granularity,
+        sourceIp,
+        destIp,
+        total_points: 0,
+        success: true,
+        timestamp: new Date().toISOString(),
+        note: "No flow data found in database"
+      });
+    }
 
-    let query = '';
+    // Parse the min/max timestamps
+    const minTime = parseFlowTimestamp(minTimeStr);
+    const maxTime = parseFlowTimestamp(maxTimeStr);
+    
+    if (!minTime || !maxTime) {
+      return NextResponse.json({
+        data: [],
+        metric,
+        period,
+        granularity,
+        sourceIp,
+        destIp,
+        total_points: 0,
+        success: false,
+        timestamp: new Date().toISOString(),
+        error: "Could not parse timestamp format",
+        debug: { minTimeStr, maxTimeStr, minTime, maxTime }
+      });
+    }
+
+    // Calculate time range based on the actual data and requested period
+    let startTime = minTime;
+    let endTime = maxTime;
+    
+    if (period === '24h') {
+      // Use the last 24 hours of available data
+      startTime = Math.max(minTime, maxTime - (24 * 60 * 60 * 1000));
+    } else if (period === '7d') {
+      // Use the last 7 days of available data
+      startTime = Math.max(minTime, maxTime - (7 * 24 * 60 * 60 * 1000));
+    } else if (period === '30d') {
+      // Use all available data (since our data span is less than 30 days)
+      startTime = minTime;
+      endTime = maxTime;
+    }
+
     let data: any[] = [];
 
     if (metric === 'bandwidth') {
@@ -40,116 +131,142 @@ export async function GET(request: NextRequest) {
         sourceIp ? `AND (f.sourceIPv4Address = $sourceIp OR f.destinationIPv4Address = $sourceIp)` :
         '';
       
-      query = `
+      const result = await session.run(`
         MATCH (f:Flow)
-        WHERE f.flowStartMilliseconds >= $startTime 
-          AND f.flowStartMilliseconds <= $endTime
+        WHERE f.flowStartMilliseconds IS NOT NULL
           AND (f.malicious IS NULL OR f.malicious = false) 
           AND (f.honeypot IS NULL OR f.honeypot = false)
           ${ipFilter}
-        WITH f, datetime({epochMillis: f.flowStartMilliseconds}) as dt
-        RETURN 
-          dt.year as year, dt.month as month, dt.day as day, dt.hour as hour,
-          sum(coalesce(f.octetTotalCount, 0)) as total_bytes,
-          sum(coalesce(f.reverseOctetTotalCount, 0)) as reverse_bytes,
-          sum(coalesce(f.octetTotalCount, 0) + coalesce(f.reverseOctetTotalCount, 0)) as bandwidth,
-          count(f) as flows,
-          collect(DISTINCT f.sourceIPv4Address)[0..10] as source_ips,
-          collect(DISTINCT f.destinationIPv4Address)[0..10] as dest_ips
-        ORDER BY year, month, day, hour
-      `;
-      
-      const params: any = { startTime, endTime: now };
-      if (sourceIp) params.sourceIp = sourceIp;
-      if (destIp) params.destIp = destIp;
-      
-      const result = await session.run(query, params);
+        RETURN f.flowStartMilliseconds AS flow_start,
+               coalesce(f.octetTotalCount, 0) as total_bytes,
+               coalesce(f.reverseOctetTotalCount, 0) as reverse_bytes,
+               f.sourceIPv4Address as src_ip,
+               f.destinationIPv4Address as dst_ip
+      `, sourceIp || destIp ? { sourceIp, destIp } : {});
+
+      // Group flows by time intervals
+      const timeGroups: Record<string, any> = {};
       
       for (const record of result.records) {
-        const year = record.get('year').toNumber();
-        const month = record.get('month').toNumber();
-        const day = record.get('day').toNumber();
-        const hour = record.get('hour').toNumber();
-        const bandwidth = record.get('bandwidth').toNumber();
-        const flows = record.get('flows').toNumber();
-        const sourceIps = record.get('source_ips');
-        const destIps = record.get('dest_ips');
+        const flow_start_str = record.get('flow_start');
+        const flow_start_time = parseFlowTimestamp(flow_start_str);
         
-        const timestamp = new Date(year, month - 1, day, hour).toISOString();
-        data.push({ 
-          timestamp, 
-          value: bandwidth, 
-          metric: 'bandwidth',
-          flows,
-          sourceIps,
-          destIps
-        });
-      }
-    } else if (metric === 'bandwidth_with_alerts') {
-      // Bandwidth with alert correlation
-      query = `
-        MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port)
-        WHERE f.flowStartMilliseconds >= $startTime 
-          AND f.flowStartMilliseconds <= $endTime
-          AND (f.malicious IS NULL OR f.malicious = false) 
-          AND (f.honeypot IS NULL OR f.honeypot = false)
-        WITH f, datetime({epochMillis: f.flowStartMilliseconds}) as dt, src, dst_port
-        RETURN 
-          dt.year as year, dt.month as month, dt.day as day, dt.hour as hour,
-          sum(coalesce(f.octetTotalCount, 0) + coalesce(f.reverseOctetTotalCount, 0)) as bandwidth,
-          count(f) as flows,
-          src.ip as src_ip,
-          collect(DISTINCT dst_port.port)[0..5] as dest_ports,
-          collect(DISTINCT f.destinationIPv4Address)[0..5] as dest_ips,
-          sum(coalesce(f.packetTotalCount, 0)) as packets,
-          sum(coalesce(f.reversePacketTotalCount, 0)) as reverse_packets
-        ORDER BY year, month, day, hour, bandwidth DESC
-      `;
-      
-      const result = await session.run(query, { startTime, endTime: now });
-      
-      // Process results and calculate alert probabilities
-      const aggregated: { [key: string]: any } = {};
-      
-      for (const record of result.records) {
-        const year = record.get('year').toNumber();
-        const month = record.get('month').toNumber();
-        const day = record.get('day').toNumber();
-        const hour = record.get('hour').toNumber();
-        const bandwidth = record.get('bandwidth').toNumber();
-        const flows = record.get('flows').toNumber();
-        const packets = record.get('packets').toNumber();
-        const reversePackets = record.get('reverse_packets').toNumber();
-        const destPorts = record.get('dest_ports');
-        const destIps = record.get('dest_ips');
+        if (!flow_start_time) continue;
+        if (flow_start_time < startTime || flow_start_time > endTime) continue;
         
-        const timestamp = new Date(year, month - 1, day, hour).toISOString();
-        const key = timestamp;
+        const flowDate = new Date(flow_start_time);
+        if (isNaN(flowDate.getTime())) continue;
         
-        if (!aggregated[key]) {
-          aggregated[key] = {
-            timestamp,
-            value: 0,
-            metric: 'bandwidth_with_alerts',
-            flows: 0,
-            alert_probability: 0,
-            unique_ports: new Set(),
-            unique_ips: new Set(),
-            total_packets: 0,
-            total_reverse_packets: 0
-          };
+        let timeKey = '';
+        if (granularity === '30m') {
+          const minutes = Math.floor(flowDate.getMinutes() / 30) * 30;
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), flowDate.getHours(), minutes).toISOString();
+        } else if (granularity === '1h') {
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), flowDate.getHours()).toISOString();
+        } else if (granularity === '6h') {
+          const hours = Math.floor(flowDate.getHours() / 6) * 6;
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), hours).toISOString();
+        } else if (granularity === '1d') {
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate()).toISOString();
         }
         
-        aggregated[key].value += bandwidth;
-        aggregated[key].flows += flows;
-        aggregated[key].total_packets += packets;
-        aggregated[key].total_reverse_packets += reversePackets;
-        destPorts.forEach((port: any) => aggregated[key].unique_ports.add(port));
-        destIps.forEach((ip: any) => aggregated[key].unique_ips.add(ip));
+        if (timeKey) {
+          if (!timeGroups[timeKey]) {
+            timeGroups[timeKey] = {
+              timestamp: timeKey,
+              value: 0,
+              metric: 'bandwidth',
+              flows: 0,
+              sourceIps: new Set(),
+              destIps: new Set()
+            };
+          }
+          
+          const totalBytes = record.get('total_bytes') + record.get('reverse_bytes');
+          timeGroups[timeKey].value += totalBytes;
+          timeGroups[timeKey].flows += 1;
+          timeGroups[timeKey].sourceIps.add(record.get('src_ip'));
+          timeGroups[timeKey].destIps.add(record.get('dst_ip'));
+        }
+      }
+
+      data = Object.values(timeGroups).map((item: any) => ({
+        timestamp: item.timestamp,
+        value: item.value,
+        metric: item.metric,
+        flows: item.flows,
+        sourceIps: Array.from(item.sourceIps),
+        destIps: Array.from(item.destIps)
+      })).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      
+    } else if (metric === 'bandwidth_with_alerts') {
+      // Bandwidth with alert correlation
+      const result = await session.run(`
+        MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port)
+        WHERE f.flowStartMilliseconds IS NOT NULL
+          AND (f.malicious IS NULL OR f.malicious = false) 
+          AND (f.honeypot IS NULL OR f.honeypot = false)
+        RETURN f.flowStartMilliseconds AS flow_start,
+               coalesce(f.octetTotalCount, 0) + coalesce(f.reverseOctetTotalCount, 0) as bandwidth,
+               src.ip as src_ip,
+               dst_port.port as dst_port,
+               f.destinationIPv4Address as dst_ip,
+               coalesce(f.packetTotalCount, 0) as packets,
+               coalesce(f.reversePacketTotalCount, 0) as reverse_packets
+      `);
+      
+      // Process results and calculate alert probabilities
+      const timeGroups: Record<string, any> = {};
+      
+      for (const record of result.records) {
+        const flow_start_str = record.get('flow_start');
+        const flow_start_time = parseFlowTimestamp(flow_start_str);
+        
+        if (!flow_start_time) continue;
+        if (flow_start_time < startTime || flow_start_time > endTime) continue;
+        
+        const flowDate = new Date(flow_start_time);
+        if (isNaN(flowDate.getTime())) continue;
+        
+        let timeKey = '';
+        if (granularity === '30m') {
+          const minutes = Math.floor(flowDate.getMinutes() / 30) * 30;
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), flowDate.getHours(), minutes).toISOString();
+        } else if (granularity === '1h') {
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), flowDate.getHours()).toISOString();
+        } else if (granularity === '6h') {
+          const hours = Math.floor(flowDate.getHours() / 6) * 6;
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), hours).toISOString();
+        } else if (granularity === '1d') {
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate()).toISOString();
+        }
+        
+        if (timeKey) {
+          if (!timeGroups[timeKey]) {
+            timeGroups[timeKey] = {
+              timestamp: timeKey,
+              value: 0,
+              metric: 'bandwidth_with_alerts',
+              flows: 0,
+              alert_probability: 0,
+              unique_ports: new Set(),
+              unique_ips: new Set(),
+              total_packets: 0,
+              total_reverse_packets: 0
+            };
+          }
+          
+          timeGroups[timeKey].value += record.get('bandwidth');
+          timeGroups[timeKey].flows += 1;
+          timeGroups[timeKey].total_packets += record.get('packets');
+          timeGroups[timeKey].total_reverse_packets += record.get('reverse_packets');
+          timeGroups[timeKey].unique_ports.add(record.get('dst_port'));
+          timeGroups[timeKey].unique_ips.add(record.get('dst_ip'));
+        }
       }
       
       // Calculate alert probabilities for each time period
-      data = Object.values(aggregated).map((item: any) => {
+      data = Object.values(timeGroups).map((item: any) => {
         const num_ports = item.unique_ports.size;
         const pcr = item.total_reverse_packets > 0 ? item.value / item.total_reverse_packets : 0;
         const por = item.value > 0 ? item.total_packets / item.value : 0;
@@ -168,99 +285,215 @@ export async function GET(request: NextRequest) {
           unique_ports: num_ports,
           unique_ips: item.unique_ips.size
         };
+      }).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    } else if (metric === 'flows') {
+      // Network flows over time
+      const result = await session.run(`
+        MATCH (f:Flow)
+        WHERE f.flowStartMilliseconds IS NOT NULL
+          AND (f.malicious IS NULL OR f.malicious = false) 
+          AND (f.honeypot IS NULL OR f.honeypot = false)
+        RETURN f.flowStartMilliseconds AS flow_start
+      `);
+
+      // Group flows by time intervals
+      const timeGroups: Record<string, number> = {};
+      
+      for (const record of result.records) {
+        const flow_start_str = record.get('flow_start');
+        const flow_start_time = parseFlowTimestamp(flow_start_str);
+        
+        if (!flow_start_time) continue;
+        if (flow_start_time < startTime || flow_start_time > endTime) continue;
+        
+        const flowDate = new Date(flow_start_time);
+        if (isNaN(flowDate.getTime())) continue;
+        
+        let timeKey = '';
+        if (granularity === '30m') {
+          const minutes = Math.floor(flowDate.getMinutes() / 30) * 30;
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), flowDate.getHours(), minutes).toISOString();
+        } else if (granularity === '1h') {
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), flowDate.getHours()).toISOString();
+        } else if (granularity === '6h') {
+          const hours = Math.floor(flowDate.getHours() / 6) * 6;
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), hours).toISOString();
+        } else if (granularity === '1d') {
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate()).toISOString();
+        }
+        
+        if (timeKey) {
+          timeGroups[timeKey] = (timeGroups[timeKey] || 0) + 1;
+        }
+      }
+
+      data = Object.entries(timeGroups).map(([timestamp, value]) => ({
+        timestamp,
+        value,
+        metric: 'flows'
+      })).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    } else if (metric === 'alerts' || metric === 'threats') {
+      // Generate security alerts using the same logic as the alerts API
+      const result = await session.run(`
+        MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port)
+        WHERE f.flowStartMilliseconds IS NOT NULL
+          AND (f.malicious IS NULL OR f.malicious = false) 
+          AND (f.honeypot IS NULL OR f.honeypot = false)
+        RETURN src.ip AS src_ip, f.destinationIPv4Address AS dst_ip, f.flowStartMilliseconds AS flow_start, dst_port.port AS dst_port,
+               f.protocolIdentifier AS protocol, f.packetTotalCount AS packets, f.reversePacketTotalCount AS reverse_packets,
+               f.octetTotalCount AS bytes, f.reverseOctetTotalCount AS reverse_bytes
+      `);
+
+      // Process flows to generate alerts
+      const unique_ports: Record<string, any> = {};
+      for (const record of result.records) {
+        const src_ip = record.get('src_ip');
+        const dst_ip = record.get('dst_ip');
+        const dst_port_raw = record.get('dst_port');
+        const dst_port = Number(dst_port_raw);
+        const bytes = record.get('bytes') || 0;
+        const reverse_bytes = record.get('reverse_bytes') || 0;
+        const packets = record.get('packets') || 0;
+        const flow_start_str = record.get('flow_start');
+        
+        // Parse the string timestamp
+        const flow_start_time = parseFlowTimestamp(flow_start_str);
+        if (!flow_start_time) continue;
+        
+        // Filter by time range
+        if (flow_start_time < startTime || flow_start_time > endTime) continue;
+        
+        // Use hour for grouping (adjust based on granularity later)
+        const date = new Date(flow_start_time);
+        const dateKey = date.toISOString().slice(0, 10); // YYYY-MM-DD
+        const key = `${src_ip}_${dateKey}`;
+
+        if (!unique_ports[key]) {
+          unique_ports[key] = {
+            src_ip,
+            date: dateKey,
+            flow_start_time: flow_start_time,
+            dest_port_string: new Set(),
+            dest_ip_string: new Set(),
+            bytes: 0,
+            reverse_bytes: 0,
+            packets: 0,
+            pcr: 0,
+            por: 0,
+            p_value: 0
+          };
+        }
+        
+        unique_ports[key].dest_port_string.add(dst_port);
+        unique_ports[key].dest_ip_string.add(String(dst_ip));
+        unique_ports[key].bytes += Number(bytes);
+        unique_ports[key].reverse_bytes += Number(reverse_bytes);
+        unique_ports[key].packets += Number(packets);
+        
+        if (unique_ports[key].reverse_bytes !== 0) {
+          unique_ports[key].pcr = unique_ports[key].bytes / unique_ports[key].reverse_bytes;
+        }
+        if (unique_ports[key].bytes !== 0) {
+          unique_ports[key].por = unique_ports[key].packets / unique_ports[key].bytes;
+        }
+        unique_ports[key].num_ports = unique_ports[key].dest_port_string.size;
+        unique_ports[key].p_value = logistic_regression(
+          unique_ports[key].num_ports,
+          unique_ports[key].pcr,
+          unique_ports[key].por,
+          0.00243691,
+          0.00014983,
+          0.00014983,
+          -3.93433105
+        );
+      }
+
+      // Convert alerts to time series data
+      const timeGroups: Record<string, number> = {};
+      
+      Object.values(unique_ports).forEach((entry: any) => {
+        let severity_threshold = 0.1; // Default for 'alerts'
+        if (metric === 'threats') {
+          severity_threshold = 0.6; // Higher threshold for high-risk threats
+        }
+        
+        if (entry.p_value >= severity_threshold) {
+          const date = new Date(entry.flow_start_time);
+          let timeKey = '';
+          
+          if (granularity === '30m') {
+            const minutes = Math.floor(date.getMinutes() / 30) * 30;
+            timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), minutes).toISOString();
+          } else if (granularity === '1h') {
+            timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).toISOString();
+          } else if (granularity === '6h') {
+            const hours = Math.floor(date.getHours() / 6) * 6;
+            timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours).toISOString();
+          } else if (granularity === '1d') {
+            timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
+          }
+          
+          if (timeKey) {
+            timeGroups[timeKey] = (timeGroups[timeKey] || 0) + 1;
+          }
+        }
       });
-    } else if (metric === 'ip_pair_bandwidth') {
-      // Top IP pairs by bandwidth
-      query = `
-        MATCH (f:Flow)
-        WHERE f.flowStartMilliseconds >= $startTime 
-          AND f.flowStartMilliseconds <= $endTime
-          AND (f.malicious IS NULL OR f.malicious = false) 
-          AND (f.honeypot IS NULL OR f.honeypot = false)
-        WITH f, datetime({epochMillis: f.flowStartMilliseconds}) as dt,
-             f.sourceIPv4Address + " → " + f.destinationIPv4Address as ip_pair
-        RETURN 
-          dt.year as year, dt.month as month, dt.day as day, dt.hour as hour,
-          ip_pair,
-          sum(coalesce(f.octetTotalCount, 0) + coalesce(f.reverseOctetTotalCount, 0)) as bandwidth,
-          count(f) as flows
-        ORDER BY year, month, day, hour, bandwidth DESC
-      `;
-      
-      const result = await session.run(query, { startTime, endTime: now });
-      
-      for (const record of result.records) {
-        const year = record.get('year').toNumber();
-        const month = record.get('month').toNumber();
-        const day = record.get('day').toNumber();
-        const hour = record.get('hour').toNumber();
-        const bandwidth = record.get('bandwidth').toNumber();
-        const flows = record.get('flows').toNumber();
-        const ipPair = record.get('ip_pair');
-        
-        const timestamp = new Date(year, month - 1, day, hour).toISOString();
-        data.push({ 
-          timestamp, 
-          value: bandwidth, 
-          metric: 'ip_pair_bandwidth',
-          flows,
-          ip_pair: ipPair
-        });
-      }
-    } else if (metric === 'alerts' || metric === 'flows') {
-      // Original alert/flow metrics
-      query = `
-        MATCH (f:Flow)
-        WHERE f.flowStartMilliseconds >= $startTime 
-          AND f.flowStartMilliseconds <= $endTime
-          AND (f.malicious IS NULL OR f.malicious = false) 
-          AND (f.honeypot IS NULL OR f.honeypot = false)
-        WITH f, datetime({epochMillis: f.flowStartMilliseconds}) as dt
-        RETURN 
-          dt.year as year, dt.month as month, dt.day as day, dt.hour as hour,
-          count(f) as value
-        ORDER BY year, month, day, hour
-      `;
-      
-      const result = await session.run(query, { startTime, endTime: now });
-      
-      for (const record of result.records) {
-        const year = record.get('year').toNumber();
-        const month = record.get('month').toNumber();
-        const day = record.get('day').toNumber();
-        const hour = record.get('hour').toNumber();
-        const value = record.get('value').toNumber();
-        
-        const timestamp = new Date(year, month - 1, day, hour).toISOString();
-        data.push({ timestamp, value, metric });
-      }
+
+      data = Object.entries(timeGroups).map(([timestamp, value]) => ({
+        timestamp,
+        value,
+        metric
+      })).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
     } else if (metric === 'bytes') {
       // Original bytes metric
-      query = `
+      const result = await session.run(`
         MATCH (f:Flow)
-        WHERE f.flowStartMilliseconds >= $startTime 
-          AND f.flowStartMilliseconds <= $endTime
+        WHERE f.flowStartMilliseconds IS NOT NULL
           AND (f.malicious IS NULL OR f.malicious = false) 
           AND (f.honeypot IS NULL OR f.honeypot = false)
-        WITH f, datetime({epochMillis: f.flowStartMilliseconds}) as dt
-        RETURN 
-          dt.year as year, dt.month as month, dt.day as day, dt.hour as hour,
-          sum(coalesce(f.octetTotalCount, 0)) as value
-        ORDER BY year, month, day, hour
-      `;
-      
-      const result = await session.run(query, { startTime, endTime: now });
+        RETURN f.flowStartMilliseconds AS flow_start,
+               coalesce(f.octetTotalCount, 0) as bytes
+      `);
+
+      // Group by time intervals
+      const timeGroups: Record<string, number> = {};
       
       for (const record of result.records) {
-        const year = record.get('year').toNumber();
-        const month = record.get('month').toNumber();
-        const day = record.get('day').toNumber();
-        const hour = record.get('hour').toNumber();
-        const value = record.get('value').toNumber();
+        const flow_start_str = record.get('flow_start');
+        const flow_start_time = parseFlowTimestamp(flow_start_str);
         
-        const timestamp = new Date(year, month - 1, day, hour).toISOString();
-        data.push({ timestamp, value, metric });
+        if (!flow_start_time) continue;
+        if (flow_start_time < startTime || flow_start_time > endTime) continue;
+        
+        const flowDate = new Date(flow_start_time);
+        if (isNaN(flowDate.getTime())) continue;
+        
+        let timeKey = '';
+        if (granularity === '30m') {
+          const minutes = Math.floor(flowDate.getMinutes() / 30) * 30;
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), flowDate.getHours(), minutes).toISOString();
+        } else if (granularity === '1h') {
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), flowDate.getHours()).toISOString();
+        } else if (granularity === '6h') {
+          const hours = Math.floor(flowDate.getHours() / 6) * 6;
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate(), hours).toISOString();
+        } else if (granularity === '1d') {
+          timeKey = new Date(flowDate.getFullYear(), flowDate.getMonth(), flowDate.getDate()).toISOString();
+        }
+        
+        if (timeKey) {
+          timeGroups[timeKey] = (timeGroups[timeKey] || 0) + record.get('bytes');
+        }
       }
+
+      data = Object.entries(timeGroups).map(([timestamp, value]) => ({
+        timestamp,
+        value,
+        metric: 'bytes'
+      })).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     }
 
     return NextResponse.json({

@@ -36,9 +36,9 @@ export default function HelpPage() {
       category: "Getting Started",
     },
     {
-      question: "What types of threats can CyberSense AI detect?",
+      question: "What types of threats can LEVANT AI detect?",
       answer:
-        "CyberSense AI can detect malware, phishing attempts, DDoS attacks, unauthorized access attempts, data breaches, and advanced persistent threats (APTs).",
+        "LEVANT AI can detect malware, phishing attempts, DDoS attacks, unauthorized access attempts, data breaches, and advanced persistent threats (APTs).",
       category: "Features",
     },
     {
@@ -48,7 +48,7 @@ export default function HelpPage() {
       category: "Billing",
     },
     {
-      question: "Can I integrate CyberSense AI with other security tools?",
+      question: "Can I integrate LEVANT AI with other security tools?",
       answer:
         "Yes, we support integrations with popular SIEM tools, firewalls, and security platforms through our API and webhooks.",
       category: "Integrations",
@@ -64,7 +64,7 @@ export default function HelpPage() {
   const resources = [
     {
       title: "Getting Started Guide",
-      description: "Complete guide to setting up your CyberSense AI account",
+      description: "Complete guide to setting up your LEVANT AI account",
       type: "Documentation",
       icon: <Book className="h-5 w-5" />,
       link: "#",
@@ -107,7 +107,7 @@ export default function HelpPage() {
             <div className="flex items-center gap-4">
               <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 <Shield className="h-8 w-8 text-purple-400" />
-                <span className="text-xl font-bold text-white">CyberSense AI</span>
+                <span className="text-xl font-bold text-white">LEVANT AI</span>
               </Link>
               <div className="text-zinc-400">/</div>
               <h1 className="text-lg font-semibold text-white">Help & Support</h1>
@@ -349,7 +349,7 @@ export default function HelpPage() {
                   System Status
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Current status of all CyberSense AI services
+                  Current status of all LEVANT AI services
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -417,7 +417,7 @@ export default function HelpPage() {
       {/* Footer */}
       <footer className="border-t border-purple-500/20 bg-gray-900/50 backdrop-blur-xl mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <p className="text-center text-zinc-400">© 2025 CyberSense AI. Built for cybersecurity professionals.</p>
+          <p className="text-center text-zinc-400">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
         </div>
       </footer>
     </div>

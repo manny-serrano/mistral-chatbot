@@ -3,11 +3,11 @@ import './globals.css'
 import { AuthProvider } from '@/components/auth/auth-provider'
 
 export const metadata: Metadata = {
-  title: 'Cybersense Ai',
+  title: 'LEVANT AI',
   description: 'Created with v0',
   generator: 'v0.dev',
   icons: {
-    icon: '/cybersense.png',
+    icon: '/LEVANT.png',
   },
 }
 

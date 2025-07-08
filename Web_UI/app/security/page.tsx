@@ -42,7 +42,7 @@ export default function SecurityPage() {
             <div className="flex items-center gap-4">
               <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 <Shield className="h-8 w-8 text-purple-400" />
-                <span className="text-xl font-bold text-white">CyberSense AI</span>
+                <span className="text-xl font-bold text-white">LEVANT AI</span>
               </Link>
               <div className="text-zinc-400">/</div>
               <h1 className="text-lg font-semibold text-white">Security Center</h1>
@@ -434,7 +434,7 @@ export default function SecurityPage() {
       {/* Footer */}
       <footer className="border-t border-purple-500/20 bg-gray-900/50 backdrop-blur-xl mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <p className="text-center text-zinc-400">© 2025 CyberSense AI. Built for cybersecurity professionals.</p>
+          <p className="text-center text-zinc-400">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
         </div>
       </footer>
     </div>
