@@ -1,12 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { ShieldCheck, Bell, LineChart, ArrowLeft, Clock, TrendingUp, Activity, BarChart3 } from "lucide-react"
+import { ShieldCheck, Bell, LineChart, ArrowLeft, Clock, TrendingUp, Activity, BarChart3, AlertTriangle, Shield } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useEffect, useState } from "react"
-import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts'
 
 interface TimeSeriesDataPoint {
   timestamp: string
@@ -34,10 +34,34 @@ export default function TimeSeriesVisualizationPage() {
   const [selectedGranularity, setSelectedGranularity] = useState("1h")
 
   const metrics = [
-    { id: "alerts", name: "Security Alerts", color: "#ef4444", icon: Activity },
-    { id: "flows", name: "Network Flows", color: "#3b82f6", icon: BarChart3 },
-    { id: "threats", name: "Threat Events", color: "#f59e0b", icon: TrendingUp },
-    { id: "bandwidth", name: "Bandwidth Usage", color: "#10b981", icon: LineChart }
+    { 
+      id: "alerts", 
+      name: "Security Alerts", 
+      color: "#ef4444", 
+      icon: AlertTriangle,
+      description: "All security alerts detected by AI analysis"
+    },
+    { 
+      id: "threats", 
+      name: "High-Risk Threats", 
+      color: "#dc2626", 
+      icon: Shield,
+      description: "Critical and high-severity threats only"
+    },
+    { 
+      id: "flows", 
+      name: "Network Flows", 
+      color: "#3b82f6", 
+      icon: Activity,
+      description: "Total network traffic flows"
+    },
+    { 
+      id: "bandwidth", 
+      name: "Bandwidth Usage", 
+      color: "#10b981", 
+      icon: BarChart3,
+      description: "Network bandwidth consumption"
+    }
   ]
 
   const periods = [
@@ -84,6 +108,56 @@ export default function TimeSeriesVisualizationPage() {
   const selectedMetricInfo = metrics.find(m => m.id === selectedMetric)
   const selectedPeriodInfo = periods.find(p => p.id === selectedPeriod)
 
+  // Helper function to format values based on metric type
+  const formatValue = (value: number, metric: string) => {
+    if (metric === 'bandwidth') {
+      // Value is already in MB from the API
+      if (value >= 1024) {
+        return `${(value / 1024).toFixed(2)} GB`
+      } else {
+        return `${value.toFixed(2)} MB`
+      }
+    } else if (metric === 'flows') {
+      return `${value.toLocaleString()} flows`
+    } else if (metric === 'alerts') {
+      return `${value} alert${value !== 1 ? 's' : ''}`
+    } else if (metric === 'threats') {
+      return `${value} threat${value !== 1 ? 's' : ''}`
+    }
+    return `${value}`
+  }
+
+  // Custom tooltip for security alerts
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const isSecurityMetric = selectedMetric === 'alerts' || selectedMetric === 'threats'
+      const formattedValue = formatValue(payload[0].value, selectedMetric)
+      
+      return (
+        <div className="bg-gray-900 border border-gray-600 rounded-lg p-3 shadow-xl">
+          <p className="text-white font-medium">{`Time: ${formatTimestamp(label)}`}</p>
+          <p className="text-blue-400">
+            {isSecurityMetric 
+              ? `${selectedMetric === 'alerts' ? 'Security Alerts' : 'High-Risk Threats'}: ${formattedValue}`
+              : `${selectedMetricInfo?.name}: ${formattedValue}`
+            }
+          </p>
+          {isSecurityMetric && (
+            <p className="text-amber-400 text-sm mt-1">
+              {payload[0].value > 0 ? 'Security attention required' : 'No threats detected'}
+            </p>
+          )}
+          {selectedMetric === 'bandwidth' && payload[0].value > 1000 && (
+            <p className="text-red-400 text-sm mt-1">
+              ⚠️ High bandwidth usage detected
+            </p>
+          )}
+        </div>
+      )
+    }
+    return null
+  }
+
   return (
     <main className="flex min-h-screen flex-col bg-gradient-to-br from-black via-purple-950/40 to-gray-950 text-zinc-100 relative">
       {/* Grid pattern overlay */}
@@ -123,6 +197,13 @@ export default function TimeSeriesVisualizationPage() {
             </div>
 
             <div className="flex items-center gap-4">
+              <Link 
+                href="/alerts" 
+                className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20 transition-colors" 
+                title="View Security Alerts"
+              >
+                <AlertTriangle className="h-5 w-5" />
+              </Link>
               <button className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20">
                 <Bell className="h-5 w-5" />
               </button>
@@ -153,8 +234,8 @@ export default function TimeSeriesVisualizationPage() {
                 <LineChart className="h-6 w-6 text-blue-300" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white">Time-Series Line Chart</h1>
-                <p className="text-lg text-zinc-200 mt-1">Temporal data analysis with interactive line charts</p>
+                <h1 className="text-4xl font-bold text-white">Security Alert Timeline</h1>
+                <p className="text-lg text-zinc-200 mt-1">Real-time visualization of security events and threats</p>
               </div>
             </div>
           </div>
@@ -166,7 +247,7 @@ export default function TimeSeriesVisualizationPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-white text-lg flex items-center gap-2">
                   <Activity className="h-5 w-5 text-blue-400" />
-                  Metric
+                  Security Metrics
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -177,14 +258,17 @@ export default function TimeSeriesVisualizationPage() {
                       <button
                         key={metric.id}
                         onClick={() => setSelectedMetric(metric.id)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                        className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors ${
                           selectedMetric === metric.id
                             ? 'bg-blue-500/20 border border-blue-400/30'
                             : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/30'
                         }`}
                       >
-                        <IconComponent className="h-4 w-4" style={{ color: metric.color }} />
-                        <span className="text-white font-medium">{metric.name}</span>
+                        <IconComponent className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: metric.color }} />
+                        <div className="text-left">
+                          <div className="text-white font-medium">{metric.name}</div>
+                          <div className="text-xs text-zinc-400 mt-1">{metric.description}</div>
+                        </div>
                       </button>
                     )
                   })}
@@ -258,15 +342,21 @@ export default function TimeSeriesVisualizationPage() {
                 <div>
                   <CardTitle className="text-white flex items-center gap-2">
                     <LineChart className="h-5 w-5 text-blue-400" />
-                    {selectedMetricInfo?.name} Over Time
+                    {selectedMetricInfo?.name} Timeline
                   </CardTitle>
                   <CardDescription>
                     {selectedPeriodInfo?.name} • {selectedGranularity} intervals • {data?.total_points || 0} data points
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-                    {loading ? "Loading..." : "Live Data"}
+                  <Badge 
+                    className={`${
+                      selectedMetric === 'alerts' || selectedMetric === 'threats' 
+                        ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                        : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                    }`}
+                  >
+                    {loading ? "Loading..." : "Live Security Data"}
                   </Badge>
                   <button
                     onClick={() => fetchData(selectedMetric, selectedPeriod, selectedGranularity)}
@@ -284,7 +374,7 @@ export default function TimeSeriesVisualizationPage() {
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-2"></div>
-                      <p className="text-zinc-400">Loading time-series data...</p>
+                      <p className="text-zinc-400">Loading security data...</p>
                     </div>
                   </div>
                 ) : error ? (
@@ -296,40 +386,61 @@ export default function TimeSeriesVisualizationPage() {
                   </div>
                 ) : data?.data && data.data.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <RechartsLineChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis 
-                        dataKey="timestamp" 
-                        stroke="#9ca3af"
-                        fontSize={12}
-                        tickFormatter={formatTimestamp}
-                      />
-                      <YAxis stroke="#9ca3af" fontSize={12} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#1f2937', 
-                          border: '1px solid #374151',
-                          borderRadius: '8px',
-                          color: '#f9fafb'
-                        }}
-                        labelFormatter={(label) => `Time: ${formatTimestamp(label)}`}
-                        formatter={(value: any) => [value, selectedMetricInfo?.name]}
-                      />
-                      <Legend />
-                      <Line 
-                        type="monotone" 
-                        dataKey="value" 
-                        stroke={selectedMetricInfo?.color || "#3b82f6"}
-                        strokeWidth={2}
-                        dot={{ fill: selectedMetricInfo?.color || "#3b82f6", strokeWidth: 2, r: 4 }}
-                        name={selectedMetricInfo?.name}
-                      />
-                    </RechartsLineChart>
+                    {selectedMetric === 'alerts' || selectedMetric === 'threats' ? (
+                      <AreaChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <defs>
+                          <linearGradient id="alertGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={selectedMetricInfo?.color || "#ef4444"} stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor={selectedMetricInfo?.color || "#ef4444"} stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis 
+                          dataKey="timestamp" 
+                          stroke="#9ca3af"
+                          fontSize={12}
+                          tickFormatter={formatTimestamp}
+                        />
+                        <YAxis stroke="#9ca3af" fontSize={12} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend />
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          stroke={selectedMetricInfo?.color || "#ef4444"}
+                          fillOpacity={1}
+                          fill="url(#alertGradient)"
+                          name={selectedMetricInfo?.name}
+                        />
+                      </AreaChart>
+                    ) : (
+                      <RechartsLineChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis 
+                          dataKey="timestamp" 
+                          stroke="#9ca3af"
+                          fontSize={12}
+                          tickFormatter={formatTimestamp}
+                        />
+                        <YAxis stroke="#9ca3af" fontSize={12} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend />
+                        <Line 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke={selectedMetricInfo?.color || "#3b82f6"}
+                          strokeWidth={2}
+                          dot={{ fill: selectedMetricInfo?.color || "#3b82f6", strokeWidth: 2, r: 4 }}
+                          name={selectedMetricInfo?.name}
+                        />
+                      </RechartsLineChart>
+                    )}
                   </ResponsiveContainer>
                 ) : (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
                       <p className="text-zinc-400">No data available for the selected period</p>
+                      <p className="text-zinc-500 text-sm mt-2">Try selecting a different time range</p>
                     </div>
                   </div>
                 )}
@@ -337,52 +448,134 @@ export default function TimeSeriesVisualizationPage() {
             </CardContent>
           </Card>
 
-          {/* Statistics */}
+          {/* Security Statistics */}
           {data?.data && data.data.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card className="bg-gray-900/80 border-green-400/40 backdrop-blur-xl">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Total Data Points</CardTitle>
+                  <CardTitle className="text-sm font-medium text-zinc-400">Total Events</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-white">{data.total_points}</div>
+                  <div className="text-2xl font-bold text-white">
+                    {formatValue(data.data.reduce((sum, d) => sum + d.value, 0), selectedMetric)}
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {selectedMetric === 'alerts' ? 'Security alerts' : 
+                     selectedMetric === 'threats' ? 'High-risk threats' : 
+                     selectedMetric === 'bandwidth' ? 'Total bandwidth' : 'Total events'}
+                  </p>
                 </CardContent>
               </Card>
 
               <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Average Value</CardTitle>
+                  <CardTitle className="text-sm font-medium text-zinc-400">Average per Interval</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-white">
-                    {(data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length).toFixed(1)}
+                    {formatValue((data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length), selectedMetric)}
                   </div>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Per {selectedGranularity} interval
+                  </p>
                 </CardContent>
               </Card>
 
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Peak Value</CardTitle>
+                  <CardTitle className="text-sm font-medium text-zinc-400">Peak Activity</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-white">
-                    {Math.max(...data.data.map(d => d.value))}
+                    {formatValue(Math.max(...data.data.map(d => d.value)), selectedMetric)}
                   </div>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {selectedMetric === 'alerts' || selectedMetric === 'threats' ? 'Highest alert count' : 
+                     selectedMetric === 'bandwidth' ? 'Peak bandwidth' : 'Peak value'}
+                  </p>
                 </CardContent>
               </Card>
 
               <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Trend</CardTitle>
+                  <CardTitle className="text-sm font-medium text-zinc-400">Security Status</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-white">
-                    {data.data.length > 1 && data.data[data.data.length - 1].value > data.data[0].value ? "📈" : "📉"}
+                    {data.data.length > 1 && data.data[data.data.length - 1].value > data.data[0].value 
+                      ? (selectedMetric === 'alerts' || selectedMetric === 'threats' ? "⚠️" : "📈")
+                      : (selectedMetric === 'alerts' || selectedMetric === 'threats' ? "✅" : "📉")
+                    }
                   </div>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {selectedMetric === 'alerts' || selectedMetric === 'threats' 
+                      ? (data.data.length > 1 && data.data[data.data.length - 1].value > data.data[0].value ? 'Increasing' : 'Stable')
+                      : (data.data.length > 1 && data.data[data.data.length - 1].value > data.data[0].value ? 'Trending up' : 'Trending down')
+                    }
+                  </p>
                 </CardContent>
               </Card>
             </div>
           )}
+
+          {/* Information Card */}
+          <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl mt-6">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Shield className="h-5 w-5 text-blue-400" />
+                Security Alert Analysis
+              </CardTitle>
+              <CardDescription>
+                Understanding your security data visualization
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-white font-medium mb-3">Alert Detection Method</h4>
+                  <div className="space-y-2 text-sm text-zinc-300">
+                    <p>• <strong>AI-Powered Analysis:</strong> Uses logistic regression to analyze network behavior patterns</p>
+                    <p>• <strong>Unique Port Scanning:</strong> Detects IPs connecting to multiple unique ports</p>
+                    <p>• <strong>Threat Scoring:</strong> Assigns p-values (0-1) based on suspicious activity patterns</p>
+                    <p>• <strong>Real-Time Processing:</strong> Analyzes network flows from your Neo4j database</p>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-white font-medium mb-3">Visualization Features</h4>
+                  <div className="space-y-2 text-sm text-zinc-300">
+                    <p>• <strong>Time-Series View:</strong> Shows alert patterns over configurable time periods</p>
+                    <p>• <strong>Severity Filtering:</strong> Separate views for all alerts vs. high-risk threats</p>
+                    <p>• <strong>Interactive Charts:</strong> Hover for detailed information on each time point</p>
+                    <p>• <strong>Trend Analysis:</strong> Identifies increasing or decreasing security activity</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
+                <div className="flex items-center gap-2 text-blue-400 mb-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="font-medium">Security Thresholds</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="text-center">
+                    <div className="text-red-400 font-medium">Critical</div>
+                    <div className="text-zinc-400">p ≥ 0.8</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-amber-400 font-medium">High</div>
+                    <div className="text-zinc-400">p ≥ 0.6</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-yellow-400 font-medium">Medium</div>
+                    <div className="text-zinc-400">p ≥ 0.4</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-blue-400 font-medium">Low</div>
+                    <div className="text-zinc-400">p ≥ 0.1</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </main>
 
