@@ -499,6 +499,13 @@ export default function AlertsPage() {
           </div>
           
           <div className="flex items-center gap-2 sm:gap-4">
+            <Link 
+              href="/visualization/time-series" 
+              className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20 transition-colors" 
+              title="View Alert Timeline"
+            >
+              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Link>
             <button className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20">
               <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
