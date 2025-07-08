@@ -1,17 +1,21 @@
 "use client"
 
 import Link from "next/link"
-import { ShieldCheck, Bell, LineChart, ArrowLeft, Clock, TrendingUp, Activity, BarChart3 } from "lucide-react"
+import { ShieldCheck, Bell, LineChart, ArrowLeft, Clock, TrendingUp, Activity, BarChart3, Network, AlertTriangle } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useEffect, useState } from "react"
-import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts'
 
 interface TimeSeriesDataPoint {
   timestamp: string
   value: number
   metric: string
+  flows?: number
+  alert_probability?: number
+  unique_ports?: number
+  unique_ips?: number
 }
 
 interface TimeSeriesData {
@@ -29,15 +33,16 @@ export default function TimeSeriesVisualizationPage() {
   const [data, setData] = useState<TimeSeriesData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedMetric, setSelectedMetric] = useState("alerts")
+  const [selectedMetric, setSelectedMetric] = useState("bandwidth")
   const [selectedPeriod, setSelectedPeriod] = useState("24h")
   const [selectedGranularity, setSelectedGranularity] = useState("1h")
 
   const metrics = [
-    { id: "alerts", name: "Security Alerts", color: "#ef4444", icon: Activity },
-    { id: "flows", name: "Network Flows", color: "#3b82f6", icon: BarChart3 },
-    { id: "threats", name: "Threat Events", color: "#f59e0b", icon: TrendingUp },
-    { id: "bandwidth", name: "Bandwidth Usage", color: "#10b981", icon: LineChart }
+    { id: "bandwidth", name: "Bandwidth Usage", color: "#10b981", icon: Network, description: "Total data transfer between IP addresses" },
+    { id: "bandwidth_with_alerts", name: "Bandwidth + Security Alerts", color: "#f59e0b", icon: AlertTriangle, description: "Bandwidth with real-time alert correlation" },
+    { id: "alerts", name: "Security Alerts", color: "#ef4444", icon: Activity, description: "Security alerts over time" },
+    { id: "flows", name: "Network Flows", color: "#3b82f6", icon: BarChart3, description: "Network flow count over time" },
+    { id: "bytes", name: "Bytes Transferred", color: "#06b6d4", icon: LineChart, description: "Total bytes transferred over time" }
   ]
 
   const periods = [
@@ -51,7 +56,13 @@ export default function TimeSeriesVisualizationPage() {
       setLoading(true)
       setError(null)
       
-      const response = await fetch(`/api/visualization/time-series?metric=${metric}&period=${period}&granularity=${granularity}`)
+      const params = new URLSearchParams({
+        metric,
+        period,
+        granularity
+      })
+      
+      const response = await fetch(`/api/visualization/time-series?${params}`)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
@@ -81,8 +92,22 @@ export default function TimeSeriesVisualizationPage() {
     }
   }
 
+  const formatBytes = (bytes: number) => {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    let size = bytes
+    let unitIndex = 0
+    
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024
+      unitIndex++
+    }
+    
+    return `${size.toFixed(2)} ${units[unitIndex]}`
+  }
+
   const selectedMetricInfo = metrics.find(m => m.id === selectedMetric)
   const selectedPeriodInfo = periods.find(p => p.id === selectedPeriod)
+  const isBandwidthMetric = selectedMetric.includes('bandwidth')
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
@@ -154,7 +179,7 @@ export default function TimeSeriesVisualizationPage() {
               </div>
               <div>
                 <h1 className="text-4xl font-bold text-white">Time-Series Line Chart</h1>
-                <p className="text-lg text-zinc-200 mt-1">Temporal data analysis with interactive line charts</p>
+                <p className="text-lg text-zinc-200 mt-1">Network analysis with bandwidth monitoring and security alert correlation</p>
               </div>
             </div>
           </div>
@@ -177,14 +202,17 @@ export default function TimeSeriesVisualizationPage() {
                       <button
                         key={metric.id}
                         onClick={() => setSelectedMetric(metric.id)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                        className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors ${
                           selectedMetric === metric.id
                             ? 'bg-blue-500/20 border border-blue-400/30'
                             : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/30'
                         }`}
                       >
-                        <IconComponent className="h-4 w-4" style={{ color: metric.color }} />
-                        <span className="text-white font-medium">{metric.name}</span>
+                        <IconComponent className="h-5 w-5 mt-0.5 flex-shrink-0" style={{ color: metric.color }} />
+                        <div className="text-left">
+                          <div className="text-white font-medium">{metric.name}</div>
+                          <div className="text-xs text-zinc-400 mt-1">{metric.description}</div>
+                        </div>
                       </button>
                     )
                   })}
@@ -207,7 +235,6 @@ export default function TimeSeriesVisualizationPage() {
                       key={period.id}
                       onClick={() => {
                         setSelectedPeriod(period.id)
-                        // Auto-select appropriate granularity
                         setSelectedGranularity(period.granularities[0])
                       }}
                       className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
@@ -262,6 +289,9 @@ export default function TimeSeriesVisualizationPage() {
                   </CardTitle>
                   <CardDescription>
                     {selectedPeriodInfo?.name} • {selectedGranularity} intervals • {data?.total_points || 0} data points
+                    {selectedMetric === 'bandwidth_with_alerts' && (
+                      <span className="ml-2 text-amber-400">• Real-time threat correlation</span>
+                    )}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-3">
@@ -284,7 +314,7 @@ export default function TimeSeriesVisualizationPage() {
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-2"></div>
-                      <p className="text-zinc-400">Loading time-series data...</p>
+                      <p className="text-zinc-400">Loading {isBandwidthMetric ? 'bandwidth' : 'time-series'} data...</p>
                     </div>
                   </div>
                 ) : error ? (
@@ -296,40 +326,90 @@ export default function TimeSeriesVisualizationPage() {
                   </div>
                 ) : data?.data && data.data.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <RechartsLineChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis 
-                        dataKey="timestamp" 
-                        stroke="#9ca3af"
-                        fontSize={12}
-                        tickFormatter={formatTimestamp}
-                      />
-                      <YAxis stroke="#9ca3af" fontSize={12} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#1f2937', 
-                          border: '1px solid #374151',
-                          borderRadius: '8px',
-                          color: '#f9fafb'
-                        }}
-                        labelFormatter={(label) => `Time: ${formatTimestamp(label)}`}
-                        formatter={(value: any) => [value, selectedMetricInfo?.name]}
-                      />
-                      <Legend />
-                      <Line 
-                        type="monotone" 
-                        dataKey="value" 
-                        stroke={selectedMetricInfo?.color || "#3b82f6"}
-                        strokeWidth={2}
-                        dot={{ fill: selectedMetricInfo?.color || "#3b82f6", strokeWidth: 2, r: 4 }}
-                        name={selectedMetricInfo?.name}
-                      />
-                    </RechartsLineChart>
+                    {selectedMetric === 'bandwidth_with_alerts' ? (
+                      <AreaChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis 
+                          dataKey="timestamp" 
+                          stroke="#9ca3af"
+                          fontSize={12}
+                          tickFormatter={formatTimestamp}
+                        />
+                        <YAxis stroke="#9ca3af" fontSize={12} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#1f2937', 
+                            border: '1px solid #374151',
+                            borderRadius: '8px',
+                            color: '#f9fafb'
+                          }}
+                          labelFormatter={(label) => `Time: ${formatTimestamp(label)}`}
+                          formatter={(value: any, name: string) => {
+                            if (name === 'Bandwidth') return [formatBytes(value), 'Bandwidth']
+                            if (name === 'Alert Probability') return [`${(value * 100).toFixed(2)}%`, 'Alert Risk']
+                            return [value, name]
+                          }}
+                        />
+                        <Legend />
+                        <Area 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke="#10b981"
+                          fill="rgba(16, 185, 129, 0.1)"
+                          strokeWidth={2}
+                          name="Bandwidth"
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="alert_probability" 
+                          stroke="#f59e0b"
+                          strokeWidth={2}
+                          dot={{ fill: "#f59e0b", strokeWidth: 2, r: 3 }}
+                          name="Alert Probability"
+                        />
+                      </AreaChart>
+                    ) : (
+                      <RechartsLineChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis 
+                          dataKey="timestamp" 
+                          stroke="#9ca3af"
+                          fontSize={12}
+                          tickFormatter={formatTimestamp}
+                        />
+                        <YAxis stroke="#9ca3af" fontSize={12} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#1f2937', 
+                            border: '1px solid #374151',
+                            borderRadius: '8px',
+                            color: '#f9fafb'
+                          }}
+                          labelFormatter={(label) => `Time: ${formatTimestamp(label)}`}
+                          formatter={(value: any, name: string) => {
+                            if (isBandwidthMetric && name === selectedMetricInfo?.name) {
+                              return [formatBytes(value), selectedMetricInfo?.name]
+                            }
+                            return [value, selectedMetricInfo?.name]
+                          }}
+                        />
+                        <Legend />
+                        <Line 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke={selectedMetricInfo?.color || "#3b82f6"}
+                          strokeWidth={2}
+                          dot={{ fill: selectedMetricInfo?.color || "#3b82f6", strokeWidth: 2, r: 4 }}
+                          name={selectedMetricInfo?.name}
+                        />
+                      </RechartsLineChart>
+                    )}
                   </ResponsiveContainer>
                 ) : (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
                       <p className="text-zinc-400">No data available for the selected period</p>
+                      <p className="text-zinc-500 text-sm mt-2">Try adjusting the time period or metric selection</p>
                     </div>
                   </div>
                 )}
@@ -351,33 +431,48 @@ export default function TimeSeriesVisualizationPage() {
 
               <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Average Value</CardTitle>
+                  <CardTitle className="text-sm font-medium text-zinc-400">
+                    {isBandwidthMetric ? 'Average Bandwidth' : 'Average Value'}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-white">
-                    {(data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length).toFixed(1)}
+                    {isBandwidthMetric ? 
+                      formatBytes(data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length) :
+                      (data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length).toFixed(1)
+                    }
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Peak Value</CardTitle>
+                  <CardTitle className="text-sm font-medium text-zinc-400">
+                    {isBandwidthMetric ? 'Peak Bandwidth' : 'Peak Value'}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-white">
-                    {Math.max(...data.data.map(d => d.value))}
+                    {isBandwidthMetric ? 
+                      formatBytes(Math.max(...data.data.map(d => d.value))) :
+                      Math.max(...data.data.map(d => d.value))
+                    }
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Trend</CardTitle>
+                  <CardTitle className="text-sm font-medium text-zinc-400">
+                    {selectedMetric === 'bandwidth_with_alerts' ? 'Max Alert Risk' : 'Trend'}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-white">
-                    {data.data.length > 1 && data.data[data.data.length - 1].value > data.data[0].value ? "📈" : "📉"}
+                    {selectedMetric === 'bandwidth_with_alerts' ? 
+                      `${(Math.max(...data.data.map(d => d.alert_probability || 0)) * 100).toFixed(1)}%` :
+                      (data.data.length > 1 && data.data[data.data.length - 1].value > data.data[0].value ? "📈" : "📉")
+                    }
                   </div>
                 </CardContent>
               </Card>
