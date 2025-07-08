@@ -34,7 +34,7 @@ export default function DashboardPage() {
               <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
             <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-              CyberSense AI
+              LEVANT AI
             </h1>
           </Link>
           

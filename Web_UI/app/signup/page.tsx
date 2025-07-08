@@ -86,7 +86,7 @@ export default function SignUpPage() {
                 <ShieldCheck className="h-5 w-5 text-white" />
               </div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </h1>
             </Link>
             <nav className="hidden md:flex items-center gap-6">
@@ -120,7 +120,7 @@ export default function SignUpPage() {
               </div>
               <CardTitle className="text-2xl font-bold text-white">Create your account</CardTitle>
               <CardDescription className="text-zinc-300">
-                Join thousands of security professionals using CyberSense AI to protect their networks
+                Join thousands of security professionals using LEVANT AI to protect their networks
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -416,10 +416,10 @@ export default function SignUpPage() {
                 <ShieldCheck className="h-4 w-4 text-white" />
               </div>
               <span className="font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </span>
             </div>
-            <p className="text-sm text-zinc-400">© 2025 CyberSense AI. Built for cybersecurity professionals.</p>
+            <p className="text-sm text-zinc-400">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
           </div>
         </div>
       </footer>

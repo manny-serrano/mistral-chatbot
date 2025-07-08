@@ -229,7 +229,7 @@ export default function ChatPage() {
     const lowerInput = userInput.toLowerCase()
     
     if (lowerInput.includes("alert") || lowerInput.includes("notification")) {
-      return "I can help you with alert configuration and management. In CyberSense AI, you can:\n\n• Set custom thresholds for different threat types\n• Configure severity levels based on p-values\n• Set up email and SMS notifications\n• Create custom alert rules for specific IP ranges or ports\n\nWould you like me to guide you through configuring specific alert types?"
+      return "I can help you with alert configuration and management. In LEVANT AI, you can:\n\n• Set custom thresholds for different threat types\n• Configure severity levels based on p-values\n• Set up email and SMS notifications\n• Create custom alert rules for specific IP ranges or ports\n\nWould you like me to guide you through configuring specific alert types?"
     }
     
     if (lowerInput.includes("network") || lowerInput.includes("traffic")) {
@@ -240,7 +240,7 @@ export default function ChatPage() {
       return "Our visualization tools can help you understand your security data better:\n\n📈 **Time-Series Charts**: Track trends over time\n🗺️ **Geolocation Maps**: See where attacks are coming from\n📊 **Bar Charts**: Compare different metrics\n🔥 **Heatmaps**: Identify patterns and hotspots\n🕸️ **Network Graphs**: Visualize network topology and connections\n\nWhich type of visualization would be most helpful for your current analysis?"
     }
     
-    return "I'm here to help you with cybersecurity analysis and using CyberSense AI effectively. I can assist with:\n\n🛡️ **Security Analysis**: Network traffic, threat detection, incident response\n📊 **Data Visualization**: Understanding charts, graphs, and security metrics\n🚨 **Alert Management**: Configuring alerts and managing notifications\n📋 **Reporting**: Generating and interpreting security reports\n\nWhat specific cybersecurity topic or CyberSense AI feature would you like to explore?"
+    return "I'm here to help you with cybersecurity analysis and using LEVANT AI effectively. I can assist with:\n\n🛡️ **Security Analysis**: Network traffic, threat detection, incident response\n📊 **Data Visualization**: Understanding charts, graphs, and security metrics\n🚨 **Alert Management**: Configuring alerts and managing notifications\n📋 **Reporting**: Generating and interpreting security reports\n\nWhat specific cybersecurity topic or LEVANT AI feature would you like to explore?"
   }
 
   const formatTime = (d: string | Date) => {
@@ -279,7 +279,7 @@ export default function ChatPage() {
                 <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </h1>
             </Link>
             
@@ -422,7 +422,7 @@ export default function ChatPage() {
                     </Button>
                   )}
                 </div>
-                <p className="text-sm text-zinc-400">CyberSense AI Assistant • {currentChat.messages.length} messages</p>
+                <p className="text-sm text-zinc-400">LEVANT AI Assistant • {currentChat.messages.length} messages</p>
               </div>
 
               {/* Messages */}
@@ -584,7 +584,7 @@ export default function ChatPage() {
                   <Input
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder="Ask CyberSense AI about security analysis, alerts, or any cybersecurity questions..."
+                    placeholder="Ask LEVANT AI about security analysis, alerts, or any cybersecurity questions..."
                     className="w-full rounded-full bg-gray-800 border-gray-600 text-white placeholder-zinc-400 focus:border-purple-400 text-sm"
                     onKeyPress={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
@@ -629,7 +629,7 @@ export default function ChatPage() {
               <Input
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask CyberSense AI about security analysis, alerts, or any cybersecurity questions..."
+                placeholder="Ask LEVANT AI about security analysis, alerts, or any cybersecurity questions..."
                 className="flex-1 rounded-lg bg-gray-800 border-gray-600 text-white placeholder-zinc-400 focus:border-purple-400"
                 onKeyPress={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {

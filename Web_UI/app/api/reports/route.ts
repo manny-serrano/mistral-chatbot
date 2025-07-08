@@ -66,7 +66,7 @@ function getReportMetadata(): ReportMetadata[] {
           duration_hours: metadata.analysis_duration_hours || 0,
           risk_level: executiveSummary.overall_risk_level || 'UNKNOWN',
           flows_analyzed: networkOverview.total_flows || 0,
-          generated_by: metadata.generated_by || 'CyberSense AI'
+          generated_by: metadata.generated_by || 'LEVANT AI'
         });
       } catch (error) {
         console.error(`Error processing report ${filename}:`, error);
@@ -82,7 +82,7 @@ function getReportMetadata(): ReportMetadata[] {
           duration_hours: 0,
           risk_level: 'UNKNOWN',
           flows_analyzed: 0,
-          generated_by: 'CyberSense AI'
+          generated_by: 'LEVANT AI'
         });
       }
     }

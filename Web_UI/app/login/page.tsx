@@ -60,7 +60,7 @@ function LoginForm() {
                 <ShieldCheck className="h-5 w-5 text-white" />
               </div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </h1>
             </Link>
             <nav className="hidden md:flex items-center gap-6">
@@ -97,7 +97,7 @@ function LoginForm() {
               </div>
               <CardTitle className="text-2xl font-bold text-white">Welcome back</CardTitle>
               <CardDescription className="text-zinc-300">
-                Sign in to your CyberSense AI account to continue protecting your network
+                Sign in to your LEVANT AI account to continue protecting your network
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -237,10 +237,10 @@ function LoginForm() {
                 <ShieldCheck className="h-4 w-4 text-white" />
               </div>
               <span className="font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </span>
             </div>
-            <p className="text-sm text-zinc-400">© 2025 CyberSense AI. Built for cybersecurity professionals.</p>
+            <p className="text-sm text-zinc-400">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
           </div>
         </div>
       </footer>

@@ -94,7 +94,7 @@ export default function VisualizationPage() {
                 <ShieldCheck className="h-5 w-5 text-white" />
               </div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </h1>
             </Link>
 
@@ -289,10 +289,10 @@ export default function VisualizationPage() {
                 <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
               </div>
               <span className="text-sm sm:text-base font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-zinc-400 text-center sm:text-right">© 2025 CyberSense AI. Built for cybersecurity professionals.</p>
+            <p className="text-xs sm:text-sm text-zinc-400 text-center sm:text-right">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
           </div>
         </div>
       </footer>

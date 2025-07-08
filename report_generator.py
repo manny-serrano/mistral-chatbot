@@ -972,7 +972,7 @@ def main():
             "metadata": {
                 "report_title": "Network Traffic Analysis Report with Threat Detection (YAF/IPFIX Data)",
                 "reporting_period": f"{start_time.isoformat()} to {end_time.isoformat()}",
-                "generated_by": "CyberSense AI Security Platform",
+                "generated_by": "LEVANT AI Security Platform",
                 "generation_date": datetime.now(timezone.utc).isoformat(),
                 "report_version": "3.0",
                 "analysis_duration_hours": round(duration_hours, 2),

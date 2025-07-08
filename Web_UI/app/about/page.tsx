@@ -47,7 +47,7 @@ export default function AboutPage() {
                 <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </h1>
             </Link>
             <nav className="flex items-center gap-2 sm:gap-4 md:gap-6">
@@ -118,7 +118,7 @@ export default function AboutPage() {
                 variant="outline"
                 className="mb-4 sm:mb-6 border-purple-400/30 bg-purple-500/10 text-purple-300 backdrop-blur-sm text-xs sm:text-sm"
               >
-                About CyberSense AI
+                About LEVANT AI
               </Badge>
               <h1 className="text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight text-white mb-4 sm:mb-6">
                 Protecting the{" "}
@@ -505,10 +505,10 @@ export default function AboutPage() {
                 <ShieldCheck className="h-4 w-4 text-white" />
               </div>
               <span className="font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </span>
             </div>
-            <p className="text-sm text-zinc-400">© 2025 CyberSense AI. Built for cybersecurity professionals.</p>
+            <p className="text-sm text-zinc-400">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
           </div>
         </div>
       </footer>

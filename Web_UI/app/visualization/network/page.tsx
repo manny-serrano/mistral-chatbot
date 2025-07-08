@@ -296,7 +296,7 @@ export default function NetworkVisualizationPage() {
                 <ShieldCheck className="h-5 w-5 text-white" />
               </div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                CyberSense AI
+                LEVANT AI
               </h1>
             </Link>
 
