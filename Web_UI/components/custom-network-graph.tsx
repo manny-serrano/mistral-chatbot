@@ -97,7 +97,11 @@ export const CustomNetworkGraph = forwardRef<any, CustomNetworkGraphProps>(({
   // Primary D3 rendering logic
   useEffect(() => {
     if (!svgRef.current) return
-    
+
+    // Clone data to avoid mutating original state during D3 simulation
+    const nodesData = graphData.nodes.map(node => ({ ...node }))
+    const linksData = graphData.links.map(link => ({ ...link }))
+
     // If dimensions are not set yet, try to get them from the container
     let width = dimensions.width
     let height = dimensions.height
@@ -129,27 +133,27 @@ export const CustomNetworkGraph = forwardRef<any, CustomNetworkGraphProps>(({
     svg.selectAll('*').remove()
 
     // If we have no data and we're searching, show empty state
-    if (searchIp && (!graphData.nodes.length || !graphData.links.length)) {
+    if (searchIp && (!nodesData.length || !linksData.length)) {
       return
     }
 
     // Only proceed with graph rendering if we have data
-    if (graphData.nodes.length > 0) {
+    if (nodesData.length > 0) {
       // Use the local width and height variables we calculated above
 
       // Create container groups
       const linkGroup = svg.append("g").attr("class", "links")
       const nodeGroup = svg.append("g").attr("class", "nodes")
       
-      const simulation = forceSimulation(graphData.nodes)
-        .force("link", forceLink(graphData.links).id((d: any) => d.id).distance(90))
+      const simulation = forceSimulation(nodesData)
+        .force("link", forceLink(linksData).id((d: any) => d.id).distance(90))
         .force("charge", forceManyBody().strength(-200))
         .force("center", forceCenter(width / 2, height / 2))
         .force("collision", forceCollide().radius(d => getNodeSize(d as NetworkNode) + 8))
 
       const link = linkGroup
         .selectAll("line")
-        .data(graphData.links)
+        .data(linksData)
         .join("line")
           .attr("stroke-width", 1.5)
           .style('pointer-events', 'none')
@@ -157,7 +161,7 @@ export const CustomNetworkGraph = forwardRef<any, CustomNetworkGraphProps>(({
           .attr("stroke-opacity", 0.6);
 
       const node = nodeGroup.selectAll('g.node')
-        .data(graphData.nodes)
+        .data(nodesData)
         .join('g')
         .attr('class', 'node')
         .style('pointer-events', 'all')
@@ -240,10 +244,10 @@ export const CustomNetworkGraph = forwardRef<any, CustomNetworkGraphProps>(({
 
       simulation.on("tick", () => {
         link
-          .attr("x1", (d: any) => d.source.x)
-          .attr("y1", (d: any) => d.source.y)
-          .attr("x2", (d: any) => d.target.x)
-          .attr("y2", (d: any) => d.target.y);
+          .attr("x1", (d: any) => (d.source as any).x)
+          .attr("y1", (d: any) => (d.source as any).y)
+          .attr("x2", (d: any) => (d.target as any).x)
+          .attr("y2", (d: any) => (d.target as any).y);
         
         node.attr("transform", (d: any) => `translate(${d.x}, ${d.y})`);
       });
