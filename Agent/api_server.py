@@ -21,6 +21,8 @@ import ipaddress  # Add this import for IP validation
 import asyncio
 import hashlib
 from functools import lru_cache
+import httpx  # Add to call external geolocation API
+import re     # Add for matching queries
 
 # Configure logging
 logging.basicConfig(
@@ -297,42 +299,73 @@ class Neo4jVisualizationHelper:
         
         try:
             with self.driver.session() as session:
-                # If searching for a specific IP
                 if ip_address and ip_address.strip():
                     ip_address = ip_address.strip()
-                    
-                    # First check if the IP exists
-                    check_query = """
-                    MATCH (n:IP {address: $ip_address})
-                    RETURN n
-                    """
-                    check_result = session.run(check_query, ip_address=ip_address)
-                    ip_exists = check_result.single()
-                    
-                    if not ip_exists:
-                        # IP not found in database
-                        return {
-                            "nodes": [],
-                            "links": [],
-                            "success": True,
-                            "message": f"IP address '{ip_address}' not found in the database."
-                        }
-                    
-                    # IP exists, get its connections
+                    # Query flows where Host sent flows to destination IPs
+                    # We use destinationIPv4Address property on Flow nodes
                     query = """
-                    MATCH (n1:IP {address: $ip_address})-[r:CONNECTED_TO]-(n2:IP)
-                    RETURN n1, r, n2
+                    MATCH (src:Host {ip: $ip_address})-[:SENT]->(f:Flow)
+                    RETURN f.destinationIPv4Address AS dst_ip
                     LIMIT $limit
                     """
                     result = session.run(query, ip_address=ip_address, limit=limit)
+                    # Build graph nodes and links based on flow destinations
+                    nodes = []
+                    links = []
+                    node_set = set()
+                    # Add source host node
+                    nodes.append(NetworkNode(
+                        id=ip_address,
+                        type="host",
+                        label=ip_address,
+                        group="source_host",
+                        ip=ip_address
+                    ))
+                    node_set.add(ip_address)
+                    for record in result:
+                        dst = record.get('dst_ip')
+                        if not dst or dst in node_set:
+                            continue
+                        # Add destination node
+                        nodes.append(NetworkNode(
+                            id=dst,
+                            type="host",
+                            label=dst,
+                            group="dest_host",
+                            ip=dst
+                        ))
+                        node_set.add(dst)
+                        # Add link
+                        links.append(NetworkLink(
+                            source=ip_address,
+                            target=dst,
+                            type="FLOW"
+                        ))
+                    return {"nodes": nodes, "links": links, "success": True}
                 else:
-                    # Default query to get a general graph
+                    # Default query to get a general graph of flows between hosts
                     query = """
-                    MATCH (n1:IP)-[r:CONNECTED_TO]->(n2:IP)
-                    RETURN n1, r, n2
+                    MATCH (src:Host)-[:SENT]->(f:Flow)
+                    WITH src, f
+                    RETURN src.ip AS src_ip, f.destinationIPv4Address AS dst_ip
                     LIMIT $limit
                     """
                     result = session.run(query, limit=limit)
+                    # Build default nodes and links
+                    nodes = []
+                    links = []
+                    node_set = set()
+                    for record in result:
+                        src_ip = record.get('src_ip')
+                        dst_ip = record.get('dst_ip')
+                        if src_ip not in node_set:
+                            nodes.append(NetworkNode(id=src_ip, type="host", label=src_ip, group="source_host", ip=src_ip))
+                            node_set.add(src_ip)
+                        if dst_ip and dst_ip not in node_set:
+                            nodes.append(NetworkNode(id=dst_ip, type="host", label=dst_ip, group="dest_host", ip=dst_ip))
+                            node_set.add(dst_ip)
+                        links.append(NetworkLink(source=src_ip, target=dst_ip, type="FLOW"))
+                    return {"nodes": nodes, "links": links, "success": True}
                 
                 node_set = set()
                 
@@ -750,6 +783,55 @@ async def analyze_security_query(request: SecurityQueryRequest):
     Optimized for custom frontend integration with caching and async processing.
     """
     global agent, agent_initialized
+    
+    # Intercept alert and geolocation questions before LLM
+    text = request.query.strip()
+    lower = text.lower()
+    # Alerts: summary of malicious flow alerts
+    if re.search(r"\b(alerts?|what alerts)\b", lower):
+        # Fetch alerts from Next.js alerts API
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get("http://localhost:3002/api/alerts")
+                resp.raise_for_status()
+                data = resp.json()
+            alerts = data.get('alerts', [])
+            if alerts:
+                lines = [f"• {a['message']}" for a in alerts]
+                content = "🔔 Alerts:\n" + "\n".join(lines)
+            else:
+                content = "No alerts found."
+        except Exception as e:
+            content = f"Error fetching alerts: {e}"
+        return SecurityQueryResponse(
+            result=content,
+            query_type="ALERTS_QUERY",
+            database_used="frontend",
+            timestamp=datetime.now().isoformat(),
+            success=True
+        )
+    # Geolocation: location of a given IP
+    geo_match = re.search(r"location of (?:this )?ip\s*([0-9\.]+)", lower)
+    if geo_match:
+        ip = geo_match.group(1)
+        try:
+            resp = await httpx.get(f"http://ipwho.is/{ip}?fields=city,country,success", timeout=5.0)
+            data = resp.json()
+            if data.get('success'):
+                city = data.get('city','Unknown')
+                country = data.get('country','Unknown')
+                content = f"🌐 IP {ip} is located in {city}, {country}."
+            else:
+                content = f"Location lookup failed for IP {ip}."
+        except Exception as e:
+            content = f"Error looking up IP {ip}: {str(e)}"
+        return SecurityQueryResponse(
+            result=content,
+            query_type="GEOLOCATION_QUERY",
+            database_used="external",
+            timestamp=datetime.now().isoformat(),
+            success=True
+        )
     
     # Validate analysis type
     valid_types = ["auto", "semantic", "graph", "hybrid"]

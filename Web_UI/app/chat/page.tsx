@@ -25,8 +25,12 @@ import {
   BarChart3,
   Settings,
   PenTool,
+  X,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
+import { CustomNetworkGraph, NetworkGraphData } from "@/components/custom-network-graph"
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Message {
   id: string
@@ -47,6 +51,12 @@ export default function ChatPage() {
   const [currentChat, setCurrentChat] = useState<Chat | null>(null)
   const [inputMessage, setInputMessage] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [graphData, setGraphData] = useState<NetworkGraphData | null>(null)
+  const [graphLoading, setGraphLoading] = useState(false)
+  const [graphError, setGraphError] = useState<string | null>(null)
+  const [searchIp, setSearchIp] = useState<string>("")
+  const [viewMode, setViewMode] = useState<'text'|'graph'>('text')
   const [chats, setChats] = useState<Chat[]>([])
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -135,13 +145,41 @@ export default function ChatPage() {
     setCurrentChat(updatedChat)
     setInputMessage("")
     setIsLoading(true)
+    setError(null)
+    // Reset any previous flows panel; only show for explicit 'show me all network flows' queries
+    setSearchIp('')
+    setGraphData(null)
+    setGraphError(null)
 
-    // Simulate API call delay
-    setTimeout(() => {
+    try {
+      // Call backend API via Next.js route
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            ...updatedChat.messages.map(msg => ({ id: msg.id, role: msg.role, parts: [{ type: 'text', text: msg.content }] })),
+            { id: userMessage.id, role: userMessage.role, parts: [{ type: 'text', text: userMessage.content }] }
+          ]
+        })
+      })
+
+      if (!response.ok) {
+        let errMsg = `Server error ${response.status}`
+        try {
+          const errData = await response.json()
+          if (errData.error) errMsg = errData.error
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(errMsg)
+      }
+
+      const data = await response.json()
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: generateAIResponse(userMessage.content),
+        id: data.id || `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: data.content || 'Sorry, I could not generate a response.',
         timestamp: new Date()
       }
 
@@ -152,11 +190,39 @@ export default function ChatPage() {
       }
 
       setCurrentChat(finalChat)
-      setChats(prevChats => 
-        prevChats.map(chat => chat.id === finalChat.id ? finalChat : chat)
-      )
+      setChats(prevChats => prevChats.map(chat => chat.id === finalChat.id ? finalChat : chat))
+
+      // If user asked for network flows by IP, trigger graph fetch
+      const ipMatch = messageText.match(/show me all network flows from ip\s*([\d\.]+)/i)
+      if (ipMatch) {
+        // Strip trailing punctuation from IP (e.g. a trailing dot)
+        const rawIp = ipMatch[1]
+        const ip = rawIp.replace(/\.$/, '')
+        setSearchIp(ip)
+        setGraphLoading(true)
+        setGraphError(null)
+        setGraphData(null)
+        fetch(`http://localhost:8000/network/graph?limit=100&ip_address=${encodeURIComponent(ip)}`)
+          .then(async res => {
+            if (!res.ok) {
+              let err = `Server error ${res.status}`
+              try { const errData = await res.json(); if (errData.error) err = errData.error } catch {}
+              throw new Error(err)
+            }
+            return res.json()
+          })
+          .then(data => {
+            setGraphData({ nodes: data.nodes, links: data.links })
+          })
+          .catch(err => setGraphError(err.message))
+          .finally(() => setGraphLoading(false))
+      }
+    } catch (err) {
+      console.error('Chat API error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch response.')
+    } finally {
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
   const generateAIResponse = (userInput: string): string => {
@@ -412,8 +478,10 @@ export default function ChatPage() {
                             : "bg-gray-900 border-gray-700"
                         }`}>
                           <CardContent className="p-4">
-                            <div className="whitespace-pre-wrap text-sm text-zinc-100">
-                              {message.content}
+                            <div className="prose prose-invert whitespace-pre-wrap text-sm text-white">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {message.content}
+                              </ReactMarkdown>
                             </div>
                             <div className="mt-2 text-xs text-zinc-500">
                               {formatTime(message.timestamp)}
@@ -430,6 +498,60 @@ export default function ChatPage() {
                     </div>
                   ))}
                   
+                  {/* Inline Flows Panel below assistant messages */}
+                  {searchIp && (
+                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-base font-semibold text-white">Flows for {searchIp}</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-red-400"
+                          onClick={() => { setSearchIp(''); setGraphData(null); setGraphError(null) }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex space-x-2 mb-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={`text-white ${viewMode === 'text' ? 'bg-purple-600 border-purple-600 hover:bg-purple-700' : 'bg-gray-800 border-gray-700 hover:bg-gray-700'}`}
+                          onClick={() => setViewMode('text')}
+                        >
+                          Text Flows
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={`text-white ${viewMode === 'graph' ? 'bg-purple-600 border-purple-600 hover:bg-purple-700' : 'bg-gray-800 border-gray-700 hover:bg-gray-700'}`}
+                          onClick={() => setViewMode('graph')}
+                        >
+                          Graph View
+                        </Button>
+                      </div>
+                      {viewMode === 'text' ? (
+                        <div className="overflow-y-auto h-48 p-2 bg-gray-900 rounded-lg">
+                          {graphData?.links.map((link, idx) => (
+                            <div key={idx} className="text-sm text-zinc-100 mb-1">
+                              {link.source} → {link.target}{link.type ? ` (${link.type})` : ''}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="h-48 rounded-lg overflow-hidden">
+                          <CustomNetworkGraph
+                            graphData={graphData || { nodes: [], links: [] }}
+                            searchIp={searchIp}
+                            loading={graphLoading}
+                            info={null}
+                            error={graphError}
+                            onClearSearch={() => { setSearchIp(''); setGraphData(null); setGraphError(null) }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {isLoading && (
                     <div className="flex gap-4 justify-start">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-violet-500 flex items-center justify-center flex-shrink-0">
@@ -502,6 +624,7 @@ export default function ChatPage() {
       {currentChat && (
         <div className="fixed bottom-0 left-80 right-0 p-4 z-50">
           <div className="max-w-4xl mx-auto">
+            {error && <div className="mb-2 text-sm text-red-500">{error}</div>}
             <div className="flex gap-2">
               <Input
                 value={inputMessage}
