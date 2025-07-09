@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { ShieldCheck, Bell, LineChart, ArrowLeft, Clock, TrendingUp, Activity, BarChart3, AlertTriangle, Shield, Network } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
+import { NotificationBell } from "@/components/ui/notification-bell"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useEffect, useState } from "react"
@@ -27,6 +28,7 @@ interface TimeSeriesData {
   success: boolean
   timestamp: string
   error?: string
+  note?: string
 }
 
 export default function TimeSeriesVisualizationPage() {
@@ -39,7 +41,13 @@ export default function TimeSeriesVisualizationPage() {
 
   const metrics = [
     { id: "bandwidth", name: "Bandwidth Usage", color: "#10b981", icon: Network, description: "Total data transfer between IP addresses" },
-    { id: "bandwidth_with_alerts", name: "Bandwidth + Security Alerts", color: "#f59e0b", icon: AlertTriangle, description: "Bandwidth with real-time alert correlation" },
+    { 
+      id: "flows", 
+      name: "Network Flows", 
+      color: "#3b82f6", 
+      icon: Activity,
+      description: "Total network traffic flows"
+    },
     { 
       id: "alerts", 
       name: "Security Alerts", 
@@ -53,15 +61,7 @@ export default function TimeSeriesVisualizationPage() {
       color: "#dc2626", 
       icon: Shield,
       description: "Critical and high-severity threats only"
-    },
-    { 
-      id: "flows", 
-      name: "Network Flows", 
-      color: "#3b82f6", 
-      icon: Activity,
-      description: "Total network traffic flows"
-    },
-    { id: "bytes", name: "Bytes Transferred", color: "#06b6d4", icon: BarChart3, description: "Total bytes transferred over time" }
+    }
   ]
 
   const periods = [
@@ -82,15 +82,37 @@ export default function TimeSeriesVisualizationPage() {
       })
       
       const response = await fetch(`/api/visualization/time-series?${params}`)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      let responseData;
+      
+      try {
+        responseData = await response.json();
+      } catch (parseError) {
+        console.error('Parse error:', parseError);
+        throw new Error('Failed to parse server response. Please try again.');
       }
       
-      const result = await response.json()
-      setData(result)
+      if (!response.ok) {
+        throw new Error(
+          responseData?.error || 
+          responseData?.details ||
+          `HTTP error! status: ${response.status} - ${response.statusText}`
+        );
+      }
+      
+      if (!responseData.success) {
+        throw new Error(responseData.error || 'Unknown error occurred');
+      }
+
+      // Validate response data structure
+      if (!Array.isArray(responseData.data)) {
+        throw new Error('Invalid data format received from server');
+      }
+      
+      setData(responseData)
     } catch (err) {
       console.error('Error fetching time-series data:', err)
       setError(err instanceof Error ? err.message : 'Failed to load time-series data')
+      setData(null)
     } finally {
       setLoading(false)
     }
@@ -130,16 +152,18 @@ export default function TimeSeriesVisualizationPage() {
 
   // Helper function to format values based on metric type
   const formatValue = (value: number, metric: string) => {
-    if (metric === 'bandwidth' || metric === 'bandwidth_with_alerts') {
-      return formatBytes(value)
-    } else if (metric === 'flows') {
-      return `${value.toLocaleString()} flows`
-    } else if (metric === 'alerts') {
-      return `${value} alert${value !== 1 ? 's' : ''}`
-    } else if (metric === 'threats') {
-      return `${value} threat${value !== 1 ? 's' : ''}`
+    switch (metric) {
+      case 'bandwidth':
+        return formatBytes(value)
+      case 'flows':
+        return `${value.toLocaleString()} flows`
+      case 'alerts':
+        return `${value} alert${value !== 1 ? 's' : ''}`
+      case 'threats':
+        return `${value} threat${value !== 1 ? 's' : ''}`
+      default:
+        return `${value}`
     }
-    return `${value}`
   }
 
   // Custom tooltip for security alerts
@@ -162,14 +186,9 @@ export default function TimeSeriesVisualizationPage() {
               {payload[0].value > 0 ? 'Security attention required' : 'No threats detected'}
             </p>
           )}
-          {isBandwidthMetric && payload[0].value > 1000000000 && (
+          {selectedMetric === 'bandwidth' && payload[0].value > 1000000000 && (
             <p className="text-red-400 text-sm mt-1">
               ⚠️ High bandwidth usage detected
-            </p>
-          )}
-          {selectedMetric === 'bandwidth_with_alerts' && payload.length > 1 && (
-            <p className="text-amber-400 text-sm mt-1">
-              Alert Risk: {(payload[1].value * 100).toFixed(2)}%
             </p>
           )}
         </div>
@@ -179,406 +198,445 @@ export default function TimeSeriesVisualizationPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-gradient-to-br from-black via-purple-950/40 to-gray-950 text-zinc-100 relative">
-      {/* Grid pattern overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
-
-      <header className="border-b border-purple-500/20 bg-black/80 backdrop-blur-xl sticky top-0 z-50 relative">
-        <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
-                <ShieldCheck className="h-5 w-5 text-white" />
-              </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                LEVANT AI
-              </h1>
-            </Link>
-
-            {/* Centered Navigation */}
-            <div className="absolute left-1/2 transform -translate-x-1/2">
-              <nav className="flex items-center gap-6">
-                <Link href="/dashboard" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Dashboard
-                </Link>
-                <Link href="/chat" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Chat
-                </Link>
-                <Link href="/alerts" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Alerts
-                </Link>
-                <Link href="/reports" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Reports
-                </Link>
-                <Link href="/visualization" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Visualization
-                </Link>
-              </nav>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <Link 
-                href="/alerts" 
-                className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20 transition-colors" 
-                title="View Security Alerts"
-              >
-                <AlertTriangle className="h-5 w-5" />
+    <main className="flex min-h-screen flex-col bg-[#0B0B0F] text-zinc-100">
+      <div className="relative flex-1 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-900/40 via-[#0B0B0F] to-[#0B0B0F]">
+        <header className="border-b border-purple-500/20 bg-black/80 backdrop-blur-xl sticky top-0 z-50 relative">
+          <div className="mx-auto max-w-7xl px-6 py-4">
+            <div className="flex items-center justify-between">
+              <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
+                  <ShieldCheck className="h-5 w-5 text-white" />
+                </div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                  LEVANT AI
+                </h1>
               </Link>
-              <button className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20">
-                <Bell className="h-5 w-5" />
-              </button>
-              <ProfileDropdown />
+
+              {/* Centered Navigation */}
+              <div className="absolute left-1/2 transform -translate-x-1/2">
+                <nav className="flex items-center gap-6">
+                  <Link href="/dashboard" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Dashboard
+                  </Link>
+                  <Link href="/chat" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Chat
+                  </Link>
+                  <Link href="/alerts" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Alerts
+                  </Link>
+                  <Link href="/reports" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Reports
+                  </Link>
+                  <Link href="/visualization" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Visualization
+                  </Link>
+                </nav>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <Link 
+                  href="/alerts" 
+                  className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20 transition-colors" 
+                  title="View Security Alerts"
+                >
+                  <AlertTriangle className="h-5 w-5" />
+                </Link>
+                <NotificationBell />
+                <ProfileDropdown />
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Content */}
-      <main className="relative py-8">
-        <div className="relative mx-auto max-w-7xl px-6">
-          {/* Breadcrumb Navigation */}
-          <div className="mb-6">
-            <Link 
-              href="/visualization" 
-              className="inline-flex items-center gap-2 text-purple-300 hover:text-purple-200 transition-colors text-sm font-medium"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Visualizations
-            </Link>
-          </div>
+        <main className="relative py-8">
+          <div className="relative mx-auto max-w-7xl px-6">
+            {/* Breadcrumb Navigation */}
+            <div className="mb-6">
+              <Link 
+                href="/visualization" 
+                className="inline-flex items-center gap-2 text-purple-300 hover:text-purple-200 transition-colors text-sm font-medium"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Visualizations
+              </Link>
+            </div>
 
-          {/* Page Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-500/20 p-3 border border-blue-400/30 backdrop-blur-sm">
-                <LineChart className="h-6 w-6 text-blue-300" />
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold text-white">Network Security & Bandwidth Timeline</h1>
-                <p className="text-lg text-zinc-200 mt-1">Real-time visualization of security events, threats, and network bandwidth analysis</p>
+            {/* Page Header */}
+            <div className="mb-8">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-blue-500/20 p-3 border border-blue-400/30 backdrop-blur-sm">
+                  <LineChart className="h-6 w-6 text-blue-300" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-bold text-white">Network Security & Bandwidth Timeline</h1>
+                  <p className="text-lg text-zinc-200 mt-1">Real-time visualization of security events, threats, and network bandwidth analysis</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Controls */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            {/* Metric Selection */}
-            <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-blue-400" />
-                  Analysis Metrics
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {metrics.map((metric) => {
-                    const IconComponent = metric.icon
-                    return (
+            {/* Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              {/* Metric Selection */}
+              <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-white text-lg flex items-center gap-2">
+                    <Activity className="h-5 w-5 text-blue-400" />
+                    Analysis Metrics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {metrics.map((metric) => {
+                      const IconComponent = metric.icon
+                      return (
+                        <button
+                          key={metric.id}
+                          onClick={() => setSelectedMetric(metric.id)}
+                          className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors ${
+                            selectedMetric === metric.id
+                              ? 'bg-blue-500/20 border border-blue-400/30'
+                              : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/30'
+                          }`}
+                        >
+                          <IconComponent className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: metric.color }} />
+                          <div className="text-left">
+                            <div className="text-white font-medium">{metric.name}</div>
+                            <div className="text-xs text-zinc-400 mt-1">{metric.description}</div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Period Selection */}
+              <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-white text-lg flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-blue-400" />
+                    Time Period
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {periods.map((period) => (
                       <button
-                        key={metric.id}
-                        onClick={() => setSelectedMetric(metric.id)}
-                        className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors ${
-                          selectedMetric === metric.id
+                        key={period.id}
+                        onClick={() => {
+                          setSelectedPeriod(period.id)
+                          setSelectedGranularity(period.granularities[0])
+                        }}
+                        className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                          selectedPeriod === period.id
                             ? 'bg-blue-500/20 border border-blue-400/30'
                             : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/30'
                         }`}
                       >
-                        <IconComponent className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: metric.color }} />
-                        <div className="text-left">
-                          <div className="text-white font-medium">{metric.name}</div>
-                          <div className="text-xs text-zinc-400 mt-1">{metric.description}</div>
-                        </div>
+                        <span className="text-white font-medium">{period.name}</span>
                       </button>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Period Selection */}
-            <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-blue-400" />
-                  Time Period
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {periods.map((period) => (
-                    <button
-                      key={period.id}
-                      onClick={() => {
-                        setSelectedPeriod(period.id)
-                        setSelectedGranularity(period.granularities[0])
-                      }}
-                      className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                        selectedPeriod === period.id
-                          ? 'bg-blue-500/20 border border-blue-400/30'
-                          : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/30'
-                      }`}
-                    >
-                      <span className="text-white font-medium">{period.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Granularity Selection */}
-            <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-blue-400" />
-                  Granularity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {selectedPeriodInfo?.granularities.map((granularity) => (
-                    <button
-                      key={granularity}
-                      onClick={() => setSelectedGranularity(granularity)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                        selectedGranularity === granularity
-                          ? 'bg-blue-500/20 border border-blue-400/30'
-                          : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/30'
-                      }`}
-                    >
-                      <span className="text-white font-medium">{granularity}</span>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Main Chart */}
-          <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl mb-6">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <LineChart className="h-5 w-5 text-blue-400" />
-                    {selectedMetricInfo?.name} Timeline
-                  </CardTitle>
-                  <CardDescription>
-                    {selectedPeriodInfo?.name} • {selectedGranularity} intervals • {data?.total_points || 0} data points
-                    {selectedMetric === 'bandwidth_with_alerts' && (
-                      <span className="ml-2 text-amber-400">• Real-time threat correlation</span>
-                    )}
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge 
-                    className={`${
-                      selectedMetric === 'alerts' || selectedMetric === 'threats' 
-                        ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                        : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                    }`}
-                  >
-                    {loading ? "Loading..." : "Live Security Data"}
-                  </Badge>
-                  <button
-                    onClick={() => fetchData(selectedMetric, selectedPeriod, selectedGranularity)}
-                    disabled={loading}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-3 py-1 rounded border border-blue-500 hover:border-blue-400 transition-colors flex items-center gap-1 text-sm"
-                  >
-                    🔄 Refresh
-                  </button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="h-96 p-6">
-                {loading ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-2"></div>
-                      <p className="text-zinc-400">Loading {isBandwidthMetric ? 'bandwidth' : 'security'} data...</p>
-                    </div>
+                    ))}
                   </div>
-                ) : error ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <p className="text-red-400 mb-2">⚠️ {error}</p>
-                      <p className="text-zinc-500 text-sm">Showing fallback data</p>
-                    </div>
-                  </div>
-                ) : data?.data && data.data.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    {selectedMetric === 'bandwidth_with_alerts' ? (
-                      <AreaChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis 
-                          dataKey="timestamp" 
-                          stroke="#9ca3af"
-                          fontSize={12}
-                          tickFormatter={formatTimestamp}
-                        />
-                        <YAxis stroke="#9ca3af" fontSize={12} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend />
-                        <Area 
-                          type="monotone" 
-                          dataKey="value" 
-                          stroke="#10b981"
-                          fill="rgba(16, 185, 129, 0.1)"
-                          strokeWidth={2}
-                          name="Bandwidth"
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="alert_probability" 
-                          stroke="#f59e0b"
-                          strokeWidth={2}
-                          dot={{ fill: "#f59e0b", strokeWidth: 2, r: 3 }}
-                          name="Alert Probability"
-                        />
-                      </AreaChart>
-                    ) : (selectedMetric === 'alerts' || selectedMetric === 'threats') ? (
-                      <AreaChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                        <defs>
-                          <linearGradient id="alertGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={selectedMetricInfo?.color || "#ef4444"} stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor={selectedMetricInfo?.color || "#ef4444"} stopOpacity={0.1}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis 
-                          dataKey="timestamp" 
-                          stroke="#9ca3af"
-                          fontSize={12}
-                          tickFormatter={formatTimestamp}
-                        />
-                        <YAxis stroke="#9ca3af" fontSize={12} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend />
-                        <Area
-                          type="monotone"
-                          dataKey="value"
-                          stroke={selectedMetricInfo?.color || "#ef4444"}
-                          fill="url(#alertGradient)"
-                          strokeWidth={2}
-                          name={selectedMetricInfo?.name}
-                        />
-                      </AreaChart>
-                    ) : (
-                      <RechartsLineChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis 
-                          dataKey="timestamp" 
-                          stroke="#9ca3af"
-                          fontSize={12}
-                          tickFormatter={formatTimestamp}
-                        />
-                        <YAxis stroke="#9ca3af" fontSize={12} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend />
-                        <Line 
-                          type="monotone" 
-                          dataKey="value" 
-                          stroke={selectedMetricInfo?.color || "#3b82f6"}
-                          strokeWidth={2}
-                          dot={{ fill: selectedMetricInfo?.color || "#3b82f6", strokeWidth: 2, r: 4 }}
-                          name={selectedMetricInfo?.name}
-                        />
-                      </RechartsLineChart>
-                    )}
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <p className="text-zinc-400">No data available for the selected period</p>
-                      <p className="text-zinc-500 text-sm mt-2">Try adjusting the time period or metric selection</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Statistics */}
-          {data?.data && data.data.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card className="bg-gray-900/80 border-green-400/40 backdrop-blur-xl">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Total Data Points</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{data.total_points}</div>
                 </CardContent>
               </Card>
 
+              {/* Granularity Selection */}
               <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">
-                    {isBandwidthMetric ? 'Average Bandwidth' : 'Average Value'}
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-white text-lg flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-blue-400" />
+                    Granularity
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-white">
-                    {isBandwidthMetric ? 
-                      formatBytes(data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length) :
-                      (data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length).toFixed(1)
-                    }
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">
-                    {isBandwidthMetric ? 'Peak Bandwidth' : 'Peak Value'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">
-                    {isBandwidthMetric ? 
-                      formatBytes(Math.max(...data.data.map(d => d.value))) :
-                      Math.max(...data.data.map(d => d.value))
-                    }
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">
-                    {selectedMetric === 'bandwidth_with_alerts' ? 'Max Alert Risk' : 'Trend'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">
-                    {selectedMetric === 'bandwidth_with_alerts' ? 
-                      `${(Math.max(...data.data.map(d => d.alert_probability || 0)) * 100).toFixed(1)}%` :
-                      (data.data.length > 1 && data.data[data.data.length - 1].value > data.data[0].value ? "📈" : "📉")
-                    }
+                  <div className="space-y-2">
+                    {selectedPeriodInfo?.granularities.map((granularity) => (
+                      <button
+                        key={granularity}
+                        onClick={() => setSelectedGranularity(granularity)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                          selectedGranularity === granularity
+                            ? 'bg-blue-500/20 border border-blue-400/30'
+                            : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/30'
+                        }`}
+                      >
+                        <span className="text-white font-medium">{granularity}</span>
+                      </button>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
             </div>
-          )}
-        </div>
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-purple-500/20 bg-black/90 backdrop-blur-xl py-12 relative mt-16">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
-                <ShieldCheck className="h-4 w-4 text-white" />
+            {/* Error Display */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-red-500 font-medium">Error Loading Data</h3>
+                    <p className="text-red-200/80 text-sm mt-1">{error}</p>
+                    <button 
+                      onClick={() => fetchData(selectedMetric, selectedPeriod, selectedGranularity)}
+                      className="mt-3 text-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-2"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Try Again
+                    </button>
+                  </div>
+                </div>
               </div>
-              <span className="font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                LEVANT AI
-              </span>
-            </div>
-            <p className="text-sm text-zinc-400">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
+            )}
+
+            {/* Loading State */}
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+                  <p className="text-sm text-zinc-400">Loading visualization data...</p>
+                </div>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!loading && !error && (!data || !data.data || data.data.length === 0) && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="rounded-full bg-purple-500/10 p-3 mb-4">
+                  <LineChart className="h-6 w-6 text-purple-500" />
+                </div>
+                <h3 className="text-lg font-medium text-zinc-200">No Data Available</h3>
+                <p className="text-sm text-zinc-400 mt-2 max-w-md">
+                  {data?.note || 'No data found for the selected time period and metric.'}
+                </p>
+              </div>
+            )}
+
+            {/* Main Chart */}
+            <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl mb-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <LineChart className="h-5 w-5 text-blue-400" />
+                      {selectedMetricInfo?.name} Timeline
+                    </CardTitle>
+                    <CardDescription>
+                      {selectedPeriodInfo?.name} • {selectedGranularity} intervals • {data?.total_points || 0} data points
+                      {selectedMetric === 'bandwidth_with_alerts' && (
+                        <span className="ml-2 text-amber-400">• Real-time threat correlation</span>
+                      )}
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge 
+                      className={`${
+                        selectedMetric === 'alerts' || selectedMetric === 'threats' 
+                          ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                          : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                      }`}
+                    >
+                      {loading ? "Loading..." : "Live Security Data"}
+                    </Badge>
+                    <button
+                      onClick={() => fetchData(selectedMetric, selectedPeriod, selectedGranularity)}
+                      disabled={loading}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-3 py-1 rounded border border-blue-500 hover:border-blue-400 transition-colors flex items-center gap-1 text-sm"
+                    >
+                      🔄 Refresh
+                    </button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="h-96 p-6">
+                  {loading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-2"></div>
+                        <p className="text-zinc-400">Loading {isBandwidthMetric ? 'bandwidth' : 'security'} data...</p>
+                      </div>
+                    </div>
+                  ) : error ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <p className="text-red-400 mb-2">⚠️ {error}</p>
+                        <p className="text-zinc-500 text-sm">Showing fallback data</p>
+                      </div>
+                    </div>
+                  ) : data?.data && data.data.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      {selectedMetric === 'bandwidth_with_alerts' ? (
+                        <AreaChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            stroke="#9ca3af"
+                            fontSize={12}
+                            tickFormatter={formatTimestamp}
+                          />
+                          <YAxis stroke="#9ca3af" fontSize={12} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend />
+                          <Area 
+                            type="monotone" 
+                            dataKey="value" 
+                            stroke="#10b981"
+                            fill="rgba(16, 185, 129, 0.1)"
+                            strokeWidth={2}
+                            name="Bandwidth"
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="alert_probability" 
+                            stroke="#f59e0b"
+                            strokeWidth={2}
+                            dot={{ fill: "#f59e0b", strokeWidth: 2, r: 3 }}
+                            name="Alert Probability"
+                          />
+                        </AreaChart>
+                      ) : (selectedMetric === 'alerts' || selectedMetric === 'threats') ? (
+                        <AreaChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                          <defs>
+                            <linearGradient id="alertGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={selectedMetricInfo?.color || "#ef4444"} stopOpacity={0.8}/>
+                              <stop offset="95%" stopColor={selectedMetricInfo?.color || "#ef4444"} stopOpacity={0.1}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            stroke="#9ca3af"
+                            fontSize={12}
+                            tickFormatter={formatTimestamp}
+                          />
+                          <YAxis stroke="#9ca3af" fontSize={12} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend />
+                          <Area
+                            type="monotone"
+                            dataKey="value"
+                            stroke={selectedMetricInfo?.color || "#ef4444"}
+                            fill="url(#alertGradient)"
+                            strokeWidth={2}
+                            name={selectedMetricInfo?.name}
+                          />
+                        </AreaChart>
+                      ) : (
+                        <RechartsLineChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            stroke="#9ca3af"
+                            fontSize={12}
+                            tickFormatter={formatTimestamp}
+                          />
+                          <YAxis stroke="#9ca3af" fontSize={12} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend />
+                          <Line 
+                            type="monotone" 
+                            dataKey="value" 
+                            stroke={selectedMetricInfo?.color || "#3b82f6"}
+                            strokeWidth={2}
+                            dot={{ fill: selectedMetricInfo?.color || "#3b82f6", strokeWidth: 2, r: 4 }}
+                            name={selectedMetricInfo?.name}
+                          />
+                        </RechartsLineChart>
+                      )}
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <p className="text-zinc-400">No data available for the selected period</p>
+                        <p className="text-zinc-500 text-sm mt-2">Try adjusting the time period or metric selection</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Statistics */}
+            {data?.data && data.data.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <Card className="bg-gray-900/80 border-green-400/40 backdrop-blur-xl">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-zinc-400">Total Data Points</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-white">{data.total_points}</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-zinc-400">
+                      {isBandwidthMetric ? 'Average Bandwidth' : 'Average Value'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-white">
+                      {isBandwidthMetric ? 
+                        formatBytes(data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length) :
+                        (data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length).toFixed(1)
+                      }
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-zinc-400">
+                      {isBandwidthMetric ? 'Peak Bandwidth' : 'Peak Value'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-white">
+                      {isBandwidthMetric ? 
+                        formatBytes(Math.max(...data.data.map(d => d.value))) :
+                        Math.max(...data.data.map(d => d.value))
+                      }
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-zinc-400">
+                      {selectedMetric === 'bandwidth_with_alerts' ? 'Max Alert Risk' : 'Trend'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-white">
+                      {selectedMetric === 'bandwidth_with_alerts' ? 
+                        `${(Math.max(...data.data.map(d => d.alert_probability || 0)) * 100).toFixed(1)}%` :
+                        (data.data.length > 1 && data.data[data.data.length - 1].value > data.data[0].value ? "📈" : "📉")
+                      }
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
-        </div>
-      </footer>
+        </main>
+
+        {/* Footer */}
+        <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative mt-16">
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
+                  <ShieldCheck className="h-4 w-4 text-white" />
+                </div>
+                <span className="font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                  LEVANT AI
+                </span>
+              </div>
+              <p className="text-sm text-zinc-400">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
+            </div>
+          </div>
+        </footer>
+      </div>
     </main>
   )
 } 

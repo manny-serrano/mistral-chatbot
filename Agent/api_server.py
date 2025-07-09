@@ -1896,35 +1896,179 @@ async def fetch_fresh_stats():
 async def get_time_series_data(
     metric: str = "alerts", 
     period: str = "24h",
-    granularity: str = "1h"
+    granularity: str = "1h",
+    source_ip: Optional[str] = None,
+    dest_ip: Optional[str] = None
 ):
     """Get time-series data for various metrics."""
     try:
-        # Simple test data to ensure endpoint works
+        # Connect to Neo4j if not already connected
+        if not neo4j_helper.driver:
+            if not neo4j_helper.connect():
+                raise HTTPException(status_code=503, detail="Database connection failed")
+
+        # Calculate time range
+        end_time = datetime.now()
+        if period == "24h":
+            start_time = end_time - timedelta(hours=24)
+        elif period == "7d":
+            start_time = end_time - timedelta(days=7)
+        elif period == "30d":
+            start_time = end_time - timedelta(days=30)
+        else:
+            raise ValueError("Invalid period. Must be one of: 24h, 7d, 30d")
+
+        # Build IP filter for queries
+        ip_filter = ""
+        params = {
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat()
+        }
+        if source_ip and dest_ip:
+            ip_filter = "AND f.sourceIPv4Address = $source_ip AND f.destinationIPv4Address = $dest_ip"
+            params.update({"source_ip": source_ip, "dest_ip": dest_ip})
+        elif source_ip:
+            ip_filter = "AND (f.sourceIPv4Address = $source_ip OR f.destinationIPv4Address = $source_ip)"
+            params.update({"source_ip": source_ip})
+
+        # Prepare query based on metric
+        if metric == "bandwidth":
+            query = f"""
+                MATCH (f:Flow)
+                WHERE datetime(f.flowStartMilliseconds) >= datetime($start_time)
+                    AND datetime(f.flowStartMilliseconds) <= datetime($end_time)
+                    AND (f.malicious IS NULL OR f.malicious = false)
+                    AND (f.honeypot IS NULL OR f.honeypot = false)
+                    {ip_filter}
+                RETURN 
+                    f.flowStartMilliseconds as timestamp,
+                    coalesce(f.octetTotalCount, 0) + coalesce(f.reverseOctetTotalCount, 0) as value
+                ORDER BY timestamp
+            """
+        elif metric == "flows":
+            query = f"""
+                MATCH (f:Flow)
+                WHERE datetime(f.flowStartMilliseconds) >= datetime($start_time)
+                    AND datetime(f.flowStartMilliseconds) <= datetime($end_time)
+                    AND (f.malicious IS NULL OR f.malicious = false)
+                    AND (f.honeypot IS NULL OR f.honeypot = false)
+                    {ip_filter}
+                RETURN 
+                    f.flowStartMilliseconds as timestamp,
+                    count(*) as value
+                ORDER BY timestamp
+            """
+        elif metric == "alerts" or metric == "threats":
+            severity_threshold = 0.6 if metric == "threats" else 0.1
+            query = f"""
+                MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port)
+                WHERE datetime(f.flowStartMilliseconds) >= datetime($start_time)
+                    AND datetime(f.flowStartMilliseconds) <= datetime($end_time)
+                    AND (f.malicious IS NULL OR f.malicious = false)
+                    AND (f.honeypot IS NULL OR f.honeypot = false)
+                    {ip_filter}
+                WITH 
+                    f.flowStartMilliseconds as timestamp,
+                    size(collect(DISTINCT dst_port.port)) as num_ports,
+                    sum(coalesce(f.octetTotalCount, 0)) as bytes,
+                    sum(coalesce(f.reverseOctetTotalCount, 0)) as reverse_bytes,
+                    sum(coalesce(f.packetTotalCount, 0)) as packets
+                WHERE bytes > 0 AND reverse_bytes > 0
+                WITH 
+                    timestamp,
+                    num_ports,
+                    bytes / reverse_bytes as pcr,
+                    packets / bytes as por
+                WHERE pcr > 0 AND por > 0
+                WITH 
+                    timestamp,
+                    1 / (1 + exp(-(0.00243691 * num_ports + 0.00014983 * pcr + 0.00014983 * por - 3.93433105))) as alert_prob
+                WHERE alert_prob >= {severity_threshold}
+                RETURN timestamp, count(*) as value
+                ORDER BY timestamp
+            """
+        else:
+            raise ValueError(f"Invalid metric: {metric}")
+
+        # Execute query with proper session handling and timeout
+        session = await neo4j_helper.get_session()
+        try:
+            result = await asyncio.wait_for(
+                session.run(query, params),
+                timeout=10.0  # 10 second timeout
+            )
+            records = await result.data()
+        finally:
+            neo4j_helper.release_session(session)
+
+        # Group data by time intervals
+        time_groups = {}
+        for record in records:
+            timestamp_str = record["timestamp"]
+            try:
+                # Handle different timestamp formats
+                if isinstance(timestamp_str, Neo4jDateTime):
+                    timestamp = datetime.fromtimestamp(timestamp_str.to_native().timestamp())
+                else:
+                    # Try different parsing methods
+                    try:
+                        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    except ValueError:
+                        timestamp = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%f%z")
+                
+                value = float(record["value"])
+
+                # Skip data outside our time range
+                if timestamp < start_time or timestamp > end_time:
+                    continue
+
+                # Create time bucket based on granularity
+                if granularity == "30m":
+                    bucket = timestamp.replace(minute=30 * (timestamp.minute // 30), second=0, microsecond=0)
+                elif granularity == "1h":
+                    bucket = timestamp.replace(minute=0, second=0, microsecond=0)
+                elif granularity == "6h":
+                    bucket = timestamp.replace(hour=6 * (timestamp.hour // 6), minute=0, second=0, microsecond=0)
+                elif granularity == "1d":
+                    bucket = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+                else:
+                    raise ValueError("Invalid granularity. Must be one of: 30m, 1h, 6h, 1d")
+
+                bucket_key = bucket.isoformat()
+                if bucket_key not in time_groups:
+                    time_groups[bucket_key] = {"timestamp": bucket_key, "value": 0, "metric": metric}
+                time_groups[bucket_key]["value"] += value
+
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error processing timestamp {timestamp_str}: {e}")
+                continue
+
+        # Convert to list and sort by timestamp
+        data = list(time_groups.values())
+        data.sort(key=lambda x: x["timestamp"])
+
         return {
-            "data": [
-                {"timestamp": "2025-07-08T10:00:00", "value": 25, "metric": metric},
-                {"timestamp": "2025-07-08T11:00:00", "value": 30, "metric": metric},
-                {"timestamp": "2025-07-08T12:00:00", "value": 15, "metric": metric},
-                {"timestamp": "2025-07-08T13:00:00", "value": 40, "metric": metric},
-                {"timestamp": "2025-07-08T14:00:00", "value": 35, "metric": metric}
-            ],
+            "data": data,
             "metric": metric,
             "period": period,
             "granularity": granularity,
-            "total_points": 5,
+            "total_points": len(data),
             "success": True,
             "timestamp": datetime.now().isoformat()
         }
-        
+
+    except asyncio.TimeoutError:
+        logger.error("Neo4j query timed out")
+        raise HTTPException(status_code=504, detail="Database query timed out")
+    except ValueError as e:
+        logger.error(f"Validation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting time-series data: {e}")
-        return {
-            "data": [],
-            "error": str(e),
-            "success": False,
-            "timestamp": datetime.now().isoformat()
-        }
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch time-series data: {str(e)}"
+        )
 
 @app.get("/visualization/bar-chart")
 async def get_bar_chart_data(chart_type: str = "protocols"):

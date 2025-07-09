@@ -5,22 +5,12 @@ import type React from "react"
 import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ShieldCheck, Eye, EyeOff, Mail, Lock, Github, Chrome } from "lucide-react"
+import { ShieldCheck } from "lucide-react"
 import DukeSSOButton from "@/components/auth/duke-sso-button"
 
 function LoginForm() {
-  const [showPassword, setShowPassword] = useState(false)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [rememberMe, setRememberMe] = useState(false)
   const [redirectPath, setRedirectPath] = useState("/dashboard")
-  
   const searchParams = useSearchParams()
 
   useEffect(() => {
@@ -30,14 +20,6 @@ function LoginForm() {
       setRedirectPath(redirect)
     }
   }, [searchParams])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Handle login logic here
-    console.log("Login attempt:", { email, password, rememberMe })
-    // Redirect to the intended page after successful login
-    window.location.href = redirectPath
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 relative overflow-hidden">
@@ -70,12 +52,6 @@ function LoginForm() {
               <Link href="/about" className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors">
                 About
               </Link>
-              <Link
-                href="/signup"
-                className="text-sm font-medium text-zinc-400 hover:text-purple-300 transition-colors"
-              >
-                Sign Up
-              </Link>
             </nav>
           </div>
         </div>
@@ -107,121 +83,6 @@ function LoginForm() {
                   className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg shadow-blue-500/25"
                   redirectPath={redirectPath}
                 />
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <Separator className="w-full bg-purple-500/20" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-gray-900 px-2 text-zinc-400">Or use local account</span>
-                  </div>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-white">
-                    Email
-                  </Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="Enter your email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 bg-gray-800/50 border-purple-400/30 text-white placeholder:text-zinc-400 focus:border-purple-400"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password" className="text-white">
-                    Password
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 pr-10 bg-gray-800/50 border-purple-400/30 text-white placeholder:text-zinc-400 focus:border-purple-400"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-400 hover:text-zinc-200"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="remember"
-                      checked={rememberMe}
-                      onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                      className="border-purple-400/30 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                    />
-                    <Label htmlFor="remember" className="text-sm text-zinc-300">
-                      Remember me
-                    </Label>
-                  </div>
-                  <Link
-                    href="/forgot-password"
-                    className="text-sm text-purple-300 hover:text-purple-200 transition-colors"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white shadow-lg shadow-purple-500/25"
-                >
-                  Sign In
-                </Button>
-              </form>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <Separator className="w-full bg-purple-500/20" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-gray-900 px-2 text-zinc-400">Or continue with</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  variant="outline"
-                  className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent"
-                >
-                  <Github className="mr-2 h-4 w-4" />
-                  GitHub
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent"
-                >
-                  <Chrome className="mr-2 h-4 w-4" />
-                  Google
-                </Button>
-              </div>
-
-              <div className="text-center">
-                <p className="text-sm text-zinc-400">
-                  Don't have an account?{" "}
-                  <Link href="/signup" className="text-purple-300 hover:text-purple-200 transition-colors">
-                    Sign up
-                  </Link>
-                </p>
               </div>
             </CardContent>
           </Card>
@@ -250,16 +111,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-900 text-zinc-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="rounded-full bg-gradient-to-r from-purple-500 to-violet-500 p-3 shadow-lg shadow-purple-500/25 mx-auto mb-4 w-fit">
-            <ShieldCheck className="h-8 w-8 text-white" />
-          </div>
-          <p className="text-zinc-300">Loading...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<div>Loading...</div>}>
       <LoginForm />
     </Suspense>
   )

@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { ShieldCheck, Bell, Activity, ArrowLeft, Clock, Grid3X3, TrendingUp, Wifi, Shield } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
+import { NotificationBell } from "@/components/ui/notification-bell"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useEffect, useState } from "react"
@@ -479,237 +480,234 @@ export default function HeatmapVisualizationPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-gradient-to-br from-black via-purple-950/40 to-gray-950 text-zinc-100 relative">
-      {/* Grid pattern overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
+    <main className="flex min-h-screen flex-col bg-[#0B0B0F] text-zinc-100">
+      <div className="relative flex-1 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-900/40 via-[#0B0B0F] to-[#0B0B0F]">
+        <header className="border-b border-purple-500/20 bg-black/80 backdrop-blur-xl sticky top-0 z-50 relative">
+          <div className="mx-auto max-w-7xl px-6 py-4">
+            <div className="flex items-center justify-between">
+              <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
+                  <ShieldCheck className="h-5 w-5 text-white" />
+                </div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                  LEVANT AI
+                </h1>
+              </Link>
 
-      <header className="border-b border-purple-500/20 bg-black/80 backdrop-blur-xl sticky top-0 z-50 relative">
-        <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
-                <ShieldCheck className="h-5 w-5 text-white" />
+              {/* Centered Navigation */}
+              <div className="absolute left-1/2 transform -translate-x-1/2">
+                <nav className="flex items-center gap-6">
+                  <Link href="/dashboard" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Dashboard
+                  </Link>
+                  <Link href="/chat" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Chat
+                  </Link>
+                  <Link href="/alerts" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Alerts
+                  </Link>
+                  <Link href="/reports" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Reports
+                  </Link>
+                  <Link href="/visualization" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
+                    Visualization
+                  </Link>
+                </nav>
               </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                LEVANT AI
-              </h1>
-            </Link>
 
-            {/* Centered Navigation */}
-            <div className="absolute left-1/2 transform -translate-x-1/2">
-              <nav className="flex items-center gap-6">
-                <Link href="/dashboard" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Dashboard
-                </Link>
-                <Link href="/chat" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Chat
-                </Link>
-                <Link href="/alerts" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Alerts
-                </Link>
-                <Link href="/reports" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Reports
-                </Link>
-                <Link href="/visualization" className="text-sm font-medium text-zinc-300 hover:text-purple-300 transition-colors">
-                  Visualization
-                </Link>
-              </nav>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <button className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20">
-                <Bell className="h-5 w-5" />
-              </button>
-              <ProfileDropdown />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="relative py-8">
-        <div className="relative mx-auto max-w-7xl px-6">
-          {/* Breadcrumb Navigation */}
-          <div className="mb-6">
-            <Link 
-              href="/visualization" 
-              className="inline-flex items-center gap-2 text-purple-300 hover:text-purple-200 transition-colors text-sm font-medium"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Visualizations
-            </Link>
-          </div>
-
-          {/* Page Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-amber-500/20 p-3 border border-amber-400/30 backdrop-blur-sm">
-                <Activity className="h-6 w-6 text-amber-300" />
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold text-white">Heatmap</h1>
-                <p className="text-lg text-zinc-200 mt-1">Intensity-based visualizations for pattern recognition</p>
+              <div className="flex items-center gap-4">
+                <NotificationBell />
+                <ProfileDropdown />
               </div>
             </div>
           </div>
+        </header>
 
-          {/* Controls */}
-          <div className="mb-6">
-            <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  <Grid3X3 className="h-5 w-5 text-amber-400" />
-                  Heatmap Type
-                </CardTitle>
+        {/* Main Content */}
+        <main className="relative py-8">
+          <div className="relative mx-auto max-w-7xl px-6">
+            {/* Breadcrumb Navigation */}
+            <div className="mb-6">
+              <Link 
+                href="/visualization" 
+                className="inline-flex items-center gap-2 text-purple-300 hover:text-purple-200 transition-colors text-sm font-medium"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Visualizations
+              </Link>
+            </div>
+
+            {/* Page Header */}
+            <div className="mb-8">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-amber-500/20 p-3 border border-amber-400/30 backdrop-blur-sm">
+                  <Activity className="h-6 w-6 text-amber-300" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-bold text-white">Heatmap</h1>
+                  <p className="text-lg text-zinc-200 mt-1">Intensity-based visualizations for pattern recognition</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="mb-6">
+              <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-white text-lg flex items-center gap-2">
+                    <Grid3X3 className="h-5 w-5 text-amber-400" />
+                    Heatmap Type
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {heatmapTypes.map((heatmap) => {
+                      const IconComponent = heatmap.icon
+                      return (
+                        <button
+                          key={heatmap.id}
+                          onClick={() => setSelectedHeatmapType(heatmap.id)}
+                          className={`flex items-start gap-3 p-4 rounded-lg transition-colors text-left ${
+                            selectedHeatmapType === heatmap.id
+                              ? 'bg-amber-500/20 border border-amber-400/30'
+                              : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/30'
+                          }`}
+                        >
+                          <IconComponent className="h-5 w-5 mt-0.5" style={{ color: heatmap.color }} />
+                          <div>
+                            <div className="text-white font-medium">{heatmap.name}</div>
+                            <div className="text-zinc-400 text-sm">{heatmap.description}</div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Heatmap */}
+            <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl mb-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-amber-400" />
+                      {selectedHeatmapInfo?.name} Heatmap
+                    </CardTitle>
+                    <CardDescription>
+                      {selectedHeatmapInfo?.description} • {data?.data.length || 0} data points
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+                      {loading ? "Loading..." : "Live Data"}
+                    </Badge>
+                    <button
+                      onClick={() => fetchData(selectedHeatmapType)}
+                      disabled={loading}
+                      className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 px-3 py-1 rounded border border-amber-500 hover:border-amber-400 transition-colors flex items-center gap-1 text-sm"
+                    >
+                      🔄 Refresh
+                    </button>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {heatmapTypes.map((heatmap) => {
-                    const IconComponent = heatmap.icon
-                    return (
-                      <button
-                        key={heatmap.id}
-                        onClick={() => setSelectedHeatmapType(heatmap.id)}
-                        className={`flex items-start gap-3 p-4 rounded-lg transition-colors text-left ${
-                          selectedHeatmapType === heatmap.id
-                            ? 'bg-amber-500/20 border border-amber-400/30'
-                            : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/30'
-                        }`}
-                      >
-                        <IconComponent className="h-5 w-5 mt-0.5" style={{ color: heatmap.color }} />
-                        <div>
-                          <div className="text-white font-medium">{heatmap.name}</div>
-                          <div className="text-zinc-400 text-sm">{heatmap.description}</div>
-                        </div>
-                      </button>
-                    )
-                  })}
+              <CardContent className="p-0">
+                <div className="min-h-[400px]">
+                  {loading ? (
+                    <div className="flex items-center justify-center h-96">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400 mx-auto mb-2"></div>
+                        <p className="text-zinc-400">Loading heatmap data...</p>
+                      </div>
+                    </div>
+                  ) : error ? (
+                    <div className="flex items-center justify-center h-96">
+                      <div className="text-center">
+                        <p className="text-red-400 mb-2">⚠️ {error}</p>
+                        <p className="text-zinc-500 text-sm">Showing fallback data</p>
+                      </div>
+                    </div>
+                  ) : data?.data && data.data.length > 0 ? (
+                    renderHeatmap()
+                  ) : (
+                    <div className="flex items-center justify-center h-96">
+                      <div className="text-center">
+                        <p className="text-zinc-400">No data available for the selected heatmap type</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
+
+            {/* Statistics */}
+            {data?.data && data.data.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-zinc-400">Data Points</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-white">{data.data.length}</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-900/80 border-green-400/40 backdrop-blur-xl">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-zinc-400">Max Value</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-white">
+                      {Math.max(...data.data.map(d => d.value))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-zinc-400">Average</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-white">
+                      {(data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length).toFixed(1)}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-zinc-400">Intensity</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-white">
+                      {Math.max(...data.data.map(d => d.value)) > 50 ? "🔥" : "📊"}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
+        </main>
 
-          {/* Main Heatmap */}
-          <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl mb-6">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-amber-400" />
-                    {selectedHeatmapInfo?.name} Heatmap
-                  </CardTitle>
-                  <CardDescription>
-                    {selectedHeatmapInfo?.description} • {data?.data.length || 0} data points
-                  </CardDescription>
+        {/* Footer */}
+        <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative mt-16">
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
+                  <ShieldCheck className="h-4 w-4 text-white" />
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
-                    {loading ? "Loading..." : "Live Data"}
-                  </Badge>
-                  <button
-                    onClick={() => fetchData(selectedHeatmapType)}
-                    disabled={loading}
-                    className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 px-3 py-1 rounded border border-amber-500 hover:border-amber-400 transition-colors flex items-center gap-1 text-sm"
-                  >
-                    🔄 Refresh
-                  </button>
-                </div>
+                <span className="font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                  LEVANT AI
+                </span>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="min-h-[400px]">
-                {loading ? (
-                  <div className="flex items-center justify-center h-96">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400 mx-auto mb-2"></div>
-                      <p className="text-zinc-400">Loading heatmap data...</p>
-                    </div>
-                  </div>
-                ) : error ? (
-                  <div className="flex items-center justify-center h-96">
-                    <div className="text-center">
-                      <p className="text-red-400 mb-2">⚠️ {error}</p>
-                      <p className="text-zinc-500 text-sm">Showing fallback data</p>
-                    </div>
-                  </div>
-                ) : data?.data && data.data.length > 0 ? (
-                  renderHeatmap()
-                ) : (
-                  <div className="flex items-center justify-center h-96">
-                    <div className="text-center">
-                      <p className="text-zinc-400">No data available for the selected heatmap type</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Statistics */}
-          {data?.data && data.data.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Data Points</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{data.data.length}</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-900/80 border-green-400/40 backdrop-blur-xl">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Max Value</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">
-                    {Math.max(...data.data.map(d => d.value))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Average</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">
-                    {(data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length).toFixed(1)}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-zinc-400">Intensity</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">
-                    {Math.max(...data.data.map(d => d.value)) > 50 ? "🔥" : "📊"}
-                  </div>
-                </CardContent>
-              </Card>
+              <p className="text-sm text-zinc-400">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
             </div>
-          )}
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-purple-500/20 bg-gray-950/90 backdrop-blur-xl py-12 relative mt-16">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="rounded-md bg-gradient-to-r from-purple-500 to-violet-500 p-1.5 shadow-lg shadow-purple-500/25">
-                <ShieldCheck className="h-4 w-4 text-white" />
-              </div>
-              <span className="font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                LEVANT AI
-              </span>
-            </div>
-            <p className="text-sm text-zinc-400">© 2025 LEVANT AI. Built for cybersecurity professionals.</p>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </main>
   )
 } 

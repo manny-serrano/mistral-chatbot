@@ -46,15 +46,14 @@ import {
   Download,
   Trash2,
   RefreshCw,
-  TrendingUp,
-  TrendingDown,
   MapPin,
   Shield,
   Wifi,
   Server,
   ChevronLeft,
   ChevronRight,
-  Bell,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 
@@ -322,102 +321,91 @@ export default function AlertsPage() {
     fetchAlertsWithGeolocation()
   }, [])
 
+  // Alert statistics
+  const alertStats = useMemo(() => {
+    const stats = {
+      total: alertsData.length,
+      critical: alertsData.filter(alert => alert.severity === "critical").length,
+      high: alertsData.filter(alert => alert.severity === "high").length,
+      medium: alertsData.filter(alert => alert.severity === "medium").length,
+      low: alertsData.filter(alert => alert.severity === "low").length,
+      resolved: alertsData.filter(alert => alert.status === "resolved").length,
+      investigating: alertsData.filter(alert => alert.status === "investigating").length,
+      escalated: alertsData.filter(alert => alert.status === "escalated").length,
+    }
+    return stats
+  }, [alertsData])
+
+  // Alert severity distribution
+  const severityDistribution = useMemo(() => {
+    const total = alertsData.length
+    if (total === 0) return { critical: 0, high: 0, medium: 0, low: 0 }
+
+    return {
+      critical: (alertsData.filter(alert => alert.severity === 'critical').length / total) * 100,
+      high: (alertsData.filter(alert => alert.severity === 'high').length / total) * 100,
+      medium: (alertsData.filter(alert => alert.severity === 'medium').length / total) * 100,
+      low: (alertsData.filter(alert => alert.severity === 'low').length / total) * 100
+    }
+  }, [alertsData])
+
+  // Alert status distribution
+  const statusDistribution = useMemo(() => {
+    const total = alertsData.length
+    if (total === 0) return { open: 0, investigating: 0, resolved: 0, escalated: 0 }
+
+    return {
+      open: (alertsData.filter(alert => alert.status === 'open').length / total) * 100,
+      investigating: (alertsData.filter(alert => alert.status === 'investigating').length / total) * 100,
+      resolved: (alertsData.filter(alert => alert.status === 'resolved').length / total) * 100,
+      escalated: (alertsData.filter(alert => alert.status === 'escalated').length / total) * 100
+    }
+  }, [alertsData])
+
   // Filter alerts based on current filters
   const filteredAlerts = useMemo(() => {
-    const filtered = alertsData.filter((alert) => {
-      // Severity filter
-      if (severityFilter !== "all" && alert.severity !== severityFilter) {
-        return false
-      }
-      // Type filter
-      if (typeFilter !== "all" && alert.type !== typeFilter) {
-        return false
-      }
-      // Status filter
-      if (statusFilter !== "all" && alert.status !== statusFilter) {
-        return false
-      }
-      // Time range filter
-      if (timeRangeFilter !== "all") {
-        const timeLimit = Number.parseInt(timeRangeFilter)
-        if (alert.timeValue > timeLimit) {
-          return false
-        }
-      }
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        return (
-          alert.title.toLowerCase().includes(query) ||
-          alert.description.toLowerCase().includes(query) ||
-          alert.source.toLowerCase().includes(query) ||
-          alert.id.toLowerCase().includes(query) ||
-          alert.tags.some((tag) => tag.toLowerCase().includes(query))
-        )
-      }
-      return true
+    return alertsData.filter(alert => {
+      const matchesSeverity = severityFilter === "all" || alert.severity === severityFilter
+      const matchesType = typeFilter === "all" || alert.type === typeFilter
+      const matchesStatus = statusFilter === "all" || alert.status === statusFilter
+      const matchesSearch = !searchQuery || 
+        alert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        alert.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        alert.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        alert.destination.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      return matchesSeverity && matchesType && matchesStatus && matchesSearch
     })
-    // Sort alerts
-    filtered.sort((a, b) => {
-      let aValue: any = a[sortBy as keyof typeof a]
-      let bValue: any = b[sortBy as keyof typeof b]
-      if (sortBy === "timestamp") {
-        aValue = a.timeValue
-        bValue = b.timeValue
-      }
-      if (sortBy === "severity") {
-        const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 }
-        aValue = severityOrder[a.severity]
-        bValue = severityOrder[b.severity]
-      }
-      if (typeof aValue === "string") {
-        aValue = aValue.toLowerCase()
-        bValue = bValue.toLowerCase()
-      }
-      if (sortOrder === "asc") {
-        return aValue > bValue ? 1 : -1
-      } else {
-        return aValue < bValue ? 1 : -1
-      }
-    })
-    return filtered
-  }, [alertsData, severityFilter, typeFilter, statusFilter, timeRangeFilter, searchQuery, sortBy, sortOrder])
+  }, [alertsData, severityFilter, typeFilter, statusFilter, searchQuery])
 
-  // Calculate filtered alert counts by severity
-  const filteredAlertCounts = useMemo(() => {
-    const counts = { critical: 0, high: 0, medium: 0, low: 0, total: 0 }
-    filteredAlerts.forEach((alert) => {
-      counts[alert.severity]++
-      counts.total++
-    })
-    return counts
-  }, [filteredAlerts])
+  // Get current page alerts
+  const currentPageAlerts = useMemo(() => {
+    const startIndex = (currentPage - 1) * alertsPerPage
+    return filteredAlerts.slice(startIndex, startIndex + alertsPerPage)
+  }, [filteredAlerts, currentPage])
 
-  // Pagination logic
+  // Calculate total pages
   const totalPages = Math.ceil(filteredAlerts.length / alertsPerPage)
-  const startIndex = (currentPage - 1) * alertsPerPage
-  const endIndex = startIndex + alertsPerPage
-  const currentPageAlerts = filteredAlerts.slice(startIndex, endIndex)
 
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [severityFilter, typeFilter, statusFilter, timeRangeFilter, searchQuery, sortBy, sortOrder])
+  }, [severityFilter, typeFilter, statusFilter, searchQuery])
 
-  // Pagination handlers
+  // Pagination navigation
   const goToPage = (page: number) => {
-    setCurrentPage(Math.max(1, Math.min(page, totalPages)))
+    setCurrentPage(page)
   }
 
   const goToNextPage = () => {
     if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1)
+      setCurrentPage(prev => prev + 1)
     }
   }
 
   const goToPrevPage = () => {
     if (currentPage > 1) {
-      setCurrentPage(currentPage - 1)
+      setCurrentPage(prev => prev - 1)
     }
   }
 
@@ -428,25 +416,24 @@ export default function AlertsPage() {
     setStatusFilter("all")
     setTimeRangeFilter("all")
     setSearchQuery("")
-    setSelectedAlerts([])
     setCurrentPage(1)
   }
 
   // Check if any filters are active
-  const hasActiveFilters =
-    severityFilter !== "all" ||
-    typeFilter !== "all" ||
-    statusFilter !== "all" ||
-    timeRangeFilter !== "all" ||
-    searchQuery
+  const hasActiveFilters = severityFilter !== "all" || typeFilter !== "all" || statusFilter !== "all" || timeRangeFilter !== "all" || searchQuery !== ""
 
-  // Handle alert selection
+  // Alert selection handlers
   const toggleAlertSelection = (alertId: string) => {
-    setSelectedAlerts((prev) => (prev.includes(alertId) ? prev.filter((id) => id !== alertId) : [...prev, alertId]))
+    setSelectedAlerts((prev: string[]) => 
+      prev.includes(alertId) 
+        ? prev.filter(id => id !== alertId)
+        : [...prev, alertId]
+    )
   }
 
   const selectAllAlerts = () => {
-    setSelectedAlerts(currentPageAlerts.map((alert) => alert.id))
+    const currentPageAlertIds = currentPageAlerts.map(alert => alert.id)
+    setSelectedAlerts(currentPageAlertIds)
   }
 
   const clearSelection = () => {
@@ -499,16 +486,6 @@ export default function AlertsPage() {
           </div>
           
           <div className="flex items-center gap-2 sm:gap-4">
-            <Link 
-              href="/visualization/time-series" 
-              className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20 transition-colors" 
-              title="View Alert Timeline"
-            >
-              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Link>
-            <button className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20">
-              <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
-            </button>
             <ProfileDropdown />
           </div>
         </div>
@@ -561,7 +538,7 @@ export default function AlertsPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
-                <div className="text-xl sm:text-2xl font-bold text-red-400">{filteredAlertCounts.critical}</div>
+                <div className="text-xl sm:text-2xl font-bold text-red-400">{alertStats.critical}</div>
                 <p className="text-xs text-red-300 mt-1">p_value ≥ 0.8</p>
               </CardContent>
             </Card>
@@ -573,7 +550,7 @@ export default function AlertsPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
-                <div className="text-xl sm:text-2xl font-bold text-amber-400">{filteredAlertCounts.high}</div>
+                <div className="text-xl sm:text-2xl font-bold text-amber-400">{alertStats.high}</div>
                 <p className="text-xs text-amber-300 mt-1">p_value ≥ 0.6</p>
               </CardContent>
             </Card>
@@ -585,7 +562,7 @@ export default function AlertsPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
-                <div className="text-xl sm:text-2xl font-bold text-yellow-400">{filteredAlertCounts.medium}</div>
+                <div className="text-xl sm:text-2xl font-bold text-yellow-400">{alertStats.medium}</div>
                 <p className="text-xs text-yellow-300 mt-1">p_value ≥ 0.4</p>
               </CardContent>
             </Card>
@@ -597,7 +574,7 @@ export default function AlertsPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
-                <div className="text-xl sm:text-2xl font-bold text-blue-400">{filteredAlertCounts.low}</div>
+                <div className="text-xl sm:text-2xl font-bold text-blue-400">{alertStats.low}</div>
                 <p className="text-xs text-blue-300 mt-1">p_value ≥ 0.1</p>
               </CardContent>
             </Card>
@@ -609,7 +586,7 @@ export default function AlertsPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
-                <div className="text-xl sm:text-2xl font-bold text-white">{filteredAlertCounts.total}</div>
+                <div className="text-xl sm:text-2xl font-bold text-white">{alertStats.total}</div>
                 <p className="text-xs text-zinc-300 mt-1">{hasActiveFilters ? "Filtered" : "All"} alerts</p>
               </CardContent>
             </Card>
@@ -773,7 +750,7 @@ export default function AlertsPage() {
                       onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
                       className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent text-xs"
                     >
-                      {sortOrder === "asc" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                      {sortOrder === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     </Button>
                   </div>
                   <Button
@@ -807,7 +784,7 @@ export default function AlertsPage() {
                   {hasActiveFilters ? "Filtered Alerts" : "All Alerts"}
                 </CardTitle>
                 <span className="text-sm text-zinc-400">
-                  Showing {startIndex + 1}-{Math.min(endIndex, filteredAlerts.length)} of {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? "s" : ""}
+                  Showing {currentPageAlerts.length} of {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? "s" : ""}
                   {totalPages > 1 && ` • Page ${currentPage} of ${totalPages}`}
                 </span>
               </div>
@@ -878,7 +855,7 @@ export default function AlertsPage() {
               <div className="px-6 py-4 border-t border-zinc-800">
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-zinc-400">
-                    Showing {startIndex + 1}-{Math.min(endIndex, filteredAlerts.length)} of {filteredAlerts.length} results
+                    Showing {currentPageAlerts.length} of {filteredAlerts.length} results
                   </div>
                   <div className="flex items-center gap-2">
                     <Button

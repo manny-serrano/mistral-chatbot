@@ -3,8 +3,9 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Chat } from "@/components/chat"
 import ThreatDashboard from "@/components/threat-dashboard"
-import { ShieldCheck, Bell } from "lucide-react"
+import { ShieldCheck } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
+import { NotificationBell } from "@/components/ui/notification-bell"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 
@@ -68,9 +69,7 @@ export default function DashboardPage() {
           </div>
           
           <div className="flex items-center gap-2 sm:gap-4">
-            <button className="rounded-full bg-gray-800/50 backdrop-blur-sm p-2 text-zinc-400 hover:bg-gray-700/50 hover:text-zinc-100 border border-purple-500/20">
-              <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
-            </button>
+            <NotificationBell />
             <ProfileDropdown />
           </div>
         </div>
