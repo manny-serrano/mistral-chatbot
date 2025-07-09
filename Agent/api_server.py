@@ -58,15 +58,7 @@ PROCESSING_REQUESTS = {}
 
 # Query optimization patterns
 SIMPLE_QUERIES = {
-    # Pattern: (response, processing_time)
-    "network statistics": ("Network statistics: Total flows: 127,595 | Active connections: 45,231 | Protocols: TCP (68%), UDP (25%), ICMP (7%) | Top ports: 80, 443, 22", 0.1),
-    "show me stats": ("Network statistics: Total flows: 127,595 | Active connections: 45,231 | Protocols: TCP (68%), UDP (25%), ICMP (7%) | Top ports: 80, 443, 22", 0.1),
-    "count flows": ("Total network flows in database: 127,595", 0.05),
-    "total flows": ("Total network flows in database: 127,595", 0.05),
-    "how many flows": ("Total network flows in database: 127,595", 0.05),
-    "list protocols": ("Available protocols: TCP (68.5%), UDP (25.1%), ICMP (5.6%), GRE (0.8%)", 0.05),
-    "top ports": ("Top destination ports: 80 (HTTP) - 35.2%, 443 (HTTPS) - 30.7%, 22 (SSH) - 8.1%, 53 (DNS) - 5.4%", 0.05),
-    "malicious flows": ("Malicious flows detected: 1,247 flows flagged as suspicious or malicious", 0.05),
+    # Empty dictionary - removed static data as database is live
 }
 
 # Compile regex patterns for better performance
@@ -263,9 +255,6 @@ class Config:
         self.environment = os.getenv("ENVIRONMENT", "development")
         self.cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
         
-        # Add lightweight mode for testing without databases
-        self.lightweight_mode = os.getenv("LIGHTWEIGHT_MODE", "false").lower() == "true"
-        
         # Add Neo4j configuration
         self.neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         self.neo4j_user = os.getenv("NEO4J_USER", "neo4j")
@@ -276,8 +265,6 @@ class Config:
             raise ValueError(f"Invalid API port: {self.api_port}")
         
         logger.info(f"Configuration loaded - Host: {self.api_host}, Port: {self.api_port}, Environment: {self.environment}")
-        if self.lightweight_mode:
-            logger.info("⚠️  LIGHTWEIGHT MODE: Running without database connections for testing")
 
 config = Config()
 
@@ -1217,64 +1204,125 @@ async def health_check():
         overall_status=overall_status
     )
 
-# Add query optimization patterns
+# Optimize query patterns for dynamic responses
 QUERY_PATTERNS = {
-    r"\b(show|display|list|get)\s+(network|traffic)\s+stats": "network_statistics",
-    r"\b(count|total|how many)\s+(flows?|connections?)": "flow_count",
+    r"\b(show|display|list|get)\s+(network|traffic)\s+(stats|statistics)": "network_statistics",
+    r"\b(count|total|how\s+many)\s+(flows?|connections?)": "flow_count",
     r"\b(show|list|display)\s+protocols?\b": "protocol_list",
     r"\b(show|list|display)\s+top\s+ports?\b": "top_ports",
-    r"\bmalicious\s+flows?\b": "malicious_flows",
+    r"\b(show|find|list)\s+(malicious|suspicious|threat)\s+(flows?|traffic|connections?)\b": "malicious_flows"
 }
 
-async def optimize_query(query: str) -> tuple[str, Optional[str]]:
-    """Optimize query by identifying patterns and using cached responses."""
+async def is_simple_query(query: str) -> tuple[bool, Optional[Dict[str, Any]]]:
+    """Check if this is a simple query that can be answered quickly with database queries."""
     query_lower = query.lower().strip()
     
-    # Check for exact matches in simple queries
-    if query_lower in SIMPLE_QUERIES:
-        return SIMPLE_QUERIES[query_lower][0], "SIMPLE_QUERY"
-    
-    # Check for pattern matches
+    # Check for pattern matches using compiled regex
     for pattern, query_type in QUERY_PATTERNS.items():
         if re.search(pattern, query_lower):
-            return await get_optimized_response(query_type), "OPTIMIZED_QUERY"
+            # Get live data from database
+            try:
+                result = await get_optimized_response(query_type)
+                if result:
+                    return True, result
+            except Exception as e:
+                logger.error(f"Error getting optimized response for {query_type}: {e}")
     
-    return query, None
+    return False, None
 
-async def get_optimized_response(query_type: str) -> str:
-    """Get optimized response for common query types."""
-    if query_type == "network_statistics":
+async def get_optimized_response(query_type: str) -> Optional[Dict[str, Any]]:
+    """Get optimized response using cached database queries."""
+    try:
+        # Use the network stats cache for consistent data
         stats = await network_stats_cache.get_or_update(
             "network_stats",
-            lambda: neo4j_helper.get_network_statistics()
+            lambda: fetch_fresh_stats()
         )
-        return (f"Network Statistics:\n"
-                f"• Total Flows: {stats.get('total_flows', 0):,}\n"
-                f"• Active Connections: {stats.get('active_connections', 0):,}\n"
-                f"• Total Hosts: {stats.get('total_hosts', 0):,}\n"
-                f"• Malicious Flows: {stats.get('malicious_flows', 0):,}")
-    
-    elif query_type == "flow_count":
-        stats = await network_stats_cache.get_or_update(
-            "network_stats",
-            lambda: neo4j_helper.get_network_statistics()
-        )
-        return f"Total network flows: {stats.get('total_flows', 0):,}"
-    
-    # Add more optimized responses for other patterns
-    return ""
+        
+        if not stats:
+            return None
+            
+        if query_type == "network_statistics":
+            return {
+                "result": (
+                    f"Network Statistics:\n"
+                    f"• Total Flows: {stats.get('total_flows', 0):,}\n"
+                    f"• Active Connections: {stats.get('active_connections', 0):,}\n"
+                    f"• Total Hosts: {stats.get('total_hosts', 0):,}\n"
+                    f"• Protocols: {', '.join(f'{p['protocol']} ({p['percentage']}%)' for p in stats.get('top_protocols', []))}\n"
+                    f"• Top Ports: {', '.join(f'{p['port']} ({p['percentage']}%)' for p in stats.get('top_ports', []))}"
+                ),
+                "processing_time": 0.1
+            }
+            
+        elif query_type == "flow_count":
+            return {
+                "result": f"Total network flows: {stats.get('total_flows', 0):,}",
+                "processing_time": 0.05
+            }
+            
+        elif query_type == "protocol_list":
+            protocols = stats.get('top_protocols', [])
+            return {
+                "result": f"Available protocols: {', '.join(f'{p['protocol']} ({p['percentage']}%)' for p in protocols)}",
+                "processing_time": 0.05
+            }
+            
+        elif query_type == "top_ports":
+            ports = stats.get('top_ports', [])
+            return {
+                "result": f"Top destination ports: {', '.join(f'{p['port']} ({p['percentage']}%)' for p in ports)}",
+                "processing_time": 0.05
+            }
+            
+        elif query_type == "malicious_flows":
+            return {
+                "result": f"Malicious flows detected: {stats.get('malicious_flows', 0):,} flows flagged as suspicious or malicious",
+                "processing_time": 0.05
+            }
+            
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error in get_optimized_response for {query_type}: {e}")
+        return None
+
+async def optimize_query(query: str) -> tuple[str, Optional[str]]:
+    """Optimize query by identifying patterns and using cached database responses."""
+    try:
+        # Check for pattern matches
+        is_simple, result = await is_simple_query(query)
+        if is_simple and result:
+            return result["result"], "OPTIMIZED_QUERY"
+            
+        return query, None
+        
+    except Exception as e:
+        logger.error(f"Error in optimize_query: {e}")
+        return query, None
 
 async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
     """Process analysis tasks in parallel with optimized execution."""
     try:
-        # Create tasks with proper timeouts
+        # First try optimized query handling
+        result, query_type = await optimize_query(query)
+        if query_type == "OPTIMIZED_QUERY":
+            return {
+                'result': result,
+                'query_type': query_type,
+                'database_used': ['optimized_cache'],
+                'processing_time': 0.1,
+                'error': None
+            }
+        
+        # If not an optimized query, proceed with parallel analysis
         tasks = []
         
         if hasattr(agent, 'milvus_retriever'):
             tasks.append(asyncio.create_task(
                 asyncio.wait_for(
                     semantic_analysis(query, agent),
-                    timeout=3.0  # 3 second timeout for semantic analysis
+                    timeout=3.0
                 )
             ))
             
@@ -1282,17 +1330,9 @@ async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
             tasks.append(asyncio.create_task(
                 asyncio.wait_for(
                     graph_analysis(query, agent),
-                    timeout=2.0  # 2 second timeout for graph analysis
+                    timeout=2.0
                 )
             ))
-        
-        # Pattern analysis is fast, always include it
-        tasks.append(asyncio.create_task(
-            asyncio.wait_for(
-                pattern_analysis(query),
-                timeout=0.5  # 500ms timeout for pattern matching
-            )
-        ))
         
         # Wait for first successful result
         done, pending = await asyncio.wait(
@@ -1317,17 +1357,6 @@ async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
             except Exception as e:
                 errors.append(str(e))
         
-        # If we have a pattern match, return it immediately
-        for result in results:
-            if result['type'] == 'pattern':
-                return {
-                    'result': result['result'][0],
-                    'query_type': 'PATTERN_MATCH',
-                    'processing_time': result['result'][1],
-                    'database_used': ['pattern_cache']
-                }
-        
-        # Combine other results
         if results:
             combined_result = {
                 'result': '\n'.join(r['result'] for r in results if r.get('result')),
@@ -1339,7 +1368,6 @@ async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
             }
             return combined_result
             
-        # If all failed, return error
         error_msg = '; '.join(errors) if errors else 'All analyses failed'
         return {
             'result': 'Analysis failed. Please try again.',
@@ -1359,6 +1387,51 @@ async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
             'processing_time': 0.0
         }
 
+# Add enhanced caching for analyze endpoint
+ANALYZE_CACHE_TTL = 300  # 5 minutes
+ANALYZE_CACHE = {}
+
+async def cache_analyze_result(query: str, result: Dict[str, Any]):
+    """Cache analyze endpoint results."""
+    cache_key = hashlib.md5(query.encode()).hexdigest()
+    ANALYZE_CACHE[cache_key] = {
+        'result': result,
+        'timestamp': time.time()
+    }
+
+async def get_cached_analyze_result(query: str) -> Optional[Dict[str, Any]]:
+    """Get cached analyze result if available."""
+    cache_key = hashlib.md5(query.encode()).hexdigest()
+    if cache_key in ANALYZE_CACHE:
+        cached = ANALYZE_CACHE[cache_key]
+        if time.time() - cached['timestamp'] < ANALYZE_CACHE_TTL:
+            return cached['result']
+        else:
+            del ANALYZE_CACHE[cache_key]  # Clean up expired cache
+    return None
+
+async def get_network_stats_cache_key() -> str:
+    """Generate time-based cache key for network stats."""
+    return f"network_stats_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
+# Background task for network stats cache refresh
+async def refresh_network_stats_cache():
+    """Continuously refresh network stats cache in background."""
+    while True:
+        try:
+            await fetch_fresh_stats()
+            await asyncio.sleep(240)  # Refresh every 4 minutes
+        except Exception as e:
+            logger.error(f"Error refreshing network stats cache: {e}")
+            await asyncio.sleep(60)
+
+# Add background task startup
+@app.on_event("startup")
+async def start_background_tasks():
+    """Start background tasks on app startup."""
+    asyncio.create_task(refresh_network_stats_cache())
+
+# Update analyze endpoint to use new caching
 @app.post("/analyze", response_model=SecurityQueryResponse)
 async def analyze_security_query(request: SecurityQueryRequest):
     """Analyze a security query using parallel processing and aggressive caching."""
@@ -1374,18 +1447,17 @@ async def analyze_security_query(request: SecurityQueryRequest):
             success=False
         )
     
-    # Generate cache key
-    cache_key = get_cache_key(request.query, request.analysis_type, request.user)
+    # Check analyze cache first
+    cached_result = await get_cached_analyze_result(text)
+    if cached_result:
+        return SecurityQueryResponse(
+            **cached_result,
+            timestamp=datetime.now().isoformat(),
+            processing_time=0.01
+        )
     
-    # Check aggressive cache first
-    try:
-        cached_result = await aggressive_cache.get(cache_key)
-        if cached_result:
-            cached_result['timestamp'] = datetime.now().isoformat()
-            cached_result['processing_time'] = 0.01
-            return SecurityQueryResponse(**cached_result)
-    except Exception as e:
-        logger.error(f"Cache error: {e}")
+    # Generate cache key for deduplication
+    cache_key = get_cache_key(request.query, request.analysis_type, request.user)
     
     # Clean up stale processing requests
     cleanup_stale_processing()
@@ -1396,11 +1468,13 @@ async def analyze_security_query(request: SecurityQueryRequest):
         await asyncio.sleep(0.1)
         
         # Check cache again
-        cached_result = await aggressive_cache.get(cache_key)
+        cached_result = await get_cached_analyze_result(text)
         if cached_result:
-            cached_result['timestamp'] = datetime.now().isoformat()
-            cached_result['processing_time'] = 0.05
-            return SecurityQueryResponse(**cached_result)
+            return SecurityQueryResponse(
+                **cached_result,
+                timestamp=datetime.now().isoformat(),
+                processing_time=0.05
+            )
         
         return SecurityQueryResponse(
             result="Your query is being processed. Please try again in a moment.",
@@ -1465,9 +1539,8 @@ async def analyze_security_query(request: SecurityQueryRequest):
             "success": not bool(result.get('error'))
         }
         
-        # Cache the result if appropriate
-        if not request.include_sources:
-            await aggressive_cache.set(cache_key, response_data)
+        # Cache the result
+        await cache_analyze_result(text, response_data)
         
         # Unmark request as processing
         unmark_request_processing(cache_key)
@@ -1564,7 +1637,7 @@ async def get_query_examples():
             "description": "Analyze relationships, connections, and network topology",
             "examples": [
                 "How many IP addresses are in the graph database?",
-                "Show me all connections from IP 192.168.1.100",
+                "Show me all connections from a specific IP",
                 "Find the network path between two IPs",
                 "Count the total number of network flows",
                 "Display communication patterns for suspicious hosts",
@@ -1605,27 +1678,6 @@ async def get_query_examples():
 async def get_network_graph(limit: int = 100, ip_address: Optional[str] = None):
     """Get network graph data from Neo4j for visualization."""
     logger.info(f"Network graph request received - limit: {limit}, ip_address: {ip_address}")
-    
-    if config.lightweight_mode:
-        logger.info("Running in lightweight mode, returning mock data")
-        # Return mock data for lightweight mode
-        mock_nodes = [
-            NetworkNode(id="192.168.1.1", type="host", label="192.168.1.1", group="source_host", ip="192.168.1.1"),
-            NetworkNode(id="10.0.0.1", type="host", label="10.0.0.1", group="dest_host", ip="10.0.0.1"),
-            NetworkNode(id="172.16.0.1", type="host", label="172.16.0.1", group="dest_host", ip="172.16.0.1"),
-        ]
-        mock_links = [
-            NetworkLink(source="192.168.1.1", target="10.0.0.1", type="FLOW"),
-            NetworkLink(source="192.168.1.1", target="172.16.0.1", type="FLOW"),
-        ]
-        mock_stats = {"total_nodes": 3, "total_links": 2, "malicious_flows": 0}
-        
-        return NetworkGraphResponse(
-            nodes=mock_nodes,
-            links=mock_links,
-            statistics=mock_stats,
-            timestamp=datetime.now().isoformat()
-        )
     
     try:
         # Validate IP address if provided
@@ -1715,16 +1767,11 @@ async def get_network_graph(limit: int = 100, ip_address: Optional[str] = None):
 @app.get("/network/stats", response_model=NetworkStatsResponse)
 async def get_network_stats():
     """Get network statistics with optimized caching and background updates."""
-    cache_key = "network_stats"
+    cache_key = await get_network_stats_cache_key()
     
     # Try to get from cache first
     cached_stats = await network_stats_cache.get(cache_key)
     if cached_stats:
-        # Schedule background refresh if cache is getting old (75% of TTL)
-        cache_age = (datetime.now() - cached_stats.get('timestamp', datetime.now())).total_seconds()
-        if cache_age > (STATS_CACHE_EXPIRY_MINUTES * 60 * 0.75):
-            background_tasks = BackgroundTasks()
-            background_tasks.add_task(fetch_fresh_stats)
         return cached_stats
 
     try:
@@ -1889,39 +1936,7 @@ async def get_bar_chart_data(chart_type: str = "protocols"):
         cached_data = await network_stats_cache.get(cache_key)
         if cached_data:
             return cached_data
-        
-        if config.lightweight_mode:
-            # Return mock bar chart data (unchanged)
-            import random
-            data = []
-            if chart_type == "protocols":
-                data = [
-                    {"name": "TCP", "value": 2847, "percentage": 68.5},
-                    {"name": "UDP", "value": 1044, "percentage": 25.1},
-                    {"name": "ICMP", "value": 234, "percentage": 5.6},
-                    {"name": "GRE", "value": 32, "percentage": 0.8}
-                ]
-            elif chart_type == "ports":
-                data = [
-                    {"name": "80 (HTTP)", "value": 1024, "percentage": 35.2},
-                    {"name": "443 (HTTPS)", "value": 892, "percentage": 30.7},
-                    {"name": "22 (SSH)", "value": 234, "percentage": 8.1},
-                    {"name": "53 (DNS)", "value": 156, "percentage": 5.4},
-                    {"name": "3389 (RDP)", "value": 98, "percentage": 3.4}
-                ]
-            else:
-                data = [{"name": f"Item {i}", "value": random.randint(10, 1000)} for i in range(5)]
             
-            result = {
-                "data": data,
-                "chart_type": chart_type,
-                "total": sum(item["value"] for item in data),
-                "success": True,
-                "timestamp": datetime.now().isoformat()
-            }
-            await network_stats_cache.set(cache_key, result)
-            return result
-        
         # Real Neo4j queries with optimized execution
         if not neo4j_helper.driver:
             neo4j_helper.connect()
@@ -2027,31 +2042,6 @@ async def get_bar_chart_data(chart_type: str = "protocols"):
 async def get_geolocation_data():
     """Get geolocation data for IP addresses."""
     try:
-        if config.lightweight_mode:
-            # Return mock geolocation data
-            import random
-            
-            # Mock IP geolocation data
-            mock_locations = [
-                {"ip": "203.0.113.1", "country": "United States", "city": "New York", "lat": 40.7128, "lon": -74.0060, "threats": 15, "flows": 234},
-                {"ip": "198.51.100.1", "country": "China", "city": "Beijing", "lat": 39.9042, "lon": 116.4074, "threats": 8, "flows": 156},
-                {"ip": "192.0.2.1", "country": "Russia", "city": "Moscow", "lat": 55.7558, "lon": 37.6176, "threats": 12, "flows": 89},
-                {"ip": "203.0.113.2", "country": "Germany", "city": "Berlin", "lat": 52.5200, "lon": 13.4050, "threats": 3, "flows": 67},
-                {"ip": "198.51.100.2", "country": "United Kingdom", "city": "London", "lat": 51.5074, "lon": -0.1278, "threats": 5, "flows": 123},
-                {"ip": "192.0.2.2", "country": "France", "city": "Paris", "lat": 48.8566, "lon": 2.3522, "threats": 2, "flows": 45},
-                {"ip": "203.0.113.3", "country": "Japan", "city": "Tokyo", "lat": 35.6762, "lon": 139.6503, "threats": 7, "flows": 78},
-                {"ip": "198.51.100.3", "country": "Brazil", "city": "São Paulo", "lat": -23.5505, "lon": -46.6333, "threats": 4, "flows": 34},
-            ]
-            
-            return {
-                "locations": mock_locations,
-                "total_ips": len(mock_locations),
-                "total_threats": sum(loc["threats"] for loc in mock_locations),
-                "total_flows": sum(loc["flows"] for loc in mock_locations),
-                "success": True,
-                "timestamp": datetime.now().isoformat()
-            }
-        
         # Real Neo4j query for geolocation data
         if not neo4j_helper.driver:
             if not neo4j_helper.connect():
@@ -2112,72 +2102,6 @@ async def get_geolocation_data():
 async def get_heatmap_data(heatmap_type: str = "hourly_activity"):
     """Get heatmap data for various time-based patterns."""
     try:
-        if config.lightweight_mode:
-            # Return mock heatmap data
-            import random
-            
-            if heatmap_type == "hourly_activity":
-                # 24 hours x 7 days grid
-                data = []
-                days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                for day_idx, day in enumerate(days):
-                    for hour in range(24):
-                        # Simulate business hours having more activity
-                        base_activity = 20
-                        if day_idx < 5 and 9 <= hour <= 17:  # Weekdays 9-5
-                            base_activity = 80
-                        elif day_idx < 5 and (8 <= hour <= 8 or 18 <= hour <= 19):  # Rush hours
-                            base_activity = 60
-                        elif day_idx >= 5:  # Weekends
-                            base_activity = 30
-                        
-                        activity = base_activity + random.randint(-15, 25)
-                        data.append({
-                            "day": day,
-                            "day_index": day_idx,
-                            "hour": hour,
-                            "value": max(0, activity)
-                        })
-                        
-            elif heatmap_type == "ip_port_matrix":
-                # Top IPs vs top ports
-                top_ips = ["192.168.1.100", "10.0.0.15", "172.16.0.50", "203.0.113.1", "198.51.100.1"]
-                top_ports = [80, 443, 22, 53, 3389, 21, 25, 993]
-                data = []
-                for ip in top_ips:
-                    for port in top_ports:
-                        data.append({
-                            "ip": ip,
-                            "port": port,
-                            "value": random.randint(0, 100)
-                        })
-                        
-            else:  # threat_intensity
-                # Geographic threat intensity by region
-                regions = [
-                    {"region": "North America", "x": 0, "y": 0},
-                    {"region": "Europe", "x": 1, "y": 0},
-                    {"region": "Asia", "x": 2, "y": 0},
-                    {"region": "South America", "x": 0, "y": 1},
-                    {"region": "Africa", "x": 1, "y": 1},
-                    {"region": "Oceania", "x": 2, "y": 1}
-                ]
-                data = []
-                for region in regions:
-                    data.append({
-                        "region": region["region"],
-                        "x": region["x"],
-                        "y": region["y"],
-                        "value": random.randint(5, 95)
-                    })
-            
-            return {
-                "data": data,
-                "heatmap_type": heatmap_type,
-                "success": True,
-                "timestamp": datetime.now().isoformat()
-            }
-        
         # Real Neo4j query for heatmap data
         if not neo4j_helper.driver:
             if not neo4j_helper.connect():
@@ -2230,7 +2154,24 @@ async def get_heatmap_data(heatmap_type: str = "hourly_activity"):
                         "value": record["value"]
                     })
                     
-            else:  # Default query
+            elif heatmap_type == "threat_intensity":
+                # Geographic threat intensity by region
+                query = """
+                MATCH (h:Host)-[:SENT]->(f:Flow)
+                WHERE h.country IS NOT NULL AND f.malicious = true
+                WITH h.country as region, count(f) as threats
+                ORDER BY threats DESC
+                RETURN region, threats as value
+                """
+                
+                result = session.run(query)
+                data = []
+                for record in result:
+                    data.append({
+                        "region": record["region"],
+                        "value": record["value"]
+                    })
+            else:
                 data = []
         
         return {
