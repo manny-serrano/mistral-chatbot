@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ShieldCheck, Bell, Activity, ArrowLeft, Clock, Grid3X3, TrendingUp } from "lucide-react"
+import { ShieldCheck, Bell, Activity, ArrowLeft, Clock, Grid3X3, TrendingUp, Wifi, Shield } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +17,8 @@ interface HeatmapDataPoint {
   x?: number
   y?: number
   value: number
+  bytes?: number
+  threat_score?: number
 }
 
 interface HeatmapData {
@@ -25,6 +27,11 @@ interface HeatmapData {
   success: boolean
   timestamp: string
   error?: string
+  debug?: {
+    totalFlows: number
+    dataRange: any
+    dataPoints: number
+  }
 }
 
 export default function HeatmapVisualizationPage() {
@@ -51,9 +58,23 @@ export default function HeatmapVisualizationPage() {
     { 
       id: "threat_intensity", 
       name: "Threat Intensity", 
-      description: "Geographic threat intensity heatmap",
-      icon: TrendingUp,
+      description: "Security threat levels by network region",
+      icon: Shield,
       color: "#ef4444"
+    },
+    { 
+      id: "bandwidth_matrix", 
+      name: "Bandwidth Usage", 
+      description: "Data transfer patterns by IP and time",
+      icon: Wifi,
+      color: "#f59e0b"
+    },
+    { 
+      id: "ip_activity", 
+      name: "IP Activity", 
+      description: "Source IP activity patterns by hour",
+      icon: TrendingUp,
+      color: "#8b5cf6"
     }
   ]
 
@@ -83,20 +104,47 @@ export default function HeatmapVisualizationPage() {
 
   const selectedHeatmapInfo = heatmapTypes.find(h => h.id === selectedHeatmapType)
 
-  const getIntensityColor = (value: number, maxValue: number) => {
+  const getIntensityColor = (value: number, maxValue: number, type: string = "default") => {
     const intensity = value / maxValue
     if (intensity === 0) return "bg-gray-800"
-    if (intensity < 0.2) return "bg-green-900"
-    if (intensity < 0.4) return "bg-green-700"
-    if (intensity < 0.6) return "bg-yellow-600"
-    if (intensity < 0.8) return "bg-orange-500"
-    return "bg-red-500"
+    
+    if (type === "threat") {
+      // Red scale for threats
+      if (intensity < 0.2) return "bg-green-900"
+      if (intensity < 0.4) return "bg-yellow-600"
+      if (intensity < 0.6) return "bg-orange-500"
+      if (intensity < 0.8) return "bg-red-600"
+      return "bg-red-500"
+    } else if (type === "bandwidth") {
+      // Blue scale for bandwidth
+      if (intensity < 0.2) return "bg-blue-900"
+      if (intensity < 0.4) return "bg-blue-700"
+      if (intensity < 0.6) return "bg-blue-600"
+      if (intensity < 0.8) return "bg-blue-500"
+      return "bg-blue-400"
+    } else {
+      // Default green-to-red scale
+      if (intensity < 0.2) return "bg-green-900"
+      if (intensity < 0.4) return "bg-green-700"
+      if (intensity < 0.6) return "bg-yellow-600"
+      if (intensity < 0.8) return "bg-orange-500"
+      return "bg-red-500"
+    }
+  }
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
   }
 
   const renderHourlyActivityHeatmap = () => {
     if (!data?.data) return null
 
-    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    // API returns: Sunday=0, Monday=1, Tuesday=2, Wednesday=3, Thursday=4, Friday=5, Saturday=6
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     const hours = Array.from({ length: 24 }, (_, i) => i)
     const maxValue = Math.max(...data.data.map(d => d.value))
 
@@ -110,7 +158,7 @@ export default function HeatmapVisualizationPage() {
 
     return (
       <div className="p-4">
-        <div className="grid grid-cols-25 gap-1">
+        <div className="grid gap-1" style={{ gridTemplateColumns: `80px repeat(${hours.length}, 25px)` }}>
           {/* Header with hours */}
           <div></div>
           {hours.map(hour => (
@@ -131,7 +179,7 @@ export default function HeatmapVisualizationPage() {
                   <div
                     key={`${dayIndex}-${hour}`}
                     className={`w-6 h-6 rounded-sm ${getIntensityColor(value, maxValue)} border border-gray-700 cursor-pointer hover:border-white transition-all`}
-                    title={`${day} ${hour}:00 - Activity: ${value}`}
+                    title={`${day} ${hour}:00 - Flows: ${value.toLocaleString()}`}
                   />
                 )
               })}
@@ -141,7 +189,7 @@ export default function HeatmapVisualizationPage() {
         
         {/* Legend */}
         <div className="mt-4 flex items-center justify-center gap-2">
-          <span className="text-xs text-gray-400">Less</span>
+          <span className="text-xs text-gray-400">Less Active</span>
           <div className="flex gap-1">
             <div className="w-3 h-3 bg-gray-800 border border-gray-600"></div>
             <div className="w-3 h-3 bg-green-900 border border-gray-600"></div>
@@ -150,7 +198,82 @@ export default function HeatmapVisualizationPage() {
             <div className="w-3 h-3 bg-orange-500 border border-gray-600"></div>
             <div className="w-3 h-3 bg-red-500 border border-gray-600"></div>
           </div>
-          <span className="text-xs text-gray-400">More</span>
+          <span className="text-xs text-gray-400">More Active</span>
+        </div>
+      </div>
+    )
+  }
+
+  const renderIPActivityHeatmap = () => {
+    if (!data?.data) return null
+
+    // Get unique IPs and sort by total activity
+    const ipActivity: { [ip: string]: number } = {}
+    data.data.forEach(d => {
+      if (d.ip) {
+        ipActivity[d.ip] = (ipActivity[d.ip] || 0) + d.value
+      }
+    })
+
+    const topIPs = Object.entries(ipActivity)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15)
+      .map(([ip]) => ip)
+
+    const hours = Array.from({ length: 24 }, (_, i) => i)
+    const maxValue = Math.max(...data.data.map(d => d.value))
+
+    // Create matrix for lookup
+    const dataMatrix: { [key: string]: number } = {}
+    data.data.forEach(d => {
+      if (d.ip && d.hour !== undefined) {
+        dataMatrix[`${d.ip}-${d.hour}`] = d.value
+      }
+    })
+
+    return (
+      <div className="p-4 overflow-auto">
+        <div className="grid gap-1" style={{ gridTemplateColumns: `150px repeat(${hours.length}, 30px)` }}>
+          {/* Header with hours */}
+          <div></div>
+          {hours.map(hour => (
+            <div key={hour} className="text-xs text-gray-400 text-center">
+              {hour.toString().padStart(2, '0')}
+            </div>
+          ))}
+          
+          {/* IPs and data */}
+          {topIPs.map(ip => (
+            <div key={ip} className="contents">
+              <div className="text-xs text-gray-400 pr-2 flex items-center justify-end truncate">
+                {ip}
+              </div>
+              {hours.map(hour => {
+                const value = dataMatrix[`${ip}-${hour}`] || 0
+                return (
+                  <div
+                    key={`${ip}-${hour}`}
+                    className={`w-7 h-7 rounded-sm ${getIntensityColor(value, maxValue)} border border-gray-700 cursor-pointer hover:border-white transition-all`}
+                    title={`${ip} at ${hour}:00 - Flows: ${value.toLocaleString()}`}
+                  />
+                )
+              })}
+            </div>
+          ))}
+        </div>
+        
+        {/* Legend */}
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <span className="text-xs text-gray-400">Less Active</span>
+          <div className="flex gap-1">
+            <div className="w-3 h-3 bg-gray-800 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-green-900 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-green-700 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-yellow-600 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-orange-500 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-red-500 border border-gray-600"></div>
+          </div>
+          <span className="text-xs text-gray-400">More Active</span>
         </div>
       </div>
     )
@@ -174,10 +297,10 @@ export default function HeatmapVisualizationPage() {
 
     return (
       <div className="p-4 overflow-auto">
-        <div className="grid gap-1" style={{ gridTemplateColumns: `120px repeat(${ports.length}, 40px)` }}>
+        <div className="grid gap-1" style={{ gridTemplateColumns: `120px repeat(${Math.min(ports.length, 15)}, 40px)` }}>
           {/* Header with ports */}
           <div></div>
-          {ports.map(port => (
+          {ports.slice(0, 15).map(port => (
             <div key={port} className="text-xs text-gray-400 text-center transform -rotate-45 origin-center">
               {port}
             </div>
@@ -189,13 +312,13 @@ export default function HeatmapVisualizationPage() {
               <div className="text-xs text-gray-400 pr-2 flex items-center justify-end truncate">
                 {ip}
               </div>
-              {ports.map(port => {
+              {ports.slice(0, 15).map(port => {
                 const value = dataMatrix[`${ip}-${port}`] || 0
                 return (
                   <div
                     key={`${ip}-${port}`}
                     className={`w-8 h-8 rounded-sm ${getIntensityColor(value, maxValue)} border border-gray-700 cursor-pointer hover:border-white transition-all`}
-                    title={`${ip}:${port} - Flows: ${value}`}
+                    title={`${ip}:${port} - Flows: ${value.toLocaleString()}`}
                   />
                 )
               })}
@@ -220,6 +343,83 @@ export default function HeatmapVisualizationPage() {
     )
   }
 
+  const renderBandwidthMatrix = () => {
+    if (!data?.data) return null
+
+    // Get unique IPs and sort by bandwidth
+    const ipBandwidth: { [ip: string]: number } = {}
+    data.data.forEach(d => {
+      if (d.ip) {
+        ipBandwidth[d.ip] = (ipBandwidth[d.ip] || 0) + d.value
+      }
+    })
+
+    const topIPs = Object.entries(ipBandwidth)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([ip]) => ip)
+
+    const hours = Array.from({ length: 24 }, (_, i) => i)
+    const maxValue = Math.max(...data.data.map(d => d.value))
+
+    // Create matrix for lookup
+    const dataMatrix: { [key: string]: HeatmapDataPoint } = {}
+    data.data.forEach(d => {
+      if (d.ip && d.hour !== undefined) {
+        dataMatrix[`${d.ip}-${d.hour}`] = d
+      }
+    })
+
+    return (
+      <div className="p-4 overflow-auto">
+        <div className="grid gap-1" style={{ gridTemplateColumns: `150px repeat(${hours.length}, 35px)` }}>
+          {/* Header with hours */}
+          <div></div>
+          {hours.map(hour => (
+            <div key={hour} className="text-xs text-gray-400 text-center">
+              {hour.toString().padStart(2, '0')}
+            </div>
+          ))}
+          
+          {/* IPs and data */}
+          {topIPs.map(ip => (
+            <div key={ip} className="contents">
+              <div className="text-xs text-gray-400 pr-2 flex items-center justify-end truncate">
+                {ip}
+              </div>
+              {hours.map(hour => {
+                const dataPoint = dataMatrix[`${ip}-${hour}`]
+                const value = dataPoint?.value || 0
+                const bytes = dataPoint?.bytes || 0
+                return (
+                  <div
+                    key={`${ip}-${hour}`}
+                    className={`w-8 h-8 rounded-sm ${getIntensityColor(value, maxValue, "bandwidth")} border border-gray-700 cursor-pointer hover:border-white transition-all`}
+                    title={`${ip} at ${hour}:00\nBandwidth: ${value} MB\nBytes: ${formatBytes(bytes)}`}
+                  />
+                )
+              })}
+            </div>
+          ))}
+        </div>
+        
+        {/* Legend */}
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <span className="text-xs text-gray-400">Low Bandwidth</span>
+          <div className="flex gap-1">
+            <div className="w-3 h-3 bg-gray-800 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-blue-900 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-blue-700 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-blue-600 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-blue-500 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-blue-400 border border-gray-600"></div>
+          </div>
+          <span className="text-xs text-gray-400">High Bandwidth</span>
+        </div>
+      </div>
+    )
+  }
+
   const renderThreatIntensityHeatmap = () => {
     if (!data?.data) return null
 
@@ -228,15 +428,18 @@ export default function HeatmapVisualizationPage() {
 
     return (
       <div className="p-4">
-        <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
           {regions.map(region => (
             <div
               key={region.region}
-              className={`p-6 rounded-lg ${getIntensityColor(region.value, maxValue)} border-2 border-gray-600 cursor-pointer hover:border-white transition-all text-center`}
-              title={`${region.region} - Threat Level: ${region.value}`}
+              className={`p-6 rounded-lg ${getIntensityColor(region.value, maxValue, "threat")} border-2 border-gray-600 cursor-pointer hover:border-white transition-all text-center`}
+              title={`${region.region}\nThreat Level: ${region.value}%\nThreat Score: ${(region.threat_score || 0).toFixed(3)}`}
             >
-              <div className="text-white font-medium text-sm">{region.region}</div>
-              <div className="text-white text-lg font-bold mt-1">{region.value}</div>
+              <div className="text-white font-medium text-sm mb-2">{region.region}</div>
+              <div className="text-white text-2xl font-bold">{region.value}%</div>
+              <div className="text-white/70 text-xs mt-1">
+                Risk: {region.threat_score ? (region.threat_score * 100).toFixed(1) : '0.0'}%
+              </div>
             </div>
           ))}
         </div>
@@ -247,9 +450,9 @@ export default function HeatmapVisualizationPage() {
           <div className="flex gap-1">
             <div className="w-3 h-3 bg-gray-800 border border-gray-600"></div>
             <div className="w-3 h-3 bg-green-900 border border-gray-600"></div>
-            <div className="w-3 h-3 bg-green-700 border border-gray-600"></div>
             <div className="w-3 h-3 bg-yellow-600 border border-gray-600"></div>
             <div className="w-3 h-3 bg-orange-500 border border-gray-600"></div>
+            <div className="w-3 h-3 bg-red-600 border border-gray-600"></div>
             <div className="w-3 h-3 bg-red-500 border border-gray-600"></div>
           </div>
           <span className="text-xs text-gray-400">High Threat</span>
@@ -262,10 +465,14 @@ export default function HeatmapVisualizationPage() {
     switch (selectedHeatmapType) {
       case "hourly_activity":
         return renderHourlyActivityHeatmap()
+      case "ip_activity":
+        return renderIPActivityHeatmap()
       case "ip_port_matrix":
         return renderIPPortMatrix()
       case "threat_intensity":
         return renderThreatIntensityHeatmap()
+      case "bandwidth_matrix":
+        return renderBandwidthMatrix()
       default:
         return <div className="p-4 text-center text-gray-400">Select a heatmap type</div>
     }
