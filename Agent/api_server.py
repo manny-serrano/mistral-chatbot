@@ -9,8 +9,9 @@ import sys
 import warnings
 import logging
 import uvicorn
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
@@ -23,6 +24,7 @@ import hashlib
 from functools import lru_cache
 import httpx  # Add to call external geolocation API
 import re     # Add for matching queries
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -67,23 +69,37 @@ SIMPLE_QUERIES = {
     "malicious flows": ("Malicious flows detected: 1,247 flows flagged as suspicious or malicious", 0.05),
 }
 
+# Compile regex patterns for better performance
+COMPILED_QUERY_PATTERNS = [
+    (re.compile(r"(?i)(show|get|display|list).*(statistics|stats)"), "network statistics"),
+    (re.compile(r"(?i)(how many|count|total).*(flows|connections)"), "count flows"),
+    (re.compile(r"(?i)(show|list|display)\s+protocols?\b"), "protocol_list"),
+    (re.compile(r"(?i)(show|list|display)\s+top\s+ports?\b"), "top_ports"),
+    (re.compile(r"(?i)(show|find|list).*(malicious|suspicious|threat).*(flows|traffic|connections)"), "malicious flows"),
+]
+
 def is_simple_query(query: str) -> tuple:
-    """Check if this is a simple query that can be answered quickly."""
+    """Check if this is a simple query that can be answered quickly with enhanced pattern matching."""
     query_lower = query.lower().strip()
     
-    # Direct matches
+    # Direct matches first (fastest)
     if query_lower in SIMPLE_QUERIES:
         return True, SIMPLE_QUERIES[query_lower]
     
-    # Pattern matching for variations
-    for pattern, response_data in SIMPLE_QUERIES.items():
-        if pattern in query_lower:
-            return True, response_data
+    # Enhanced pattern matching with compiled regex
+    for pattern, key in COMPILED_QUERY_PATTERNS:
+        if pattern.search(query_lower):
+            return True, SIMPLE_QUERIES[key]
     
-    # Statistical queries
-    if any(word in query_lower for word in ["count", "total", "how many", "statistics", "stats"]):
-        if any(word in query_lower for word in ["flow", "connection", "traffic"]):
-            return True, ("Total network flows: 127,595 | Active connections: 45,231", 0.05)
+    # Word overlap matching only if no direct or pattern matches
+    query_words = set(query_lower.split())
+    if len(query_words) >= 2:  # Only try word matching for queries with at least 2 words
+        for key in SIMPLE_QUERIES:
+            key_words = set(key.split())
+            if len(key_words) >= 2:  # Only compare with keys that have at least 2 words
+                overlap = len(query_words.intersection(key_words))
+                if overlap >= 2 and overlap / len(key_words) >= 0.7:  # 70% word match threshold
+                    return True, SIMPLE_QUERIES[key]
     
     return False, None
 
@@ -250,6 +266,11 @@ class Config:
         # Add lightweight mode for testing without databases
         self.lightweight_mode = os.getenv("LIGHTWEIGHT_MODE", "false").lower() == "true"
         
+        # Add Neo4j configuration
+        self.neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        self.neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        self.neo4j_password = os.getenv("NEO4J_PASSWORD", "")
+        
         # Validate configuration
         if self.api_port < 1 or self.api_port > 65535:
             raise ValueError(f"Invalid API port: {self.api_port}")
@@ -268,245 +289,174 @@ initialization_error = None
 # Neo4j helper class for direct visualization queries
 class Neo4jVisualizationHelper:
     def __init__(self):
-        self.uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-        self.user = os.getenv("NEO4J_USER", "neo4j")
-        self.password = os.getenv("NEO4J_PASSWORD", "password123")
         self.driver = None
+        self.session_pool = None
+        self.max_pool_size = 10
+        self.query_cache = {}
+        self.cache_ttl = timedelta(minutes=5)
+        self.query_stats = {}
+        self.last_health_check = None
+        self.health_check_interval = timedelta(minutes=1)
         
     def connect(self):
+        """Initialize Neo4j driver with optimized connection pooling."""
+        if not self.driver:
+            try:
+                # Configure connection pooling
+                self.driver = GraphDatabase.driver(
+                    config.neo4j_uri,
+                    auth=(config.neo4j_user, config.neo4j_password),
+                    max_connection_lifetime=30 * 60,  # 30 minutes
+                    max_connection_pool_size=self.max_pool_size,
+                    connection_acquisition_timeout=2.0  # 2 seconds timeout
+                )
+                
+                # Initialize session pool
+                self.session_pool = []
+                for _ in range(self.max_pool_size):
+                    session = self.driver.session()
+                    self.session_pool.append({
+                        'session': session,
+                        'in_use': False,
+                        'last_used': datetime.now()
+                    })
+                
+                logger.info("Successfully connected to Neo4j with connection pooling")
+            except Exception as e:
+                logger.error(f"Failed to connect to Neo4j: {e}")
+                raise
+    
+    async def get_session(self):
+        """Get an available session from the pool."""
         try:
-            self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
-            with self.driver.session() as session:
-                session.run("RETURN 1")
-            logger.info("Neo4j visualization helper connected successfully")
-            return True
+            # First try to find an unused session
+            for session_data in self.session_pool:
+                if not session_data['in_use']:
+                    session_data['in_use'] = True
+                    session_data['last_used'] = datetime.now()
+                    return session_data['session']
+            
+            # If all sessions are in use, wait briefly and try again
+            await asyncio.sleep(0.1)
+            for session_data in self.session_pool:
+                if not session_data['in_use']:
+                    session_data['in_use'] = True
+                    session_data['last_used'] = datetime.now()
+                    return session_data['session']
+            
+            # If still no session available, create a new one
+            logger.warning("All sessions in use, creating temporary session")
+            return self.driver.session()
+            
         except Exception as e:
-            logger.error(f"Failed to connect Neo4j visualization helper: {e}")
+            logger.error(f"Error getting Neo4j session: {e}")
+            raise
+    
+    def release_session(self, session):
+        """Release a session back to the pool."""
+        for session_data in self.session_pool:
+            if session_data['session'] == session:
+                session_data['in_use'] = False
+                session_data['last_used'] = datetime.now()
+                return
+    
+    async def execute_cached_query(self, query: str, params: dict = None, cache_key: str = None) -> Any:
+        """Execute a Neo4j query with caching and connection pooling."""
+        if not cache_key:
+            # Generate cache key from query and params
+            cache_key = hashlib.md5(
+                f"{query}:{json.dumps(params or {}, sort_keys=True)}".encode()
+            ).hexdigest()
+        
+        # Check cache first
+        if cache_key in self.query_cache:
+            cache_entry = self.query_cache[cache_key]
+            if datetime.now() - cache_entry['timestamp'] < self.cache_ttl:
+                return cache_entry['result']
+        
+        try:
+            # Get session from pool
+            session = await self.get_session()
+            
+            try:
+                # Execute query with timeout
+                start_time = time.time()
+                result = await asyncio.wait_for(
+                    session.run(query, params or {}),
+                    timeout=10.0  # 10 second timeout
+                )
+                
+                # Process results
+                data = await result.data()
+                
+                # Update query statistics
+                execution_time = time.time() - start_time
+                if query not in self.query_stats:
+                    self.query_stats[query] = {
+                        'count': 0,
+                        'total_time': 0,
+                        'avg_time': 0
+                    }
+                stats = self.query_stats[query]
+                stats['count'] += 1
+                stats['total_time'] += execution_time
+                stats['avg_time'] = stats['total_time'] / stats['count']
+                
+                # Cache results
+                self.query_cache[cache_key] = {
+                    'result': data,
+                    'timestamp': datetime.now()
+                }
+                
+                return data
+                
+            finally:
+                # Always release the session back to the pool
+                self.release_session(session)
+                
+        except asyncio.TimeoutError:
+            logger.error(f"Query timeout: {query[:100]}...")
+            raise HTTPException(status_code=504, detail="Database query timed out")
+        except Exception as e:
+            logger.error(f"Error executing Neo4j query: {e}")
+            raise HTTPException(status_code=500, detail="Database query failed")
+    
+    async def check_health(self) -> bool:
+        """Check Neo4j connection health."""
+        if (self.last_health_check and 
+            datetime.now() - self.last_health_check < self.health_check_interval):
+            return True
+            
+        try:
+            session = await self.get_session()
+            try:
+                result = await session.run("RETURN 1")
+                await result.single()
+                self.last_health_check = datetime.now()
+                return True
+            finally:
+                self.release_session(session)
+        except Exception as e:
+            logger.error(f"Neo4j health check failed: {e}")
             return False
     
     def close(self):
-        if self.driver:
-            self.driver.close()
-    
-    def get_network_graph_data(self, limit: int = 100, ip_address: Optional[str] = None):
-        """Get network graph data optimized for visualization"""
-        if not self.driver:
-            if not self.connect():
-                raise Exception("Cannot connect to Neo4j")
-        
-        nodes = []
-        links = []
-        
+        """Close all database connections."""
         try:
-            with self.driver.session() as session:
-                if ip_address and ip_address.strip():
-                    ip_address = ip_address.strip()
-                    # Query flows where Host sent flows to destination IPs
-                    # We use destinationIPv4Address property on Flow nodes
-                    query = """
-                    MATCH (src:Host {ip: $ip_address})-[:SENT]->(f:Flow)
-                    RETURN f.destinationIPv4Address AS dst_ip
-                    LIMIT $limit
-                    """
-                    result = session.run(query, ip_address=ip_address, limit=limit)
-                    # Build graph nodes and links based on flow destinations
-                    nodes = []
-                    links = []
-                    node_set = set()
-                    # Add source host node
-                    nodes.append(NetworkNode(
-                        id=ip_address,
-                        type="host",
-                        label=ip_address,
-                        group="source_host",
-                        ip=ip_address
-                    ))
-                    node_set.add(ip_address)
-                    for record in result:
-                        dst = record.get('dst_ip')
-                        if not dst or dst in node_set:
-                            continue
-                        # Add destination node
-                        nodes.append(NetworkNode(
-                            id=dst,
-                            type="host",
-                            label=dst,
-                            group="dest_host",
-                            ip=dst
-                        ))
-                        node_set.add(dst)
-                        # Add link
-                        links.append(NetworkLink(
-                            source=ip_address,
-                            target=dst,
-                            type="FLOW"
-                        ))
-                    return {"nodes": nodes, "links": links, "success": True}
-                else:
-                    # Default query to get a general graph of flows between hosts
-                    query = """
-                    MATCH (src:Host)-[:SENT]->(f:Flow)
-                    WITH src, f
-                    RETURN src.ip AS src_ip, f.destinationIPv4Address AS dst_ip
-                    LIMIT $limit
-                    """
-                    result = session.run(query, limit=limit)
-                    # Build default nodes and links
-                    nodes = []
-                    links = []
-                    node_set = set()
-                    for record in result:
-                        src_ip = record.get('src_ip')
-                        dst_ip = record.get('dst_ip')
-                        if src_ip not in node_set:
-                            nodes.append(NetworkNode(id=src_ip, type="host", label=src_ip, group="source_host", ip=src_ip))
-                            node_set.add(src_ip)
-                        if dst_ip and dst_ip not in node_set:
-                            nodes.append(NetworkNode(id=dst_ip, type="host", label=dst_ip, group="dest_host", ip=dst_ip))
-                            node_set.add(dst_ip)
-                        links.append(NetworkLink(source=src_ip, target=dst_ip, type="FLOW"))
-                    return {"nodes": nodes, "links": links, "success": True}
+            # Close all sessions in the pool
+            for session_data in self.session_pool:
+                try:
+                    session_data['session'].close()
+                except Exception as e:
+                    logger.error(f"Error closing session: {e}")
+            
+            # Close the driver
+            if self.driver:
+                self.driver.close()
                 
-                node_set = set()
-                
-                for record in result:
-                    n1_data = record["n1"]
-                    n2_data = record["n2"]
-
-                    # Add source node if not already added
-                    if n1_data.element_id not in node_set:
-                        nodes.append(NetworkNode(
-                            id=n1_data['address'],
-                            type="ip",
-                            label=n1_data.get('hostname') or n1_data['address'],
-                            group="source_host",
-                            ip=n1_data['address'],
-                            malicious=n1_data.get('malicious', False)
-                        ))
-                        node_set.add(n1_data.element_id)
-
-                    # Add target node if not already added
-                    if n2_data.element_id not in node_set:
-                        nodes.append(NetworkNode(
-                            id=n2_data['address'],
-                            type="ip",
-                            label=n2_data.get('hostname') or n2_data['address'],
-                            group="dest_host",
-                            ip=n2_data['address'],
-                            malicious=n2_data.get('malicious', False)
-                        ))
-                        node_set.add(n2_data.element_id)
-                    
-                    # Add the connection
-                    links.append(NetworkLink(
-                        source=n1_data['address'],
-                        target=n2_data['address'],
-                        type="CONNECTED_TO"
-                    ))
-                
-                return {
-                    "nodes": nodes,
-                    "links": links,
-                    "success": True
-                }
-        
+            logger.info("Successfully closed all Neo4j connections")
         except Exception as e:
-            logger.error(f"Error getting network graph data: {e}")
-            raise
-    
-    def get_network_statistics(self):
-        """Get network statistics for the dashboard"""
-        if not self.driver:
-            if not self.connect():
-                raise Exception("Cannot connect to Neo4j")
-        
-        stats = {}
-        
-        try:
-            with self.driver.session() as session:
-                # Total hosts
-                result = session.run("MATCH (h:Host) RETURN count(h) as total_hosts")
-                record = result.single()
-                stats["total_hosts"] = record["total_hosts"] if record else 0
-                
-                # Total flows
-                result = session.run("MATCH (f:Flow) RETURN count(f) as total_flows")
-                record = result.single()
-                stats["total_flows"] = record["total_flows"] if record else 0
-                
-                # Total protocols  
-                result = session.run("MATCH (p:Protocol) RETURN count(p) as total_protocols")
-                record = result.single()
-                stats["total_protocols"] = record["total_protocols"] if record else 0
-                
-                # Malicious flows
-                result = session.run("MATCH (f:Flow) WHERE f.malicious = true RETURN count(f) as malicious_flows")
-                record = result.single()
-                stats["malicious_flows"] = record["malicious_flows"] if record else 0
-                
-                # Active connections (flows)
-                stats["active_connections"] = stats["total_flows"]
-                
-                # Network nodes count (hosts + protocols + ports)
-                result = session.run("""
-                    MATCH (h:Host) WITH count(h) as hosts
-                    MATCH (p:Protocol) WITH hosts, count(p) as protocols  
-                    MATCH (port:Port) WITH hosts, protocols, count(port) as ports
-                    RETURN hosts + protocols + ports as total_nodes
-                """)
-                record = result.single()
-                stats["network_nodes"] = record["total_nodes"] if record else stats["total_hosts"]
-                
-                # Top ports
-                result = session.run("""
-                    MATCH (f:Flow)-[:USES_DST_PORT]->(port:Port)
-                    RETURN port.port as port, port.service as service, count(f) as flow_count
-                    ORDER BY flow_count DESC
-                    LIMIT 5
-                """)
-                stats["top_ports"] = []
-                for record in result:
-                    stats["top_ports"].append({
-                        "port": record["port"], 
-                        "service": record["service"], 
-                        "count": record["flow_count"]
-                    })
-                
-                # Top protocols
-                result = session.run("""
-                    MATCH (f:Flow)-[:USES_PROTOCOL]->(p:Protocol)
-                    RETURN p.name as protocol, count(f) as flow_count
-                    ORDER BY flow_count DESC
-                    LIMIT 5
-                """)
-                stats["top_protocols"] = []
-                for record in result:
-                    stats["top_protocols"].append({
-                        "protocol": record["protocol"], 
-                        "count": record["flow_count"]
-                    })
-                
-                # Threat indicators (malicious flows by source)
-                result = session.run("""
-                    MATCH (src:Host)-[:SENT]->(f:Flow)
-                    WHERE f.malicious = true
-                    RETURN src.ip as source_ip, count(f) as malicious_count
-                    ORDER BY malicious_count DESC
-                    LIMIT 5
-                """)
-                stats["threat_indicators"] = []
-                for record in result:
-                    stats["threat_indicators"].append({
-                        "ip": record["source_ip"], 
-                        "count": record["malicious_count"]
-                    })
-                
-        except Exception as e:
-            logger.error(f"Error getting network statistics: {e}")
-            # Return what we have so far, don't raise
-            pass
-        
-        return stats
+            logger.error(f"Error closing Neo4j connections: {e}")
 
 # Initialize Neo4j helper
 neo4j_helper = Neo4jVisualizationHelper()
@@ -515,34 +465,362 @@ neo4j_helper = Neo4jVisualizationHelper()
 NETWORK_STATS_CACHE = {}
 STATS_CACHE_EXPIRY_MINUTES = 5
 
-def initialize_agent():
-    """Initialize the security agent with comprehensive error handling."""
-    global agent, agent_initialized, initialization_error
-    
-    if agent_initialized:
-        return agent
-    
-    # Skip agent initialization in lightweight mode
-    if config.lightweight_mode:
-        logger.info("Skipping agent initialization (lightweight mode)")
-        agent_initialized = False
-        initialization_error = "Running in lightweight mode - databases not connected"
+# Improved caching with TTL and async updates
+class CacheManager:
+    def __init__(self, expiry_minutes: int = 5):
+        self.cache = {}
+        self.expiry_minutes = expiry_minutes
+        self.locks = {}
+        self._last_cleanup = datetime.now()
+        self._cleanup_interval = timedelta(minutes=5)
+        
+    async def get(self, key: str) -> Optional[Dict[str, Any]]:
+        now = datetime.now()
+        
+        # Periodic cleanup
+        if now - self._last_cleanup > self._cleanup_interval:
+            self._cleanup()
+            self._last_cleanup = now
+        
+        if key in self.cache:
+            cached_item = self.cache[key]
+            if now - cached_item['timestamp'] < timedelta(minutes=self.expiry_minutes):
+                return cached_item['data']
+            else:
+                del self.cache[key]
         return None
+        
+    async def set(self, key: str, data: Dict[str, Any]) -> None:
+        self.cache[key] = {
+            'data': data,
+            'timestamp': datetime.now()
+        }
+        
+    async def get_or_update(self, key: str, update_func) -> Dict[str, Any]:
+        # Check cache first
+        cached_data = await self.get(key)
+        if cached_data:
+            return cached_data
+            
+        # If no lock exists for this key, create one
+        if key not in self.locks:
+            self.locks[key] = asyncio.Lock()
+            
+        async with self.locks[key]:
+            # Double-check cache after acquiring lock
+            cached_data = await self.get(key)
+            if cached_data:
+                return cached_data
+                
+            # Update cache
+            new_data = await update_func()
+            await self.set(key, new_data)
+            return new_data
     
-    try:
-        logger.info("Initializing Intelligent Security Agent...")
-        agent = IntelligentSecurityAgent(
-            collection_name=None  # Use multi-collection retriever
-        )
-        agent_initialized = True
-        initialization_error = None
-        logger.info("Agent initialized successfully!")
-        return agent
-    except Exception as e:
-        logger.error(f"Failed to initialize agent: {e}")
-        agent_initialized = False
-        initialization_error = str(e)
+    def _cleanup(self):
+        """Remove expired entries."""
+        now = datetime.now()
+        expired = timedelta(minutes=self.expiry_minutes)
+        expired_keys = [
+            k for k, v in self.cache.items()
+            if now - v['timestamp'] >= expired
+        ]
+        for k in expired_keys:
+            del self.cache[k]
+            if k in self.locks:
+                del self.locks[k]
+
+# Initialize cache managers with optimized settings
+network_stats_cache = CacheManager(expiry_minutes=STATS_CACHE_EXPIRY_MINUTES)
+analyze_cache = CacheManager(expiry_minutes=CACHE_EXPIRY_MINUTES)
+
+# Enhance cache management with TTL and size-based eviction
+class QueryCache:
+    def __init__(self, max_size=1000, ttl_minutes=30):
+        self.cache = {}
+        self.max_size = max_size
+        self.ttl = timedelta(minutes=ttl_minutes)
+        self.access_times = {}
+        self._last_cleanup = datetime.now()
+        self._cleanup_interval = timedelta(minutes=5)
+        
+    def get(self, key: str) -> Optional[Dict[str, Any]]:
+        now = datetime.now()
+        
+        # Periodic cleanup to prevent memory bloat
+        if now - self._last_cleanup > self._cleanup_interval:
+            self._cleanup()
+            self._last_cleanup = now
+        
+        if key in self.cache:
+            entry = self.cache[key]
+            if now - entry['timestamp'] < self.ttl:
+                # Update access time only every minute to reduce overhead
+                last_access = self.access_times.get(key, datetime.min)
+                if now - last_access > timedelta(minutes=1):
+                    self.access_times[key] = now
+                return entry['data']
+            else:
+                del self.cache[key]
+                del self.access_times[key]
         return None
+        
+    def set(self, key: str, value: Any) -> None:
+        now = datetime.now()
+        
+        # Only evict if we're significantly over the limit
+        if len(self.cache) >= self.max_size * 1.1:
+            # Remove 20% of oldest entries
+            self._evict_old_entries()
+            
+        self.cache[key] = {
+            'data': value,
+            'timestamp': now
+        }
+        self.access_times[key] = now
+    
+    def _cleanup(self):
+        """Periodic cleanup of expired entries."""
+        now = datetime.now()
+        expired_keys = [
+            k for k, v in self.cache.items()
+            if now - v['timestamp'] >= self.ttl
+        ]
+        for k in expired_keys:
+            del self.cache[k]
+            del self.access_times[k]
+    
+    def _evict_old_entries(self):
+        """Evict least recently used entries when cache is full."""
+        if len(self.cache) <= self.max_size:
+            return
+            
+        # Sort by access time and remove oldest 20%
+        num_to_remove = len(self.cache) - self.max_size
+        sorted_keys = sorted(
+            self.access_times.items(),
+            key=lambda x: x[1]
+        )[:num_to_remove]
+        
+        for key, _ in sorted_keys:
+            del self.cache[key]
+            del self.access_times[key]
+
+# Initialize the enhanced query cache
+QUERY_CACHE = QueryCache()
+
+class AggressiveQueryCache:
+    def __init__(self):
+        self.primary_cache = {}     # Fast, recent results
+        self.secondary_cache = {}    # Longer-term storage
+        self.pattern_cache = {}      # Common patterns
+        self.similarity_threshold = 0.8
+        self.max_primary_size = 1000
+        self.max_secondary_size = 5000
+        self.primary_ttl = timedelta(minutes=30)
+        self.secondary_ttl = timedelta(hours=24)
+        
+    def _compute_similarity(self, query1: str, query2: str) -> float:
+        """Compute similarity between two queries."""
+        words1 = set(query1.lower().split())
+        words2 = set(query2.lower().split())
+        intersection = len(words1.intersection(words2))
+        union = len(words1.union(words2))
+        return intersection / union if union > 0 else 0
+        
+    async def get(self, query: str) -> Optional[Dict[str, Any]]:
+        """Get result from cache with smart matching."""
+        now = datetime.now()
+        query = query.strip().lower()
+        
+        # 1. Check primary cache for exact match
+        if query in self.primary_cache:
+            entry = self.primary_cache[query]
+            if now - entry['timestamp'] < self.primary_ttl:
+                logger.info(f"Primary cache hit for query: {query[:50]}...")
+                return entry['data']
+        
+        # 2. Check pattern cache
+        for pattern, result in self.pattern_cache.items():
+            if re.search(pattern, query):
+                logger.info(f"Pattern cache hit for query: {query[:50]}...")
+                return result['data']
+        
+        # 3. Check secondary cache with similarity matching
+        best_match = None
+        best_similarity = 0
+        
+        for cached_query, entry in self.secondary_cache.items():
+            if now - entry['timestamp'] < self.secondary_ttl:
+                similarity = self._compute_similarity(query, cached_query)
+                if similarity > self.similarity_threshold and similarity > best_similarity:
+                    best_similarity = similarity
+                    best_match = entry
+        
+        if best_match:
+            logger.info(f"Secondary cache hit (similarity: {best_similarity:.2f}) for query: {query[:50]}...")
+            return best_match['data']
+        
+        return None
+        
+    async def set(self, query: str, result: Dict[str, Any], is_pattern: bool = False) -> None:
+        """Store result in appropriate cache."""
+        now = datetime.now()
+        query = query.strip().lower()
+        
+        if is_pattern:
+            self.pattern_cache[query] = {
+                'data': result,
+                'timestamp': now
+            }
+            return
+        
+        # Store in primary cache
+        self.primary_cache[query] = {
+            'data': result,
+            'timestamp': now
+        }
+        
+        # Cleanup if needed
+        if len(self.primary_cache) > self.max_primary_size:
+            self._cleanup_primary_cache()
+        
+        # Store in secondary cache
+        self.secondary_cache[query] = {
+            'data': result,
+            'timestamp': now
+        }
+        
+        if len(self.secondary_cache) > self.max_secondary_size:
+            self._cleanup_secondary_cache()
+    
+    def _cleanup_primary_cache(self) -> None:
+        """Remove old entries from primary cache."""
+        now = datetime.now()
+        self.primary_cache = {
+            k: v for k, v in self.primary_cache.items()
+            if now - v['timestamp'] < self.primary_ttl
+        }
+        
+        # If still too large, remove oldest entries
+        if len(self.primary_cache) > self.max_primary_size:
+            sorted_entries = sorted(
+                self.primary_cache.items(),
+                key=lambda x: x[1]['timestamp']
+            )
+            self.primary_cache = dict(sorted_entries[-self.max_primary_size:])
+    
+    def _cleanup_secondary_cache(self) -> None:
+        """Remove old entries from secondary cache."""
+        now = datetime.now()
+        self.secondary_cache = {
+            k: v for k, v in self.secondary_cache.items()
+            if now - v['timestamp'] < self.secondary_ttl
+        }
+        
+        # If still too large, remove oldest entries
+        if len(self.secondary_cache) > self.max_secondary_size:
+            sorted_entries = sorted(
+                self.secondary_cache.items(),
+                key=lambda x: x[1]['timestamp']
+            )
+            self.secondary_cache = dict(sorted_entries[-self.max_secondary_size:])
+
+# Initialize aggressive cache
+aggressive_cache = AggressiveQueryCache()
+
+class AgentManager:
+    def __init__(self):
+        self.agent = None
+        self.initialized = False
+        self.initialization_error = None
+        self.initialization_lock = asyncio.Lock()
+        self.last_health_check = None
+        self.health_check_interval = timedelta(minutes=5)
+    
+    async def initialize(self):
+        """Initialize the agent with proper error handling."""
+        if self.initialized and self.agent:
+            return self.agent
+        
+        async with self.initialization_lock:
+            # Double-check after acquiring lock
+            if self.initialized and self.agent:
+                return self.agent
+            
+            try:
+                logger.info("Initializing Intelligent Security Agent...")
+                self.agent = IntelligentSecurityAgent(
+                    collection_name=None  # Use multi-collection retriever
+                )
+                self.initialized = True
+                self.initialization_error = None
+                logger.info("Agent initialized successfully!")
+                return self.agent
+            except Exception as e:
+                logger.error(f"Failed to initialize agent: {e}")
+                self.initialized = False
+                self.initialization_error = str(e)
+                return None
+    
+    async def get_agent(self):
+        """Get the agent instance, initializing if necessary."""
+        if not self.initialized or not self.agent:
+            return await self.initialize()
+        
+        # Periodic health check
+        now = datetime.now()
+        if (not self.last_health_check or 
+            now - self.last_health_check > self.health_check_interval):
+            if not await self.check_health():
+                return await self.initialize()
+            self.last_health_check = now
+        
+        return self.agent
+    
+    async def check_health(self):
+        """Check agent health and connections."""
+        try:
+            if not self.agent:
+                return False
+            
+            # Check Milvus connection
+            if hasattr(self.agent, 'milvus_retriever'):
+                if not self.agent.milvus_retriever or not self.agent.milvus_retriever.client:
+                    return False
+            
+            # Check Neo4j connection
+            if hasattr(self.agent, 'neo4j_retriever'):
+                if not self.agent.neo4j_retriever or not self.agent.neo4j_retriever.driver:
+                    return False
+            
+            return True
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return False
+    
+    def close(self):
+        """Close all agent connections."""
+        if self.agent:
+            try:
+                if hasattr(self.agent, 'milvus_retriever'):
+                    if hasattr(self.agent.milvus_retriever, 'client'):
+                        self.agent.milvus_retriever.client.close()
+                
+                if hasattr(self.agent, 'neo4j_retriever'):
+                    if hasattr(self.agent.neo4j_retriever, 'driver'):
+                        self.agent.neo4j_retriever.driver.close()
+                
+                self.agent.close()
+                logger.info("Agent connections closed successfully")
+            except Exception as e:
+                logger.error(f"Error closing agent: {e}")
+            finally:
+                self.agent = None
+                self.initialized = False
+
+# Initialize agent manager
+agent_manager = AgentManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -553,7 +831,7 @@ async def lifespan(app: FastAPI):
         logger.info("🚀 API server ready in lightweight mode (testing only)")
     else:
         try:
-            initialize_agent()
+            await agent_manager.initialize()
         except Exception as e:
             logger.error(f"Failed to initialize during startup: {e}")
             logger.warning("Server will continue in limited mode")
@@ -568,22 +846,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down Mistral Security Analysis API")
-    global agent
-    if agent:
-        try:
-            # Force close all connections
-            if hasattr(agent, 'milvus_retriever') and agent.milvus_retriever:
-                if hasattr(agent.milvus_retriever, 'client'):
-                    agent.milvus_retriever.client.close()
-            if hasattr(agent, 'neo4j_retriever') and agent.neo4j_retriever:
-                if hasattr(agent.neo4j_retriever, 'driver'):
-                    agent.neo4j_retriever.driver.close()
-            agent.close()
-            logger.info("Agent connections closed successfully")
-        except Exception as e:
-            logger.error(f"Error closing agent: {e}")
-        finally:
-            agent = None
+    agent_manager.close()
     
     # Close Neo4j helper
     try:
@@ -664,25 +927,202 @@ class NetworkStatsResponse(BaseModel):
     success: bool = True
     error: Optional[str] = None
 
-# Initialize FastAPI app with enhanced configuration
+# Configure FastAPI with optimized settings
 app = FastAPI(
-    title="Mistral Security Analysis API",
-    description="API for the Intelligent Security Agent with enhanced network security analysis capabilities",
+    title="Security Analysis API",
+    description="API for network security analysis and visualization",
     version="1.0.0",
-    docs_url="/docs" if config.environment == "development" else None,
-    redoc_url="/redoc" if config.environment == "development" else None,
-    lifespan=lifespan
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
 )
 
-# Add CORS middleware with proper configuration for custom frontend
+# Configure CORS with optimized settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.cors_origins,
+    allow_origins=["*"],  # Configure this based on your needs
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    max_age=600,  # Cache preflight requests for 10 minutes
+    max_age=3600  # Cache preflight requests for 1 hour
 )
+
+# Add GZip compression middleware
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Add custom timing and caching middleware
+@app.middleware("http")
+async def add_timing_and_cache_control(request: Request, call_next):
+    """Add response timing and cache control headers."""
+    start_time = time.time()
+    
+    # Get cache configuration for this path
+    cache_config = get_cache_config(request.url.path)
+    
+    # Check if we should return cached response
+    if cache_config['cacheable'] and request.method in ["GET", "HEAD"]:
+        cached_response = await get_cached_response(request)
+        if cached_response:
+            return cached_response
+    
+    # Process the request
+    response = await call_next(request)
+    
+    # Add timing header
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    
+    # Add cache control headers
+    if cache_config['cacheable']:
+        response.headers["Cache-Control"] = (
+            f"public, max-age={cache_config['max_age']}, "
+            f"stale-while-revalidate={cache_config['stale_while_revalidate']}"
+        )
+        if cache_config.get('vary'):
+            response.headers["Vary"] = cache_config['vary']
+    else:
+        response.headers["Cache-Control"] = "no-store"
+    
+    return response
+
+# Cache configuration for different endpoints
+CACHE_CONFIGS = {
+    "/network/stats": {
+        "cacheable": True,
+        "max_age": 300,  # 5 minutes
+        "stale_while_revalidate": 60,
+        "vary": "Accept-Encoding"
+    },
+    "/network/graph": {
+        "cacheable": True,
+        "max_age": 300,
+        "stale_while_revalidate": 60,
+        "vary": "Accept-Encoding"
+    },
+    "/visualization/": {
+        "cacheable": True,
+        "max_age": 3600,  # 1 hour
+        "stale_while_revalidate": 300,
+        "vary": "Accept-Encoding"
+    }
+}
+
+def get_cache_config(path: str) -> dict:
+    """Get cache configuration for a path."""
+    # Check exact matches first
+    if path in CACHE_CONFIGS:
+        return CACHE_CONFIGS[path]
+    
+    # Check prefix matches
+    for prefix, config in CACHE_CONFIGS.items():
+        if path.startswith(prefix):
+            return config
+    
+    # Default configuration
+    return {
+        "cacheable": False
+    }
+
+# Add rate limiting middleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+
+# Add custom rate limiting
+from datetime import datetime, timedelta
+from collections import defaultdict
+import asyncio
+
+class RateLimiter:
+    def __init__(self, rate_limit: int, time_window: int):
+        self.rate_limit = rate_limit  # requests per time window
+        self.time_window = time_window  # time window in seconds
+        self.requests = defaultdict(list)  # client_id -> list of request timestamps
+        self.cleanup_task = None
+    
+    async def is_allowed(self, client_id: str) -> bool:
+        now = datetime.now()
+        
+        # Remove old requests
+        self.requests[client_id] = [
+            ts for ts in self.requests[client_id]
+            if now - ts < timedelta(seconds=self.time_window)
+        ]
+        
+        # Check if under limit
+        if len(self.requests[client_id]) < self.rate_limit:
+            self.requests[client_id].append(now)
+            return True
+        
+        return False
+    
+    async def cleanup(self):
+        """Periodically clean up old request records."""
+        while True:
+            await asyncio.sleep(60)  # Run every minute
+            now = datetime.now()
+            cutoff = now - timedelta(seconds=self.time_window)
+            
+            # Clean up old requests
+            for client_id in list(self.requests.keys()):
+                self.requests[client_id] = [
+                    ts for ts in self.requests[client_id]
+                    if ts > cutoff
+                ]
+                # Remove empty entries
+                if not self.requests[client_id]:
+                    del self.requests[client_id]
+
+# Initialize rate limiters
+RATE_LIMITERS = {
+    "default": RateLimiter(100, 60),  # 100 requests per minute
+    "analyze": RateLimiter(20, 60),   # 20 analyze requests per minute
+    "visualization": RateLimiter(50, 60)  # 50 visualization requests per minute
+}
+
+# Start cleanup tasks for rate limiters
+@app.on_event("startup")
+async def start_rate_limiter_cleanup():
+    """Start cleanup tasks for rate limiters."""
+    for limiter in RATE_LIMITERS.values():
+        limiter.cleanup_task = asyncio.create_task(limiter.cleanup())
+
+@app.on_event("shutdown")
+async def stop_rate_limiter_cleanup():
+    """Stop rate limiter cleanup tasks."""
+    for limiter in RATE_LIMITERS.values():
+        if hasattr(limiter, 'cleanup_task') and limiter.cleanup_task:
+            limiter.cleanup_task.cancel()
+            try:
+                await limiter.cleanup_task
+            except asyncio.CancelledError:
+                pass
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Apply rate limiting to requests."""
+    # Get client identifier (IP address or API key)
+    client_id = request.client.host
+    
+    # Determine which rate limiter to use
+    if request.url.path == "/analyze":
+        limiter = RATE_LIMITERS["analyze"]
+    elif request.url.path.startswith("/visualization"):
+        limiter = RATE_LIMITERS["visualization"]
+    else:
+        limiter = RATE_LIMITERS["default"]
+    
+    # Check rate limit
+    if not await limiter.is_allowed(client_id):
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "Too many requests",
+                "detail": "Rate limit exceeded. Please try again later."
+            }
+        )
+    
+    return await call_next(request)
 
 @app.get("/", response_model=dict)
 async def root():
@@ -691,7 +1131,7 @@ async def root():
         "message": "Mistral Security Analysis API",
         "version": "1.0.0",
         "environment": config.environment,
-        "status": "healthy" if agent_initialized else "initializing",
+        "status": "healthy" if agent_manager.initialized else "initializing",
         "docs": "/docs" if config.environment == "development" else "disabled",
         "health": "/health",
         "endpoints": {
@@ -711,11 +1151,11 @@ async def health_check():
     # Determine overall agent status
     if config.lightweight_mode:
         agent_status = "lightweight_mode"
-    elif initialization_error:
-        agent_status = f"error: {initialization_error}"
-    elif agent_initialized and agent:
+    elif agent_manager.initialization_error:
+        agent_status = f"error: {agent_manager.initialization_error}"
+    elif agent_manager.initialized and agent_manager.agent:
         agent_status = "healthy"
-    elif agent_initialized:
+    elif agent_manager.initialized:
         agent_status = "initialized_but_null"
     else:
         agent_status = "not_initialized"
@@ -729,12 +1169,12 @@ async def health_check():
             "neo4j": "disabled",
             "note": "Start with LIGHTWEIGHT_MODE=false to enable databases"
         }
-    elif agent_initialized and agent:
+    elif agent_manager.initialized and agent_manager.agent:
         try:
             # Test Milvus connection
-            if hasattr(agent, 'milvus_retriever') and agent.milvus_retriever:
-                if hasattr(agent.milvus_retriever, 'collections'):
-                    collections = agent.milvus_retriever.collections
+            if hasattr(agent_manager.agent, 'milvus_retriever') and agent_manager.agent.milvus_retriever:
+                if hasattr(agent_manager.agent.milvus_retriever, 'collections'):
+                    collections = agent_manager.agent.milvus_retriever.collections
                     databases["milvus"] = f"connected ({len(collections)} collections: {list(collections.keys())})"
                 else:
                     databases["milvus"] = "connected (single collection)"
@@ -742,13 +1182,13 @@ async def health_check():
                 databases["milvus"] = "not_available"
             
             # Test Neo4j connection  
-            if hasattr(agent, 'neo4j_retriever') and agent.neo4j_retriever:
+            if hasattr(agent_manager.agent, 'neo4j_retriever') and agent_manager.agent.neo4j_retriever:
                 databases["neo4j"] = "connected"
             else:
                 databases["neo4j"] = "not_available"
             
             # Test hybrid retriever
-            if hasattr(agent, 'hybrid_retriever') and agent.hybrid_retriever:
+            if hasattr(agent_manager.agent, 'hybrid_retriever') and agent_manager.agent.hybrid_retriever:
                 databases["hybrid"] = "available"
             else:
                 databases["hybrid"] = "not_available"
@@ -758,8 +1198,8 @@ async def health_check():
             logger.error(f"Error during health check: {e}")
     else:
         databases = {"status": "agent_not_initialized"}
-        if initialization_error:
-            databases["initialization_error"] = initialization_error
+        if agent_manager.initialization_error:
+            databases["initialization_error"] = agent_manager.initialization_error
     
     # Determine overall status
     if config.lightweight_mode:
@@ -773,142 +1213,197 @@ async def health_check():
         status=overall_status,
         timestamp=datetime.now().isoformat(),
         agent_status=agent_status,
-        databases=databases
+        databases=databases,
+        overall_status=overall_status
     )
+
+# Add query optimization patterns
+QUERY_PATTERNS = {
+    r"\b(show|display|list|get)\s+(network|traffic)\s+stats": "network_statistics",
+    r"\b(count|total|how many)\s+(flows?|connections?)": "flow_count",
+    r"\b(show|list|display)\s+protocols?\b": "protocol_list",
+    r"\b(show|list|display)\s+top\s+ports?\b": "top_ports",
+    r"\bmalicious\s+flows?\b": "malicious_flows",
+}
+
+async def optimize_query(query: str) -> tuple[str, Optional[str]]:
+    """Optimize query by identifying patterns and using cached responses."""
+    query_lower = query.lower().strip()
+    
+    # Check for exact matches in simple queries
+    if query_lower in SIMPLE_QUERIES:
+        return SIMPLE_QUERIES[query_lower][0], "SIMPLE_QUERY"
+    
+    # Check for pattern matches
+    for pattern, query_type in QUERY_PATTERNS.items():
+        if re.search(pattern, query_lower):
+            return await get_optimized_response(query_type), "OPTIMIZED_QUERY"
+    
+    return query, None
+
+async def get_optimized_response(query_type: str) -> str:
+    """Get optimized response for common query types."""
+    if query_type == "network_statistics":
+        stats = await network_stats_cache.get_or_update(
+            "network_stats",
+            lambda: neo4j_helper.get_network_statistics()
+        )
+        return (f"Network Statistics:\n"
+                f"• Total Flows: {stats.get('total_flows', 0):,}\n"
+                f"• Active Connections: {stats.get('active_connections', 0):,}\n"
+                f"• Total Hosts: {stats.get('total_hosts', 0):,}\n"
+                f"• Malicious Flows: {stats.get('malicious_flows', 0):,}")
+    
+    elif query_type == "flow_count":
+        stats = await network_stats_cache.get_or_update(
+            "network_stats",
+            lambda: neo4j_helper.get_network_statistics()
+        )
+        return f"Total network flows: {stats.get('total_flows', 0):,}"
+    
+    # Add more optimized responses for other patterns
+    return ""
+
+async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
+    """Process analysis tasks in parallel with optimized execution."""
+    try:
+        # Create tasks with proper timeouts
+        tasks = []
+        
+        if hasattr(agent, 'milvus_retriever'):
+            tasks.append(asyncio.create_task(
+                asyncio.wait_for(
+                    semantic_analysis(query, agent),
+                    timeout=3.0  # 3 second timeout for semantic analysis
+                )
+            ))
+            
+        if hasattr(agent, 'neo4j_retriever'):
+            tasks.append(asyncio.create_task(
+                asyncio.wait_for(
+                    graph_analysis(query, agent),
+                    timeout=2.0  # 2 second timeout for graph analysis
+                )
+            ))
+        
+        # Pattern analysis is fast, always include it
+        tasks.append(asyncio.create_task(
+            asyncio.wait_for(
+                pattern_analysis(query),
+                timeout=0.5  # 500ms timeout for pattern matching
+            )
+        ))
+        
+        # Wait for first successful result
+        done, pending = await asyncio.wait(
+            tasks,
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        
+        # Cancel remaining tasks
+        for task in pending:
+            task.cancel()
+        
+        # Process results
+        results = []
+        errors = []
+        for task in done:
+            try:
+                result = await task
+                if result and not result.get('error'):
+                    results.append(result)
+                elif result and result.get('error'):
+                    errors.append(result['error'])
+            except Exception as e:
+                errors.append(str(e))
+        
+        # If we have a pattern match, return it immediately
+        for result in results:
+            if result['type'] == 'pattern':
+                return {
+                    'result': result['result'][0],
+                    'query_type': 'PATTERN_MATCH',
+                    'processing_time': result['result'][1],
+                    'database_used': ['pattern_cache']
+                }
+        
+        # Combine other results
+        if results:
+            combined_result = {
+                'result': '\n'.join(r['result'] for r in results if r.get('result')),
+                'query_type': 'PARALLEL',
+                'database_used': [r['type'] for r in results],
+                'source_documents': [],
+                'processing_time': sum(r.get('processing_time', 0) for r in results),
+                'error': None
+            }
+            return combined_result
+            
+        # If all failed, return error
+        error_msg = '; '.join(errors) if errors else 'All analyses failed'
+        return {
+            'result': 'Analysis failed. Please try again.',
+            'query_type': 'ERROR',
+            'database_used': [],
+            'error': error_msg,
+            'processing_time': 0.0
+        }
+            
+    except Exception as e:
+        logger.error(f"Error in parallel analysis: {e}")
+        return {
+            'result': 'An unexpected error occurred.',
+            'query_type': 'ERROR',
+            'database_used': [],
+            'error': str(e),
+            'processing_time': 0.0
+        }
 
 @app.post("/analyze", response_model=SecurityQueryResponse)
 async def analyze_security_query(request: SecurityQueryRequest):
-    """
-    Analyze a security query using the intelligent agent with enhanced error handling and validation.
-    Optimized for custom frontend integration with caching and async processing.
-    """
-    global agent, agent_initialized
-    
-    # Intercept alert and geolocation questions before LLM
+    """Analyze a security query using parallel processing and aggressive caching."""
+    # Validate and clean the query
     text = request.query.strip()
-    lower = text.lower()
-    # Alerts: summary of malicious flow alerts
-    if re.search(r"\b(alerts?|what alerts)\b", lower):
-        # Fetch alerts from Next.js alerts API
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get("http://localhost:3002/api/alerts")
-                resp.raise_for_status()
-                data = resp.json()
-            alerts = data.get('alerts', [])
-            if alerts:
-                lines = [f"• {a['message']}" for a in alerts]
-                content = "🔔 Alerts:\n" + "\n".join(lines)
-            else:
-                content = "No alerts found."
-        except Exception as e:
-            content = f"Error fetching alerts: {e}"
+    if not text:
         return SecurityQueryResponse(
-            result=content,
-            query_type="ALERTS_QUERY",
-            database_used="frontend",
-            timestamp=datetime.now().isoformat(),
-            success=True
-        )
-    # Geolocation: location of a given IP
-    geo_match = re.search(r"location of (?:this )?ip\s*([0-9\.]+)", lower)
-    if geo_match:
-        ip = geo_match.group(1)
-        try:
-            resp = await httpx.get(f"http://ipwho.is/{ip}?fields=city,country,success", timeout=5.0)
-            data = resp.json()
-            if data.get('success'):
-                city = data.get('city','Unknown')
-                country = data.get('country','Unknown')
-                content = f"🌐 IP {ip} is located in {city}, {country}."
-            else:
-                content = f"Location lookup failed for IP {ip}."
-        except Exception as e:
-            content = f"Error looking up IP {ip}: {str(e)}"
-        return SecurityQueryResponse(
-            result=content,
-            query_type="GEOLOCATION_QUERY",
-            database_used="external",
-            timestamp=datetime.now().isoformat(),
-            success=True
-        )
-    
-    # Validate analysis type
-    valid_types = ["auto", "semantic", "graph", "hybrid"]
-    if request.analysis_type not in valid_types:
-        return SecurityQueryResponse(
-            result=f"Invalid analysis type '{request.analysis_type}'. Valid types: {', '.join(valid_types)}",
+            result="Query cannot be empty",
             query_type="ERROR",
             database_used="none",
-            error=f"Invalid analysis_type: {request.analysis_type}",
+            error="Empty query",
             timestamp=datetime.now().isoformat(),
             success=False
         )
     
-    # Handle lightweight mode
-    if config.lightweight_mode:
-        return SecurityQueryResponse(
-            result=f"✅ API is working correctly! In production, this would analyze: '{request.query}'\n\n"
-                   f"🔍 Analysis type: {request.analysis_type}\n"
-                   f"👤 User: {request.user}\n"
-                   f"📊 Would include sources: {request.include_sources}\n"
-                   f"💬 Conversation history: {len(request.conversation_history or [])} messages\n\n"
-                   f"To enable full functionality, start the required databases:\n"
-                   f"• Milvus (vector database): docker-compose up milvus\n"
-                   f"• Neo4j (graph database): docker-compose up neo4j\n"
-                   f"Then restart without LIGHTWEIGHT_MODE=true",
-            query_type="LIGHTWEIGHT_TEST",
-            database_used="mock",
-            processing_time=0.1,
-            timestamp=datetime.now().isoformat(),
-            success=True
-        )
-    
-    # OPTIMIZATION 1: Check for simple queries first (major speedup for basic questions)
-    is_simple, simple_response = is_simple_query(request.query)
-    if is_simple:
-        response_text, processing_time = simple_response
-        logger.info(f"Fast response for simple query: {request.query[:50]}...")
-        return SecurityQueryResponse(
-            result=response_text,
-            query_type="SIMPLE_QUERY",
-            database_used="optimized",
-            collections_used=None,
-            source_documents=None,
-            processing_time=processing_time,
-            error=None,
-            timestamp=datetime.now().isoformat(),
-            success=True
-        )
-    
-    # OPTIMIZATION 2: Check cache (major performance optimization)
+    # Generate cache key
     cache_key = get_cache_key(request.query, request.analysis_type, request.user)
+    
+    # Check aggressive cache first
+    try:
+        cached_result = await aggressive_cache.get(cache_key)
+        if cached_result:
+            cached_result['timestamp'] = datetime.now().isoformat()
+            cached_result['processing_time'] = 0.01
+            return SecurityQueryResponse(**cached_result)
+    except Exception as e:
+        logger.error(f"Cache error: {e}")
     
     # Clean up stale processing requests
     cleanup_stale_processing()
     
-    cached_result = get_cached_result(cache_key)
-    if cached_result:
-        # Update timestamp and return cached result
-        cached_result['timestamp'] = datetime.now().isoformat()
-        cached_result['processing_time'] = 0.01  # Cache hit time
-        logger.info(f"Returning cached result for query: {request.query[:50]}...")
-        return SecurityQueryResponse(**cached_result)
-    
-    # OPTIMIZATION 3: Request deduplication - check if same query is being processed
+    # Check if request is already being processed
     if is_request_processing(cache_key):
-        logger.info(f"Request already processing, waiting for result: {request.query[:50]}...")
-        # Wait briefly and check cache again
-        import asyncio
+        logger.info(f"Request already processing: {text[:50]}...")
         await asyncio.sleep(0.1)
-        cached_result = get_cached_result(cache_key)
+        
+        # Check cache again
+        cached_result = await aggressive_cache.get(cache_key)
         if cached_result:
             cached_result['timestamp'] = datetime.now().isoformat()
-            cached_result['processing_time'] = 0.05  # Deduplication time
+            cached_result['processing_time'] = 0.05
             return SecurityQueryResponse(**cached_result)
-        # If still processing, return a quick response
+        
         return SecurityQueryResponse(
-            result="Your query is being processed. Please try again in a moment for detailed results.",
+            result="Your query is being processed. Please try again in a moment.",
             query_type="DEDUPLICATION",
             database_used="queue",
             processing_time=0.05,
@@ -916,101 +1411,35 @@ async def analyze_security_query(request: SecurityQueryRequest):
             success=True
         )
     
-    # Mark this request as being processed
+    # Mark request as processing
     mark_request_processing(cache_key)
     
-    # Ensure agent is initialized
-    if not agent_initialized or not agent:
-        agent = initialize_agent()
-        if not agent:
-            return SecurityQueryResponse(
-                result="Security agent is not available. Please check system status or start in lightweight mode.",
-                query_type="ERROR",
-                database_used="none",
-                error=f"Agent initialization failed: {initialization_error or 'Unknown error'}",
-                timestamp=datetime.now().isoformat(),
-                success=False
-            )
-    
     try:
+        # Process the query with parallel analysis
         start_time = datetime.now()
         
-        # Log the request (safely)
-        safe_query = request.query[:100].replace('\n', ' ').replace('\r', '')
-        logger.info(f"Processing query from user '{request.user}': {safe_query}...")
-        logger.debug(f"Analysis type: {request.analysis_type}, Include sources: {request.include_sources}")
+        # Get agent instance
+        agent = await agent_manager.get_agent()
+        if not agent:
+            raise Exception(f"Agent initialization failed: {agent_manager.initialization_error or 'Unknown error'}")
         
-        # Optimized conversation history processing with caching
+        # Process conversation history asynchronously
         context = ""
-        if request.conversation_history and len(request.conversation_history) > 0:
-            logger.info(f"Processing conversation history with {len(request.conversation_history)} messages")
-            # Create hash for conversation history caching
+        if request.conversation_history:
             history_json = json.dumps(request.conversation_history, sort_keys=True)
             history_hash = hashlib.md5(history_json.encode()).hexdigest()
-            
-            # Use cached conversation processing
             context = process_conversation_history_cached(history_hash, history_json)
-            if context:
-                logger.debug(f"Created conversation context (cached)")
         
-        # Combine context with current query
-        full_query = context + request.query if context else request.query
+        # Combine context with query
+        full_query = context + text if context else text
         
-        # Handle analysis type override properly
-        if request.analysis_type != "auto":
-            # Create a modified agent query that forces the specific analysis type
-            logger.info(f"Forcing analysis type: {request.analysis_type}")
-            
-            # Directly call the appropriate retriever based on analysis type
-            if request.analysis_type == "semantic" and hasattr(agent, 'milvus_retriever') and agent.milvus_retriever:
-                from langchain.chains import RetrievalQA
-                qa_chain = RetrievalQA.from_chain_type(
-                    llm=agent.llm,
-                    retriever=agent.milvus_retriever,
-                    return_source_documents=True,
-                    chain_type_kwargs={"prompt": agent.classifier.llm.get_prompts()[0] if hasattr(agent.classifier.llm, 'get_prompts') else None}
-                )
-                result = qa_chain.invoke({"query": full_query})
-                result["query_type"] = "SEMANTIC_QUERY"
-                result["database_used"] = "milvus"
-                
-            elif request.analysis_type == "graph" and hasattr(agent, 'neo4j_retriever') and agent.neo4j_retriever:
-                from langchain.chains import RetrievalQA
-                qa_chain = RetrievalQA.from_chain_type(
-                    llm=agent.llm,
-                    retriever=agent.neo4j_retriever,
-                    return_source_documents=True
-                )
-                result = qa_chain.invoke({"query": full_query})
-                result["query_type"] = "GRAPH_QUERY"
-                result["database_used"] = "neo4j"
-                
-            elif request.analysis_type == "hybrid" and hasattr(agent, 'hybrid_retriever') and agent.hybrid_retriever:
-                from langchain.chains import RetrievalQA
-                qa_chain = RetrievalQA.from_chain_type(
-                    llm=agent.llm,
-                    retriever=agent.hybrid_retriever,
-                    return_source_documents=True
-                )
-                result = qa_chain.invoke({"query": full_query})
-                result["query_type"] = "HYBRID_QUERY"
-                result["database_used"] = "hybrid"
-            else:
-                # Fallback to auto mode if specific type not available
-                result = agent.query(full_query)
-        else:
-            # Use auto classification
-            result = agent.query(full_query)
+        # Process query using parallel analysis
+        result = await process_parallel_analysis(full_query, agent)
         
-        end_time = datetime.now()
-        processing_time = (end_time - start_time).total_seconds()
+        # Calculate processing time
+        processing_time = (datetime.now() - start_time).total_seconds()
         
-        # Handle potential errors in result
-        error_msg = result.get('error')
-        if error_msg:
-            logger.warning(f"Agent returned error: {error_msg}")
-        
-        # Process source documents asynchronously (major performance improvement)
+        # Process source documents if needed
         source_docs = []
         if request.include_sources and result.get('source_documents'):
             source_docs = await process_source_documents_async(
@@ -1018,12 +1447,12 @@ async def analyze_security_query(request: SecurityQueryRequest):
                 request.max_results
             )
         
-        # Ensure result text is clean
+        # Clean result text
         result_text = result.get('result', 'No analysis result available.')
         if isinstance(result_text, str):
             result_text = result_text.replace('\x00', '').strip()
         
-        # Create response object
+        # Prepare response
         response_data = {
             "result": result_text,
             "query_type": result.get('query_type', 'UNKNOWN'),
@@ -1031,30 +1460,23 @@ async def analyze_security_query(request: SecurityQueryRequest):
             "collections_used": result.get('collections_used'),
             "source_documents": source_docs if request.include_sources else None,
             "processing_time": processing_time,
-            "error": error_msg,
+            "error": result.get('error'),
             "timestamp": datetime.now().isoformat(),
-            "success": not bool(error_msg)
+            "success": not bool(result.get('error'))
         }
         
-        # Cache the result for future requests (exclude source_documents to save memory)
-        cache_data = response_data.copy()
-        if not request.include_sources:  # Only cache simple queries without sources
-            cache_result(cache_key, cache_data)
+        # Cache the result if appropriate
+        if not request.include_sources:
+            await aggressive_cache.set(cache_key, response_data)
         
-        response = SecurityQueryResponse(**response_data)
-        
-        # OPTIMIZATION: Unmark request as processing (success case)
+        # Unmark request as processing
         unmark_request_processing(cache_key)
         
-        logger.info(f"Query processed successfully in {processing_time:.2f}s using {response.database_used}")
-        return response
+        return SecurityQueryResponse(**response_data)
         
     except Exception as e:
         logger.error(f"Error processing query: {e}")
-        
-        # OPTIMIZATION: Unmark request as processing (error case)
         unmark_request_processing(cache_key)
-        
         return SecurityQueryResponse(
             result=f"An error occurred while processing your query: {str(e)}",
             query_type="ERROR", 
@@ -1069,7 +1491,7 @@ async def get_collections():
     """Get available Milvus collections with enhanced information."""
     global agent, agent_initialized
     
-    if not agent_initialized or not agent:
+    if not agent_manager.initialized or not agent_manager.agent:
         raise HTTPException(
             status_code=503,
             detail="Security agent is not available."
@@ -1079,9 +1501,9 @@ async def get_collections():
         collections_info = {}
         collections = []
         
-        if hasattr(agent, 'milvus_retriever') and agent.milvus_retriever:
-            if hasattr(agent.milvus_retriever, 'collections'):
-                collections = list(agent.milvus_retriever.collections.keys())
+        if hasattr(agent_manager.agent, 'milvus_retriever') and agent_manager.agent.milvus_retriever:
+            if hasattr(agent_manager.agent.milvus_retriever, 'collections'):
+                collections = list(agent_manager.agent.milvus_retriever.collections.keys())
                 for coll_name in collections:
                     # Add metadata about collection type
                     if coll_name == "mistralData":
@@ -1095,7 +1517,7 @@ async def get_collections():
             "collections": collections,
             "collections_info": collections_info,
             "total": len(collections),
-            "retriever_type": "multi_collection" if hasattr(agent.milvus_retriever, 'collections') else "single_collection",
+            "retriever_type": "multi_collection" if hasattr(agent_manager.agent.milvus_retriever, 'collections') else "single_collection",
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
@@ -1292,96 +1714,134 @@ async def get_network_graph(limit: int = 100, ip_address: Optional[str] = None):
 
 @app.get("/network/stats", response_model=NetworkStatsResponse)
 async def get_network_stats():
-    """Get comprehensive network statistics for the dashboard with caching."""
+    """Get network statistics with optimized caching and background updates."""
+    cache_key = "network_stats"
+    
+    # Try to get from cache first
+    cached_stats = await network_stats_cache.get(cache_key)
+    if cached_stats:
+        # Schedule background refresh if cache is getting old (75% of TTL)
+        cache_age = (datetime.now() - cached_stats.get('timestamp', datetime.now())).total_seconds()
+        if cache_age > (STATS_CACHE_EXPIRY_MINUTES * 60 * 0.75):
+            background_tasks = BackgroundTasks()
+            background_tasks.add_task(fetch_fresh_stats)
+        return cached_stats
+
     try:
-        if config.lightweight_mode:
-            # Return mock data in lightweight mode
-            return NetworkStatsResponse(
-                network_nodes=1247,
-                active_connections=3891,
-                data_throughput="2.4 GB/s",
-                total_hosts=156,
-                total_flows=3891,
-                total_protocols=12,
-                malicious_flows=23,
-                top_ports=[
-                    {"port": 80, "service": "http", "count": 1024},
-                    {"port": 443, "service": "https", "count": 892},
-                    {"port": 22, "service": "ssh", "count": 234},
-                ],
-                top_protocols=[
-                    {"protocol": "tcp", "count": 2847},
-                    {"protocol": "udp", "count": 1044},
-                ],
-                threat_indicators=[
-                    {"ip": "185.143.223.12", "count": 15, "threat_type": "Malware C&C"},
-                    {"ip": "91.243.85.45", "count": 8, "threat_type": "Scanning Activity"},
-                ],
-                timestamp=datetime.now().isoformat()
-            )
+        # Get fresh stats
+        stats = await fetch_fresh_stats()
         
-        # Check cache first
-        cache_key = "network_stats"
-        if cache_key in NETWORK_STATS_CACHE:
-            cached_item = NETWORK_STATS_CACHE[cache_key]
-            # Check if cache is still valid
-            if datetime.now() - cached_item['timestamp'] < timedelta(minutes=STATS_CACHE_EXPIRY_MINUTES):
-                logger.info("Returning cached network stats")
-                cached_response = cached_item['data'].copy()
-                cached_response['timestamp'] = datetime.now().isoformat()
-                return NetworkStatsResponse(**cached_response)
-            else:
-                # Remove expired cache
-                del NETWORK_STATS_CACHE[cache_key]
+        # Cache the results
+        await network_stats_cache.set(cache_key, stats)
         
-        # Get fresh stats from database
-        stats = neo4j_helper.get_network_statistics()
-        
-        # Add calculated data throughput (mock for now)
-        stats["data_throughput"] = f"{stats.get('total_flows', 0) * 0.64:.1f} GB/s"
-        
-        response_data = {
-            **stats,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        # Cache the result
-        NETWORK_STATS_CACHE[cache_key] = {
-            'data': response_data,
-            'timestamp': datetime.now()
-        }
-        logger.info("Cached network stats for future requests")
-        
-        return NetworkStatsResponse(**response_data)
-        
+        return stats
     except Exception as e:
-        logger.error(f"Error getting network stats: {e}")
-        # Return fallback data on error
-        return NetworkStatsResponse(
-            network_nodes=1247,
-            active_connections=3891,
-            data_throughput="2.4 GB/s",
-            total_hosts=156,
-            total_flows=3891,
-            total_protocols=12,
-            malicious_flows=23,
-            top_ports=[
-                {"port": 80, "service": "http", "count": 1024},
-                {"port": 443, "service": "https", "count": 892},
-                {"port": 22, "service": "ssh", "count": 234},
-            ],
-            top_protocols=[
-                {"protocol": "tcp", "count": 2847},
-                {"protocol": "udp", "count": 1044},
-            ],
-            threat_indicators=[
-                {"ip": "185.143.223.12", "count": 15, "threat_type": "Malware C&C"},
-                {"ip": "91.243.85.45", "count": 8, "threat_type": "Scanning Activity"},
-            ],
-            timestamp=datetime.now().isoformat(),
-            success=True,
-            error=f"Using fallback data: {str(e)}"
-        )
+        logger.error(f"Error fetching network stats: {e}")
+        # If cache exists but expired, return it as fallback
+        if cached_stats:
+            logger.info("Returning expired cache as fallback")
+            return cached_stats
+        raise HTTPException(status_code=500, detail="Failed to fetch network statistics")
+
+async def fetch_fresh_stats():
+    """Fetch fresh network statistics with optimized queries."""
+    try:
+        # Use connection pooling and optimized query
+        async with neo4j_helper.driver.session() as session:
+            # Single optimized query that gets all stats at once
+            query = """
+            MATCH (src:Host)-[f:FLOW]->(dst:Host)
+            WITH 
+                count(f) as total_flows,
+                count(DISTINCT src) + count(DISTINCT dst) as total_hosts,
+                collect(DISTINCT f.protocol) as protocols,
+                collect(DISTINCT f.dst_port) as ports,
+                sum(CASE WHEN f.is_malicious = true THEN 1 ELSE 0 END) as malicious_count,
+                sum(CASE WHEN f.active = true THEN 1 ELSE 0 END) as active_count,
+                sum(CASE WHEN f.bytes_sent IS NOT NULL THEN f.bytes_sent ELSE 0 END) as total_bytes
+            RETURN 
+                total_flows, total_hosts, protocols, ports, 
+                malicious_count, active_count, total_bytes
+            """
+            
+            # Execute with timeout
+            result = await asyncio.wait_for(
+                session.run(query),
+                timeout=1.0  # 1 second timeout
+            )
+            data = await result.single()
+            
+            if not data:
+                raise ValueError("No network statistics available")
+            
+            # Process results efficiently using list comprehension
+            total_flows = data['total_flows']
+            total_hosts = data['total_hosts']
+            protocols = data['protocols']
+            ports = data['ports']
+            malicious_flows = data['malicious_count']
+            active_connections = data['active_count']
+            total_bytes = data['total_bytes']
+            
+            # Calculate protocol distribution efficiently
+            protocol_counts = {}
+            for p in protocols:
+                protocol_counts[p] = protocol_counts.get(p, 0) + 1
+            
+            top_protocols = [
+                {"protocol": p, "count": c, "percentage": round(c/len(protocols)*100, 1)}
+                for p, c in sorted(
+                    protocol_counts.items(), 
+                    key=lambda x: x[1], 
+                    reverse=True
+                )[:5]
+            ]
+            
+            # Calculate port distribution efficiently
+            port_counts = {}
+            for p in ports:
+                port_counts[p] = port_counts.get(p, 0) + 1
+            
+            top_ports = [
+                {"port": p, "count": c, "percentage": round(c/len(ports)*100, 1)}
+                for p, c in sorted(
+                    port_counts.items(), 
+                    key=lambda x: x[1], 
+                    reverse=True
+                )[:5]
+            ]
+            
+            # Calculate threat indicators
+            threat_indicators = [{
+                "type": "Malicious Flows",
+                "count": malicious_flows,
+                "percentage": round(malicious_flows/total_flows*100, 1) if total_flows > 0 else 0
+            }]
+            
+            # Format data throughput
+            data_throughput = f"{total_bytes / (1024*1024):.2f} MB" if total_bytes else "N/A"
+            
+            return {
+                "network_nodes": total_hosts,
+                "active_connections": active_connections,
+                "data_throughput": data_throughput,
+                "total_hosts": total_hosts,
+                "total_flows": total_flows,
+                "total_protocols": len(protocols),
+                "malicious_flows": malicious_flows,
+                "top_ports": top_ports,
+                "top_protocols": top_protocols,
+                "threat_indicators": threat_indicators,
+                "timestamp": datetime.now().isoformat(),
+                "success": True
+            }
+            
+    except asyncio.TimeoutError:
+        logger.error("Network stats query timed out")
+        raise HTTPException(status_code=504, detail="Query timed out")
+    except Exception as e:
+        logger.error(f"Error in fetch_fresh_stats: {e}")
+        raise
 
 # New visualization endpoints
 
@@ -1421,12 +1881,19 @@ async def get_time_series_data(
 
 @app.get("/visualization/bar-chart")
 async def get_bar_chart_data(chart_type: str = "protocols"):
-    """Get bar chart data for various metrics."""
+    """Get bar chart data with optimized queries and caching."""
+    cache_key = f"bar_chart_{chart_type}"
+    
     try:
+        # Check cache first
+        cached_data = await network_stats_cache.get(cache_key)
+        if cached_data:
+            return cached_data
+        
         if config.lightweight_mode:
-            # Return mock bar chart data
+            # Return mock bar chart data (unchanged)
             import random
-            
+            data = []
             if chart_type == "protocols":
                 data = [
                     {"name": "TCP", "value": 2847, "percentage": 68.5},
@@ -1442,102 +1909,111 @@ async def get_bar_chart_data(chart_type: str = "protocols"):
                     {"name": "53 (DNS)", "value": 156, "percentage": 5.4},
                     {"name": "3389 (RDP)", "value": 98, "percentage": 3.4}
                 ]
-            elif chart_type == "countries":
-                data = [
-                    {"name": "United States", "value": 1245, "percentage": 42.3},
-                    {"name": "China", "value": 567, "percentage": 19.3},
-                    {"name": "Russia", "value": 234, "percentage": 8.0},
-                    {"name": "Germany", "value": 178, "percentage": 6.1},
-                    {"name": "United Kingdom", "value": 145, "percentage": 4.9}
-                ]
             else:
                 data = [{"name": f"Item {i}", "value": random.randint(10, 1000)} for i in range(5)]
             
-            return {
+            result = {
                 "data": data,
                 "chart_type": chart_type,
                 "total": sum(item["value"] for item in data),
                 "success": True,
                 "timestamp": datetime.now().isoformat()
             }
+            await network_stats_cache.set(cache_key, result)
+            return result
         
-        # Real Neo4j queries for bar chart data
+        # Real Neo4j queries with optimized execution
         if not neo4j_helper.driver:
-            if not neo4j_helper.connect():
-                raise Exception("Cannot connect to Neo4j")
+            neo4j_helper.connect()
         
-        with neo4j_helper.driver.session() as session:
-            if chart_type == "protocols":
-                query = """
-                MATCH (f:Flow)-[:USES_PROTOCOL]->(p:Protocol)
-                RETURN p.name as name, count(f) as value
-                ORDER BY value DESC
-                LIMIT 10
+        async with neo4j_helper.driver.session() as session:
+            # Optimized queries for each chart type
+            queries = {
+                "protocols": """
+                    MATCH (f:Flow)-[:USES_PROTOCOL]->(p:Protocol)
+                    WITH p.name as name, count(f) as value
+                    ORDER BY value DESC
+                    LIMIT 10
+                    RETURN collect({name: name, value: value}) as data
+                """,
+                "ports": """
+                    MATCH (f:Flow)-[:USES_DST_PORT]->(port:Port)
+                    WITH port.port as port, port.service as service, count(f) as value
+                    ORDER BY value DESC
+                    LIMIT 10
+                    RETURN collect({port: port, service: service, value: value}) as data
+                """,
+                "threats": """
+                    MATCH (src:Host)-[:SENT]->(f:Flow)
+                    WHERE f.malicious = true
+                    WITH src.ip as name, count(f) as value
+                    ORDER BY value DESC
+                    LIMIT 10
+                    RETURN collect({name: name, value: value}) as data
+                """,
+                "countries": """
+                    MATCH (h:Host)-[:SENT]->(f:Flow)
+                    WHERE h.country IS NOT NULL AND h.country <> ""
+                    WITH h.country as name, count(f) as value
+                    ORDER BY value DESC
+                    LIMIT 10
+                    RETURN collect({name: name, value: value}) as data
                 """
-            elif chart_type == "ports":
-                query = """
-                MATCH (f:Flow)-[:USES_DST_PORT]->(port:Port)
-                RETURN port.port as port, port.service as service, count(f) as value
-                ORDER BY value DESC
-                LIMIT 10
-                """
-            elif chart_type == "threats":
-                query = """
-                MATCH (src:Host)-[:SENT]->(f:Flow)
-                WHERE f.malicious = true
-                RETURN src.ip as name, count(f) as value
-                ORDER BY value DESC
-                LIMIT 10
-                """
-            elif chart_type == "countries":
-                # Query for geographic/country data
-                query = """
-                MATCH (h:Host)-[:SENT]->(f:Flow)
-                WHERE h.country IS NOT NULL AND h.country <> ""
-                RETURN h.country as name, count(f) as value
-                ORDER BY value DESC
-                LIMIT 10
-                """
+            }
+            
+            # Execute query with timeout
+            query = queries.get(chart_type, queries["protocols"])
+            result = await asyncio.wait_for(
+                session.run(query),
+                timeout=0.5  # 500ms timeout
+            )
+            record = await result.single()
+            
+            if not record:
+                data = []
             else:
-                # Default to protocols
-                query = """
-                MATCH (f:Flow)-[:USES_PROTOCOL]->(p:Protocol)
-                RETURN p.name as name, count(f) as value
-                ORDER BY value DESC
-                LIMIT 10
-                """
-            
-            result = session.run(query)
-            data = []
-            total = 0
-            
-            for record in result:
-                if chart_type == "ports":
-                    name = f"{record['port']} ({record['service'] or 'unknown'})"
-                else:
-                    name = record["name"]
+                raw_data = record["data"]
+                total = sum(item["value"] for item in raw_data)
                 
-                value = record["value"]
-                data.append({"name": name, "value": value})
-                total += value
+                # Process data based on chart type
+                if chart_type == "ports":
+                    data = [{
+                        "name": f"{item['port']} ({item['service'] or 'unknown'})",
+                        "value": item["value"],
+                        "percentage": round((item["value"] / total) * 100, 1)
+                    } for item in raw_data]
+                else:
+                    data = [{
+                        "name": item["name"],
+                        "value": item["value"],
+                        "percentage": round((item["value"] / total) * 100, 1)
+                    } for item in raw_data]
             
-            # Calculate percentages
-            for item in data:
-                item["percentage"] = round((item["value"] / total) * 100, 1) if total > 0 else 0
-            
-            # Handle case where no geolocation data is available for countries
-            if chart_type == "countries" and len(data) == 0:
+            # Handle empty data case
+            if not data and chart_type == "countries":
                 data = [{"name": "N/A - No geolocation data available", "value": 0, "percentage": 0}]
                 total = 0
-        
+            
+            result = {
+                "data": data,
+                "chart_type": chart_type,
+                "total": total if 'total' in locals() else 0,
+                "success": True,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Cache the results
+            await network_stats_cache.set(cache_key, result)
+            return result
+            
+    except asyncio.TimeoutError:
+        logger.error("Bar chart query timed out")
         return {
-            "data": data,
-            "chart_type": chart_type,
-            "total": total,
-            "success": True,
+            "data": [],
+            "error": "Query timed out",
+            "success": False,
             "timestamp": datetime.now().isoformat()
         }
-        
     except Exception as e:
         logger.error(f"Error getting bar chart data: {e}")
         return {
@@ -1782,6 +2258,74 @@ async def not_found_handler(request, exc):
 async def internal_error_handler(request, exc):
     logger.error(f"Internal server error: {exc}")
     return {"error": "Internal server error", "message": "Please try again later"}
+
+# Add before the FastAPI app initialization
+
+async def get_cached_response(request: Request) -> Optional[Response]:
+    """Get cached response for cacheable endpoints."""
+    cache_config = get_cache_config(request.url.path)
+    if not cache_config['cacheable']:
+        return None
+        
+    cache_key = f"response_{request.url.path}_{request.query_params}"
+    cached_data = await network_stats_cache.get(cache_key)
+    
+    if cached_data:
+        return JSONResponse(
+            content=cached_data,
+            headers={
+                "X-Cache": "HIT",
+                "Cache-Control": f"public, max-age={cache_config['max_age']}"
+            }
+        )
+    return None
+
+async def semantic_analysis(query: str, agent) -> Dict[str, Any]:
+    """Perform semantic analysis using Milvus."""
+    try:
+        if not hasattr(agent, 'milvus_retriever'):
+            return {"type": "semantic", "result": None}
+            
+        from langchain.chains import RetrievalQA
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=agent.llm,
+            retriever=agent.milvus_retriever,
+            return_source_documents=True
+        )
+        result = await qa_chain.ainvoke({"query": query})
+        return {"type": "semantic", "result": result}
+    except Exception as e:
+        logger.error(f"Semantic analysis error: {e}")
+        return {"type": "semantic", "error": str(e)}
+
+async def graph_analysis(query: str, agent) -> Dict[str, Any]:
+    """Perform graph analysis using Neo4j."""
+    try:
+        if not hasattr(agent, 'neo4j_retriever'):
+            return {"type": "graph", "result": None}
+            
+        from langchain.chains import RetrievalQA
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=agent.llm,
+            retriever=agent.neo4j_retriever,
+            return_source_documents=True
+        )
+        result = await qa_chain.ainvoke({"query": query})
+        return {"type": "graph", "result": result}
+    except Exception as e:
+        logger.error(f"Graph analysis error: {e}")
+        return {"type": "graph", "error": str(e)}
+
+async def pattern_analysis(query: str) -> Dict[str, Any]:
+    """Check for known patterns and quick responses."""
+    try:
+        is_simple, result = is_simple_query(query)
+        if is_simple:
+            return {"type": "pattern", "result": result}
+        return {"type": "pattern", "result": None}
+    except Exception as e:
+        logger.error(f"Pattern analysis error: {e}")
+        return {"type": "pattern", "error": str(e)}
 
 # Run the server
 if __name__ == "__main__":

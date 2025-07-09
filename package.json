@@ -2,6 +2,8 @@
   "dependencies": {
     "date-fns": "^3.6.0",
     "neo4j-driver": "^5.28.1",
-    "react-force-graph-2d": "^1.27.1"
+    "react-force-graph-2d": "^1.27.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   }
 }
