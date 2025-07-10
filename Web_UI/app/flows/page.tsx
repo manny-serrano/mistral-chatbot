@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { CustomNetworkGraph, NetworkGraphData } from "@/components/custom-network-graph"
 import { ArrowLeft } from "lucide-react"
 
-export default function FlowsPage() {
+function FlowsContent() {
   const searchParams = useSearchParams()
   const ip = searchParams.get("ip") || ""
   const [viewMode, setViewMode] = useState<'text'|'graph'>('text')
@@ -86,5 +86,13 @@ export default function FlowsPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function FlowsPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-white">Loading flows...</div>}>
+      <FlowsContent />
+    </Suspense>
   )
 } 

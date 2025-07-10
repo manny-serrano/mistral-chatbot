@@ -1,4 +1,5 @@
 "use client"
+
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -155,7 +156,7 @@ export default function AlertsPage() {
   const handleResolveAlert = async (alertId: string) => {
     try {
       // Update alert status to resolved
-      setAlertsData(prev => prev.map(alert => 
+      setAlertsData((prev: AlertUI[]) => prev.map((alert: AlertUI) => 
         alert.id === alertId 
           ? { ...alert, status: 'resolved', assignee: 'System' }
           : alert
@@ -170,7 +171,7 @@ export default function AlertsPage() {
   const handleEscalateAlert = async (alertId: string) => {
     try {
       // Update alert status to escalated
-      setAlertsData(prev => prev.map(alert => 
+      setAlertsData((prev: AlertUI[]) => prev.map((alert: AlertUI) => 
         alert.id === alertId 
           ? { ...alert, status: 'escalated', assignee: 'Security Team' }
           : alert
@@ -185,7 +186,7 @@ export default function AlertsPage() {
   const handleInvestigateAlert = async (alertId: string) => {
     try {
       // Update alert status to investigating
-      setAlertsData(prev => prev.map(alert => 
+      setAlertsData((prev: AlertUI[]) => prev.map((alert: AlertUI) => 
         alert.id === alertId 
           ? { ...alert, status: 'investigating', assignee: 'Analyst' }
           : alert
@@ -208,10 +209,10 @@ export default function AlertsPage() {
         const data = await response.json()
         
         // Get unique IPs for geolocation lookup
-        const uniqueIPs = [...new Set((data.alerts || []).map((a: ApiAlert) => a.ip))]
+        const uniqueIPs = [...new Set((data.alerts || []).map((a: ApiAlert) => a.ip))].filter(Boolean)
         
         // Fetch geolocation data for all IPs
-        const geolocations = await getGeolocationsForIPs(uniqueIPs)
+        const geolocations = await getGeolocationsForIPs(uniqueIPs as string[])
         
         // Create IP to geolocation mapping
         const geoMap = new Map()
@@ -239,7 +240,7 @@ export default function AlertsPage() {
             timezone: timezoneString
           }
           
-          geoMap.set(geo.ip, safeGeo)
+          geoMap.set(String(geo.ip), safeGeo)
         })
 
         // Map API alerts to UI alerts with geolocation
@@ -262,27 +263,30 @@ export default function AlertsPage() {
           }
           
           // Get geolocation data for this IP
-          const geo = geoMap.get(a.ip)
+          const geo = geoMap.get(String(a.ip))
           const locationString = geo ? `${geo.city}, ${geo.country}` : "Unknown Location"
           
           // Create meaningful target description from ports and IPs
           let targetString = "Unknown"
-          if (a.target_ports && a.target_ports.length > 0 && a.target_ips && a.target_ips.length > 0) {
+          const targetPorts = Array.isArray(a.target_ports) ? a.target_ports : []
+          const targetIps = Array.isArray(a.target_ips) ? a.target_ips.map(ip => String(ip)) : []
+          
+          if (targetPorts.length > 0 && targetIps.length > 0) {
             // Show target IPs first, then ports
-            const ipPart = a.target_ips.length <= 2 
-              ? `${a.target_ips.join(', ')}`
-              : `${a.target_ips.slice(0, 2).join(', ')} (+${a.target_ips.length - 2} more)`
+            const ipPart = targetIps.length <= 2 
+              ? `${targetIps.join(', ')}`
+              : `${targetIps.slice(0, 2).join(', ')} (+${targetIps.length - 2} more)`
             
-            const portPart = a.target_ports.length <= 3 
-              ? `ports ${a.target_ports.join(', ')}`
-              : `ports ${a.target_ports.slice(0, 3).join(', ')} (+${a.target_ports.length - 3} more)`
+            const portPart = targetPorts.length <= 3 
+              ? `ports ${targetPorts.join(', ')}`
+              : `ports ${targetPorts.slice(0, 3).join(', ')} (+${targetPorts.length - 3} more)`
             
             targetString = `${ipPart} on ${portPart}`
-          } else if (a.target_ports && a.target_ports.length > 0) {
+          } else if (targetPorts.length > 0) {
             // Fallback to just ports if no IPs
-            targetString = a.target_ports.length <= 3 
-              ? `Ports: ${a.target_ports.join(', ')}`
-              : `Ports: ${a.target_ports.slice(0, 3).join(', ')} (+${a.target_ports.length - 3} more)`
+            targetString = targetPorts.length <= 3 
+              ? `Ports: ${targetPorts.join(', ')}`
+              : `Ports: ${targetPorts.slice(0, 3).join(', ')} (+${targetPorts.length - 3} more)`
           }
           
           return {
@@ -325,13 +329,13 @@ export default function AlertsPage() {
   const alertStats = useMemo(() => {
     const stats = {
       total: alertsData.length,
-      critical: alertsData.filter(alert => alert.severity === "critical").length,
-      high: alertsData.filter(alert => alert.severity === "high").length,
-      medium: alertsData.filter(alert => alert.severity === "medium").length,
-      low: alertsData.filter(alert => alert.severity === "low").length,
-      resolved: alertsData.filter(alert => alert.status === "resolved").length,
-      investigating: alertsData.filter(alert => alert.status === "investigating").length,
-      escalated: alertsData.filter(alert => alert.status === "escalated").length,
+      critical: alertsData.filter((alert: AlertUI) => alert.severity === "critical").length,
+      high: alertsData.filter((alert: AlertUI) => alert.severity === "high").length,
+      medium: alertsData.filter((alert: AlertUI) => alert.severity === "medium").length,
+      low: alertsData.filter((alert: AlertUI) => alert.severity === "low").length,
+      resolved: alertsData.filter((alert: AlertUI) => alert.status === "resolved").length,
+      investigating: alertsData.filter((alert: AlertUI) => alert.status === "investigating").length,
+      escalated: alertsData.filter((alert: AlertUI) => alert.status === "escalated").length,
     }
     return stats
   }, [alertsData])
@@ -342,10 +346,10 @@ export default function AlertsPage() {
     if (total === 0) return { critical: 0, high: 0, medium: 0, low: 0 }
 
     return {
-      critical: (alertsData.filter(alert => alert.severity === 'critical').length / total) * 100,
-      high: (alertsData.filter(alert => alert.severity === 'high').length / total) * 100,
-      medium: (alertsData.filter(alert => alert.severity === 'medium').length / total) * 100,
-      low: (alertsData.filter(alert => alert.severity === 'low').length / total) * 100
+      critical: (alertsData.filter((alert: AlertUI) => alert.severity === 'critical').length / total) * 100,
+      high: (alertsData.filter((alert: AlertUI) => alert.severity === 'high').length / total) * 100,
+      medium: (alertsData.filter((alert: AlertUI) => alert.severity === 'medium').length / total) * 100,
+      low: (alertsData.filter((alert: AlertUI) => alert.severity === 'low').length / total) * 100
     }
   }, [alertsData])
 
@@ -355,16 +359,16 @@ export default function AlertsPage() {
     if (total === 0) return { open: 0, investigating: 0, resolved: 0, escalated: 0 }
 
     return {
-      open: (alertsData.filter(alert => alert.status === 'open').length / total) * 100,
-      investigating: (alertsData.filter(alert => alert.status === 'investigating').length / total) * 100,
-      resolved: (alertsData.filter(alert => alert.status === 'resolved').length / total) * 100,
-      escalated: (alertsData.filter(alert => alert.status === 'escalated').length / total) * 100
+      open: (alertsData.filter((alert: AlertUI) => alert.status === 'open').length / total) * 100,
+      investigating: (alertsData.filter((alert: AlertUI) => alert.status === 'investigating').length / total) * 100,
+      resolved: (alertsData.filter((alert: AlertUI) => alert.status === 'resolved').length / total) * 100,
+      escalated: (alertsData.filter((alert: AlertUI) => alert.status === 'escalated').length / total) * 100
     }
   }, [alertsData])
 
   // Filter alerts based on current filters
   const filteredAlerts = useMemo(() => {
-    return alertsData.filter(alert => {
+    return alertsData.filter((alert: AlertUI) => {
       const matchesSeverity = severityFilter === "all" || alert.severity === severityFilter
       const matchesType = typeFilter === "all" || alert.type === typeFilter
       const matchesStatus = statusFilter === "all" || alert.status === statusFilter
@@ -426,13 +430,13 @@ export default function AlertsPage() {
   const toggleAlertSelection = (alertId: string) => {
     setSelectedAlerts((prev: string[]) => 
       prev.includes(alertId) 
-        ? prev.filter(id => id !== alertId)
+        ? prev.filter((id: string) => id !== alertId)
         : [...prev, alertId]
     )
   }
 
   const selectAllAlerts = () => {
-    const currentPageAlertIds = currentPageAlerts.map(alert => alert.id)
+    const currentPageAlertIds = currentPageAlerts.map((alert: AlertUI) => alert.id)
     setSelectedAlerts(currentPageAlertIds)
   }
 
@@ -796,7 +800,7 @@ export default function AlertsPage() {
                 ) : error ? (
                   <div className="p-8 text-center text-red-400">Error: {error}</div>
                 ) : currentPageAlerts.length > 0 ? (
-                  currentPageAlerts.map((alert) => (
+                  currentPageAlerts.map((alert: AlertUI) => (
                     <AlertItem
                       key={alert.id}
                       alert={alert}
@@ -1006,8 +1010,14 @@ function AlertItem({ alert, isSelected, onToggleSelection, onResolve, onEscalate
                   {alert.type.charAt(0).toUpperCase() + alert.type.slice(1)}
                 </div>
               </Badge>
-              <Badge className={`${statusConf.bg} ${statusConf.color} ${statusConf.border} text-xs`}>
-                {alert.status.charAt(0).toUpperCase() + alert.status.slice(1)}
+              <Badge
+                variant="outline"
+                className={`text-xs ml-2 ${getSeverityColor(alert.severity)}`}
+              >
+                <span className="flex items-center gap-1">
+                  <Activity className="h-3 w-3" />
+                  {alert.status.toUpperCase()}
+                </span>
               </Badge>
               <span className="text-xs font-mono text-zinc-500">{alert.id}</span>
             </div>
@@ -1161,6 +1171,22 @@ function AlertItem({ alert, isSelected, onToggleSelection, onResolve, onEscalate
       </div>
     </div>
   )
+}
+
+// Helper function to get severity color class
+function getSeverityColor(severity: string) {
+  switch (severity) {
+    case "critical":
+      return "bg-red-500/20 text-red-400 border-red-500/30"
+    case "high":
+      return "bg-amber-500/20 text-amber-400 border-amber-500/30"
+    case "medium":
+      return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+    case "low":
+      return "bg-blue-500/20 text-blue-400 border-blue-500/30"
+    default:
+      return "bg-gray-500/20 text-gray-400 border-gray-500/30"
+  }
 }
 
 // Alert Details Modal Component
