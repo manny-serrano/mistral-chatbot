@@ -36,6 +36,8 @@ import {
   Zap,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
+import { downloadReportAsPDF } from "@/lib/pdf-utils"
+import { useRouter } from "next/navigation"
 
 interface ReportData {
   id: string
@@ -69,6 +71,8 @@ export default function ReportsPage() {
   const [summary, setSummary] = useState<ReportSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     fetchReports()
@@ -166,8 +170,24 @@ export default function ReportsPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
+  const handleViewReport = (reportId: string) => {
+    router.push(`/reports/${reportId}`)
+  }
+
+  const handleDownloadPDF = async (reportId: string) => {
+    try {
+      setDownloadingPDF(reportId)
+      await downloadReportAsPDF(reportId)
+    } catch (error) {
+      console.error('Error downloading PDF:', error)
+      setError('Failed to download PDF. Please try again.')
+    } finally {
+      setDownloadingPDF(null)
+    }
+  }
+
   return (
-    <main className="flex min-h-screen flex-col bg-gradient-to-br from-black via-purple-950/40 to-gray-950 text-zinc-100 relative">
+    <div className="flex min-h-screen flex-col bg-gradient-to-br from-black via-purple-950/40 to-gray-950 text-zinc-100 relative">
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
 
@@ -284,27 +304,11 @@ export default function ReportsPage() {
                 <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Threats
               </TabsTrigger>
-              <TabsTrigger
-                value="incidents"
-                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-xs sm:text-sm"
-              >
-                <Shield className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                Incidents
-              </TabsTrigger>
-              <TabsTrigger
-                value="compliance"
-                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-xs sm:text-sm"
-              >
-                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                Compliance
-              </TabsTrigger>
               <TabsTrigger value="custom" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-xs sm:text-sm col-span-2 sm:col-span-1">
                 <FileBarChart className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Custom
               </TabsTrigger>
             </TabsList>
-
-            {/* Overview Tab - Responsive */}
             <TabsContent value="overview" className="space-y-4 sm:space-y-6">
               {/* Quick Stats - Responsive Grid */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -312,17 +316,11 @@ export default function ReportsPage() {
                   <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Total Reports</CardTitle>
-                      <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400" />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-3 sm:p-6 pt-0">
-                    <div className="text-xl sm:text-2xl font-bold text-white">
-                      {loading ? '...' : summary?.total_reports || 0}
                     </div>
                     <p className="text-xs text-zinc-300 mt-1">
                       {loading ? 'Loading...' : 'Cybersecurity reports'}
                     </p>
-                  </CardContent>
+                  </CardHeader>
                 </Card>
 
                 <Card className="bg-gray-900/80 border-violet-400/40 backdrop-blur-xl">
@@ -455,14 +453,16 @@ export default function ReportsPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0 text-zinc-400 hover:text-white hover:bg-purple-900/40"
-                                onClick={() => downloadReport(report.id)}
+                                onClick={() => handleDownloadPDF(report.id)}
+                                disabled={downloadingPDF === report.id}
                               >
-                                <Download className="h-3 w-3" />
+                                <Download className={`h-3 w-3 ${downloadingPDF === report.id ? 'animate-spin' : ''}`} />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0 text-zinc-400 hover:text-white hover:bg-purple-900/40"
+                                onClick={() => handleViewReport(report.id)}
                               >
                                 <Eye className="h-3 w-3" />
                               </Button>
@@ -651,190 +651,6 @@ export default function ReportsPage() {
               </div>
             </TabsContent>
 
-            {/* Incidents Tab */}
-            <TabsContent value="incidents" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                  <CardHeader>
-                    <CardTitle className="text-lg text-white">Incident Response Reports</CardTitle>
-                    <CardDescription className="text-zinc-300">
-                      Detailed analysis of security incidents and response actions
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
-                        <div className="text-2xl font-bold text-red-400">7</div>
-                        <div className="text-xs text-red-300">Active Incidents</div>
-                      </div>
-                      <div className="text-center p-3 bg-green-900/20 border border-green-500/30 rounded-lg">
-                        <div className="text-2xl font-bold text-green-400">142</div>
-                        <div className="text-xs text-green-300">Resolved This Month</div>
-                      </div>
-                    </div>
-
-                    <div className="text-center py-8">
-                      <Shield className="h-10 w-10 text-purple-400 mb-4 mx-auto" />
-                      <h4 className="text-white font-medium mb-2">Incident Reports Coming Soon</h4>
-                      <p className="text-zinc-400 text-sm">
-                        Advanced incident tracking features are being developed. Current security analysis available in Overview tab.
-                      </p>
-                    </div>
-
-                    <Button className="w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Generate Incident Report
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                  <CardHeader>
-                    <CardTitle className="text-lg text-white">Response Metrics</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-300">Average Response Time</span>
-                        <span className="text-sm font-medium text-white">4.2 minutes</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-300">Resolution Rate</span>
-                        <span className="text-sm font-medium text-white">94.7%</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-300">Escalation Rate</span>
-                        <span className="text-sm font-medium text-white">12.3%</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-300">False Positive Rate</span>
-                        <span className="text-sm font-medium text-white">3.1%</span>
-                      </div>
-                    </div>
-
-                    <Separator className="bg-purple-500/20" />
-
-                    <div className="space-y-3">
-                      <h4 className="text-white font-medium">Response Team Performance</h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-zinc-300">Tier 1 Analysts</span>
-                          <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Excellent</Badge>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-zinc-300">Tier 2 Engineers</span>
-                          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Good</Badge>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-zinc-300">Senior Specialists</span>
-                          <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Excellent</Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
-            {/* Compliance Tab */}
-            <TabsContent value="compliance" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                  <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                    <CardHeader>
-                      <CardTitle className="text-lg text-white">Compliance Status Overview</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="text-center p-4 bg-green-900/20 border border-green-500/30 rounded-lg">
-                          <div className="text-3xl font-bold text-green-400">87%</div>
-                          <div className="text-sm text-green-300">Overall Compliance</div>
-                        </div>
-                        <div className="text-center p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg">
-                          <div className="text-3xl font-bold text-amber-400">23</div>
-                          <div className="text-sm text-amber-300">Action Items</div>
-                        </div>
-                      </div>
-
-                      <div className="text-center py-8">
-                        <CheckCircle className="h-10 w-10 text-purple-400 mb-4 mx-auto" />
-                        <h4 className="text-white font-medium mb-2">Compliance Framework Analysis Coming Soon</h4>
-                        <p className="text-zinc-400 text-sm">
-                          Regulatory compliance reporting features are being developed. Current security analysis available in Overview tab.
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="space-y-6">
-                  <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                    <CardHeader>
-                      <CardTitle className="text-lg text-white">Generate Compliance Report</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label className="text-white">Framework</Label>
-                        <Select defaultValue="all">
-                          <SelectTrigger className="bg-gray-800/50 border-purple-400/30 text-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-gray-800 border-purple-400/30">
-                            <SelectItem value="all">All Frameworks</SelectItem>
-                            <SelectItem value="soc2">SOC 2 Type II</SelectItem>
-                            <SelectItem value="iso27001">ISO 27001</SelectItem>
-                            <SelectItem value="nist">NIST CSF</SelectItem>
-                            <SelectItem value="gdpr">GDPR</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-white">Report Period</Label>
-                        <Select defaultValue="quarterly">
-                          <SelectTrigger className="bg-gray-800/50 border-purple-400/30 text-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-gray-800 border-purple-400/30">
-                            <SelectItem value="monthly">Monthly</SelectItem>
-                            <SelectItem value="quarterly">Quarterly</SelectItem>
-                            <SelectItem value="annual">Annual</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <Button className="w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700">
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Generate Report
-                      </Button>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                    <CardHeader>
-                      <CardTitle className="text-lg text-white">Upcoming Audits</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                        <div>
-                          <h5 className="font-medium text-white">SOC 2 Annual</h5>
-                          <p className="text-sm text-zinc-400">Jan 15, 2025</p>
-                        </div>
-                        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">Upcoming</Badge>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                        <div>
-                          <h5 className="font-medium text-white">ISO 27001 Review</h5>
-                          <p className="text-sm text-zinc-400">Feb 28, 2025</p>
-                        </div>
-                        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Scheduled</Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </TabsContent>
-
             {/* Custom Tab */}
             <TabsContent value="custom" className="space-y-6">
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
@@ -997,7 +813,7 @@ export default function ReportsPage() {
           </div>
         </div>
       </footer>
-    </main>
+    </div>
   )
 }
 

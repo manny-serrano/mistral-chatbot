@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { ArrowLeft, Download, Printer, FileText, Calendar, Clock, Shield, Database, TrendingUp, AlertTriangle } from 'lucide-react'
+import { downloadReportAsPDF, generatePDFFromCurrentPage } from '@/lib/pdf-utils'
 
 interface ReportData {
   metadata: {
@@ -82,6 +83,7 @@ export default function ReportViewerPage() {
   const [report, setReport] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [downloadingPDF, setDownloadingPDF] = useState(false)
 
   useEffect(() => {
     fetchReport()
@@ -131,8 +133,49 @@ export default function ReportViewerPage() {
     window.print()
   }
 
-  const handleDownload = () => {
-    window.open(`/api/reports/download?id=${reportId}`, '_blank')
+  const handleDownload = async () => {
+    try {
+      setDownloadingPDF(true)
+      await downloadReportAsPDF(reportId)
+    } catch (error) {
+      console.error('Error downloading PDF:', error)
+      setError('Failed to download PDF. Please try again.')
+    } finally {
+      setDownloadingPDF(false)
+    }
+  }
+
+  // Map of protocol numbers to names (subset for display)
+  const PROTOCOL_MAP: Record<number, string> = {
+    1: 'ICMP',
+    2: 'IGMP',
+    6: 'TCP',
+    17: 'UDP',
+    41: 'IPv6',
+    47: 'GRE',
+    50: 'ESP',
+    51: 'AH',
+    58: 'ICMPv6',
+    89: 'OSPF',
+    112: 'VRRP',
+  }
+
+  const getProtocolName = (protoKey: string, protoData: any): string => {
+    // Prefer explicit ID from data if present
+    if (protoData && typeof protoData.protocol_id === 'number') {
+      const name = PROTOCOL_MAP[protoData.protocol_id]
+      if (name) return name
+    }
+
+    // Handle keys like "Protocol_112"
+    const match = protoKey.match(/(?:protocol_)?(\d+)/i)
+    if (match) {
+      const id = Number(match[1])
+      return PROTOCOL_MAP[id] || `Protocol ${id}`
+    }
+
+    // Not numeric, just return capitalized
+    return protoKey.toUpperCase()
   }
 
   if (loading) {
@@ -201,9 +244,14 @@ export default function ReportViewerPage() {
                 <Printer className="h-4 w-4 mr-2" />
                 Print
               </Button>
-              <Button variant="outline" size="sm" onClick={handleDownload}>
-                <Download className="h-4 w-4 mr-2" />
-                Download
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleDownload}
+                disabled={downloadingPDF}
+              >
+                <Download className={`h-4 w-4 mr-2 ${downloadingPDF ? 'animate-spin' : ''}`} />
+                {downloadingPDF ? 'Generating PDF...' : 'Download PDF'}
               </Button>
             </div>
           </div>
@@ -371,7 +419,7 @@ export default function ReportViewerPage() {
               {Object.entries(report.network_traffic_overview.protocol_breakdown).slice(0, 6).map(([protocol, data]) => (
                 <div key={protocol} className="p-3 bg-gray-50 rounded print:border print:bg-white">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900">{protocol}</span>
+                    <span className="text-sm font-medium text-gray-900">{getProtocolName(protocol, data)}</span>
                     {data.is_suspicious && (
                       <Badge variant="outline" className="text-xs border-yellow-200 text-yellow-700 bg-yellow-50">
                         Suspicious
