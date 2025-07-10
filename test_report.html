@@ -1,0 +1,969 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Network Traffic Analysis Report with Threat Detection (YAF/IPFIX Data)</title>
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          line-height: 1.5;
+          color: #1f2937;
+          background-color: #ffffff;
+          font-size: 14px;
+        }
+        
+        .container {
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 40px 32px;
+        }
+        
+        /* Header */
+        .header {
+          text-align: center;
+          margin-bottom: 40px;
+        }
+        
+        .header h1 {
+          font-size: 28px;
+          font-weight: 700;
+          color: #111827;
+          margin-bottom: 12px;
+          line-height: 1.2;
+        }
+        
+        .header .subtitle {
+          font-size: 16px;
+          color: #6b7280;
+          margin-bottom: 20px;
+        }
+        
+        .header-meta {
+          display: flex;
+          justify-content: center;
+          gap: 32px;
+          font-size: 14px;
+          color: #6b7280;
+          flex-wrap: wrap;
+        }
+        
+        .header-meta-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .icon {
+          width: 16px;
+          height: 16px;
+          background-color: #9ca3af;
+          border-radius: 2px;
+        }
+        
+        /* Sections */
+        .section {
+          margin-bottom: 48px;
+        }
+        
+        .section-title {
+          font-size: 24px;
+          font-weight: 700;
+          color: #111827;
+          margin-bottom: 24px;
+        }
+        
+        .subsection-title {
+          font-size: 18px;
+          font-weight: 600;
+          color: #111827;
+          margin-bottom: 16px;
+        }
+        
+        /* Cards and Grids */
+        .card-grid {
+          display: grid;
+          gap: 16px;
+          margin-bottom: 32px;
+        }
+        
+        .card-grid-3 {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        
+        .card-grid-4 {
+          grid-template-columns: repeat(4, 1fr);
+        }
+        
+        .card-grid-2 {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .card-grid-1 {
+          grid-template-columns: 1fr;
+        }
+        
+        .card {
+          background-color: #f9fafb;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 20px;
+        }
+        
+        .card-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 8px;
+        }
+        
+        .card-label {
+          font-size: 14px;
+          font-weight: 500;
+          color: #6b7280;
+          margin-left: 8px;
+        }
+        
+        .card-value {
+          font-size: 20px;
+          font-weight: 700;
+          color: #111827;
+        }
+        
+        .card-value-large {
+          font-size: 24px;
+          font-weight: 700;
+          color: #111827;
+        }
+        
+        /* Badges */
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 12px;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.025em;
+        }
+        
+        .badge-medium {
+          background-color: #fef3c7;
+          color: #92400e;
+          border: 1px solid #fcd34d;
+        }
+        
+        .badge-high {
+          background-color: #fef2f2;
+          color: #b91c1c;
+          border: 1px solid #fca5a5;
+        }
+        
+        .badge-low {
+          background-color: #f0fdf4;
+          color: #166534;
+          border: 1px solid #86efac;
+        }
+        
+        .badge-scheduled {
+          background-color: #fef3c7;
+          color: #92400e;
+          border: 1px solid #fcd34d;
+        }
+        
+        .badge-immediate {
+          background-color: #fef2f2;
+          color: #b91c1c;
+          border: 1px solid #fca5a5;
+        }
+        
+        /* Key Findings */
+        .findings-list {
+          list-style: none;
+          padding: 0;
+        }
+        
+        .findings-item {
+          display: flex;
+          align-items: flex-start;
+          margin-bottom: 12px;
+          padding-left: 0;
+        }
+        
+        .findings-bullet {
+          width: 6px;
+          height: 6px;
+          background-color: #6b7280;
+          border-radius: 50%;
+          margin-top: 8px;
+          margin-right: 12px;
+          flex-shrink: 0;
+        }
+        
+        /* Traffic Lists */
+        .traffic-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        
+        .traffic-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px;
+          background-color: #f9fafb;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+        }
+        
+        .traffic-ip {
+          font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+          font-size: 14px;
+          color: #374151;
+          font-weight: 500;
+        }
+        
+        .traffic-stats {
+          text-align: right;
+        }
+        
+        .traffic-bytes {
+          font-size: 14px;
+          font-weight: 600;
+          color: #111827;
+        }
+        
+        .traffic-flows {
+          font-size: 12px;
+          color: #6b7280;
+        }
+        
+        /* Protocol Grid */
+        .protocol-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
+        }
+        
+        .protocol-item {
+          padding: 16px;
+          background-color: #f9fafb;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+        }
+        
+        .protocol-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+        }
+        
+        .protocol-name {
+          font-size: 14px;
+          font-weight: 600;
+          color: #111827;
+        }
+        
+        .protocol-stats {
+          font-size: 12px;
+          color: #6b7280;
+        }
+        
+        /* Utilities */
+        .text-center {
+          text-align: center;
+        }
+        
+        .mb-8 {
+          margin-bottom: 32px;
+        }
+        
+        .mb-6 {
+          margin-bottom: 24px;
+        }
+        
+        .mb-4 {
+          margin-bottom: 16px;
+        }
+        
+        .separator {
+          height: 1px;
+          background-color: #e5e7eb;
+          margin: 32px 0;
+          border: none;
+        }
+        
+        /* Print specific */
+        @media print {
+          .container {
+            padding: 20px;
+          }
+          
+          .section {
+            margin-bottom: 32px;
+          }
+          
+          .card-grid {
+            margin-bottom: 24px;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+                 <!-- Report Header -->
+         <div class="header">
+           <h1>Network Traffic Analysis Report with Threat Detection (YAF/IPFIX Data)</h1>
+           <p class="subtitle">Generated by LEVANT AI Security Platform</p>
+           <div class="header-meta">
+             <div class="header-meta-item">
+               <span class="icon"></span>
+               July 3, 2025 at 01:20 PM
+             </div>
+             <div class="header-meta-item">
+               <span class="icon"></span>
+               3.5 hour analysis
+             </div>
+             <div class="header-meta-item">
+               <span class="icon"></span>
+               Version 3.0
+             </div>
+           </div>
+         </div>
+
+        <div class="separator"></div>
+
+                 <!-- Executive Summary -->
+         <section class="section">
+           <h2 class="section-title">Executive Summary</h2>
+           
+           <div class="card-grid card-grid-3">
+             <div class="card">
+               <div class="card-header">
+                 <span class="icon"></span>
+                 <span class="card-label">Risk Level</span>
+               </div>
+               <span class="badge badge-medium">
+                 MEDIUM
+               </span>
+             </div>
+             
+             <div class="card">
+               <div class="card-header">
+                 <span class="icon"></span>
+                 <span class="card-label">Critical Issues</span>
+               </div>
+               <span class="card-value-large">
+                 2
+               </span>
+             </div>
+             
+             <div class="card">
+               <div class="card-header">
+                 <span class="icon"></span>
+                 <span class="card-label">Priority</span>
+               </div>
+               <span class="badge badge-scheduled">
+                 SCHEDULED
+               </span>
+             </div>
+           </div>
+
+           <h3 class="subsection-title">Key Findings</h3>
+           <ul class="findings-list">
+             
+               <li class="findings-item">
+                 <span class="findings-bullet"></span>
+                 <span>High-severity port scanning detected</span>
+               </li>
+             
+               <li class="findings-item">
+                 <span class="findings-bullet"></span>
+                 <span>High-severity data exfiltration detected</span>
+               </li>
+             
+           </ul>
+         </section>
+
+        <div class="separator"></div>
+
+                 <!-- Network Traffic Overview -->
+         <section class="section">
+           <h2 class="section-title">Network Traffic Analysis</h2>
+           
+           <div class="card-grid card-grid-4">
+             <div class="card">
+               <div class="card-header">
+                 <span class="icon"></span>
+                 <span class="card-label">Total Flows</span>
+               </div>
+               <div class="card-value">
+                 127,473
+               </div>
+             </div>
+             
+             <div class="card">
+               <div class="card-header">
+                 <span class="icon"></span>
+                 <span class="card-label">Total Data</span>
+               </div>
+               <div class="card-value">
+                 22.34 GB
+               </div>
+             </div>
+             
+             <div class="card">
+               <div class="card-header">
+                 <span class="icon"></span>
+                 <span class="card-label">Total Packets</span>
+               </div>
+               <div class="card-value">
+                 38,931,511
+               </div>
+             </div>
+             
+             <div class="card">
+               <div class="card-header">
+                 <span class="icon"></span>
+                 <span class="card-label">Avg Bandwidth</span>
+               </div>
+               <div class="card-value">
+                 30.61 Mbps
+               </div>
+             </div>
+           </div>
+
+           <div class="card-grid card-grid-2">
+             <!-- Top Sources -->
+             <div>
+               <h3 class="subsection-title">Top Traffic Sources</h3>
+               <div class="traffic-list">
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.3.60</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">6.09 GB</div>
+                       <div class="traffic-flows">9 flows</div>
+                     </div>
+                   </div>
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.13.62</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">1.31 GB</div>
+                       <div class="traffic-flows">1663 flows</div>
+                     </div>
+                   </div>
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.13.48</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">1.03 GB</div>
+                       <div class="traffic-flows">817 flows</div>
+                     </div>
+                   </div>
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.13.64</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">1.02 GB</div>
+                       <div class="traffic-flows">849 flows</div>
+                     </div>
+                   </div>
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.13.148</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">1 GB</div>
+                       <div class="traffic-flows">930 flows</div>
+                     </div>
+                   </div>
+                 
+               </div>
+             </div>
+
+             <!-- Top Destinations -->
+             <div>
+               <h3 class="subsection-title">Top Traffic Destinations</h3>
+               <div class="traffic-list">
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.13.148</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">5.08 GB</div>
+                       <div class="traffic-flows">514 flows</div>
+                     </div>
+                   </div>
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.3.60</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">1.85 GB</div>
+                       <div class="traffic-flows">23 flows</div>
+                     </div>
+                   </div>
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.3.73</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">1.47 GB</div>
+                       <div class="traffic-flows">31 flows</div>
+                     </div>
+                   </div>
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.3.61</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">1.3 GB</div>
+                       <div class="traffic-flows">38 flows</div>
+                     </div>
+                   </div>
+                 
+                   <div class="traffic-item">
+                     <span class="traffic-ip">10.183.3.63</span>
+                     <div class="traffic-stats">
+                       <div class="traffic-bytes">1.02 GB</div>
+                       <div class="traffic-flows">43 flows</div>
+                     </div>
+                   </div>
+                 
+               </div>
+             </div>
+           </div>
+
+           <!-- Protocol Breakdown -->
+           <div>
+             <h3 class="subsection-title">Protocol Distribution</h3>
+             <div class="protocol-grid">
+               
+                 <div class="protocol-item">
+                   <div class="protocol-header">
+                     <span class="protocol-name">TCP</span>
+                     
+                   </div>
+                   <div class="protocol-stats">
+                     89,915 flows • 22.34 GB
+                   </div>
+                 </div>
+               
+                 <div class="protocol-item">
+                   <div class="protocol-header">
+                     <span class="protocol-name">UDP</span>
+                     
+                   </div>
+                   <div class="protocol-stats">
+                     37,548 flows • 3.85 MB
+                   </div>
+                 </div>
+               
+                 <div class="protocol-item">
+                   <div class="protocol-header">
+                     <span class="protocol-name">ICMP</span>
+                     
+                   </div>
+                   <div class="protocol-stats">
+                     6 flows • 13.39 KB
+                   </div>
+                 </div>
+               
+                 <div class="protocol-item">
+                   <div class="protocol-header">
+                     <span class="protocol-name">Protocol-112</span>
+                     
+                   </div>
+                   <div class="protocol-stats">
+                     4 flows • 562.42 KB
+                   </div>
+                 </div>
+               
+             </div>
+           </div>
+        </section>
+
+        <div class="separator"></div>
+
+                 <!-- Security Findings -->
+         <section class="section">
+           <h2 class="section-title">Security Analysis</h2>
+           
+           
+               <div class="mb-6">
+                 <h3 class="subsection-title">malicious pattern matches</h3>
+                 
+                 <div class="card">
+                   <div class="card-grid card-grid-3 mb-4">
+                     <div>
+                       <span class="card-label">Severity</span>
+                       <span class="badge badge-low">
+                         LOW
+                       </span>
+                     </div>
+                     
+                     
+                       <div>
+                         <span class="card-label">Matching Flows: </span>
+                         <span class="card-value">0</span>
+                       </div>
+                     
+                   </div>
+                   
+                   
+                   
+                   
+                 </div>
+               </div>
+             
+               <div class="mb-6">
+                 <h3 class="subsection-title">honeypot pattern matches</h3>
+                 
+                 <div class="card">
+                   <div class="card-grid card-grid-3 mb-4">
+                     <div>
+                       <span class="card-label">Severity</span>
+                       <span class="badge badge-low">
+                         LOW
+                       </span>
+                     </div>
+                     
+                     
+                   </div>
+                   
+                   
+                   
+                   
+                 </div>
+               </div>
+             
+               <div class="mb-6">
+                 <h3 class="subsection-title">suspicious connections</h3>
+                 
+                 <div class="card">
+                   <div class="card-grid card-grid-3 mb-4">
+                     <div>
+                       <span class="card-label">Severity</span>
+                       <span class="badge badge-medium">
+                         MEDIUM
+                       </span>
+                     </div>
+                     
+                       <div>
+                         <span class="card-label">Count: </span>
+                         <span class="card-value">3</span>
+                       </div>
+                     
+                     
+                   </div>
+                   
+                   
+                   
+                   
+                 </div>
+               </div>
+             
+               <div class="mb-6">
+                 <h3 class="subsection-title">port scanning</h3>
+                 
+                 <div class="card">
+                   <div class="card-grid card-grid-3 mb-4">
+                     <div>
+                       <span class="card-label">Severity</span>
+                       <span class="badge badge-high">
+                         HIGH
+                       </span>
+                     </div>
+                     
+                       <div>
+                         <span class="card-label">Count: </span>
+                         <span class="card-value">10</span>
+                       </div>
+                     
+                     
+                   </div>
+                   
+                   
+                     <div>
+                       <h4 class="subsection-title">Potential Scanners Detected</h4>
+                       <div class="traffic-list">
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">10.138.12.25</span>
+                             <span class="traffic-bytes">5352 ports scanned</span>
+                           </div>
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">10.183.10.235</span>
+                             <span class="traffic-bytes">3505 ports scanned</span>
+                           </div>
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">44.209.99.177</span>
+                             <span class="traffic-bytes">1932 ports scanned</span>
+                           </div>
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">44.205.209.155</span>
+                             <span class="traffic-bytes">1930 ports scanned</span>
+                           </div>
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">34.236.212.125</span>
+                             <span class="traffic-bytes">1906 ports scanned</span>
+                           </div>
+                         
+                       </div>
+                     </div>
+                   
+                   
+                   
+                 </div>
+               </div>
+             
+               <div class="mb-6">
+                 <h3 class="subsection-title">data exfiltration</h3>
+                 
+                 <div class="card">
+                   <div class="card-grid card-grid-3 mb-4">
+                     <div>
+                       <span class="card-label">Severity</span>
+                       <span class="badge badge-high">
+                         HIGH
+                       </span>
+                     </div>
+                     
+                       <div>
+                         <span class="card-label">Count: </span>
+                         <span class="card-value">6</span>
+                       </div>
+                     
+                     
+                   </div>
+                   
+                   
+                   
+                   
+                     <div>
+                       <h4 class="subsection-title">High Volume Sources</h4>
+                       <div class="traffic-list">
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">10.183.3.60</span>
+                             <span class="traffic-bytes">6.53 GB transferred</span>
+                           </div>
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">10.183.13.62</span>
+                             <span class="traffic-bytes">1.4 GB transferred</span>
+                           </div>
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">10.183.13.48</span>
+                             <span class="traffic-bytes">1.1 GB transferred</span>
+                           </div>
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">10.183.13.64</span>
+                             <span class="traffic-bytes">1.1 GB transferred</span>
+                           </div>
+                         
+                           <div class="traffic-item">
+                             <span class="traffic-ip">10.183.13.148</span>
+                             <span class="traffic-bytes">1.07 GB transferred</span>
+                           </div>
+                         
+                       </div>
+                     </div>
+                   
+                 </div>
+               </div>
+             
+               <div class="mb-6">
+                 <h3 class="subsection-title">unusual protocols</h3>
+                 
+                 <div class="card">
+                   <div class="card-grid card-grid-3 mb-4">
+                     <div>
+                       <span class="card-label">Severity</span>
+                       <span class="badge badge-low">
+                         LOW
+                       </span>
+                     </div>
+                     
+                       <div>
+                         <span class="card-label">Count: </span>
+                         <span class="card-value">0</span>
+                       </div>
+                     
+                     
+                   </div>
+                   
+                   
+                   
+                   
+                 </div>
+               </div>
+             
+               <div class="mb-6">
+                 <h3 class="subsection-title">threat intelligence matches</h3>
+                 
+                 <div class="card">
+                   <div class="card-grid card-grid-3 mb-4">
+                     <div>
+                       <span class="card-label">Severity</span>
+                       <span class="badge badge-low">
+                         LOW
+                       </span>
+                     </div>
+                     
+                     
+                   </div>
+                   
+                   
+                   
+                   
+                 </div>
+               </div>
+             
+        </section>
+
+        <div class="separator"></div>
+
+                 <!-- Recommendations -->
+         <section class="section">
+           <h2 class="section-title">Recommendations</h2>
+           
+           <div class="card-grid card-grid-1">
+             
+               <div class="card">
+                 <div class="card-header">
+                   <h3 class="subsection-title">Port Scanning</h3>
+                   <span class="badge badge-immediate">
+                     IMMEDIATE
+                   </span>
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Finding:</strong> Detected 10 potential port scanners
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Recommendation:</strong> Block scanning sources and review firewall rules
+                 </div>
+                 
+                 <div class="traffic-item">
+                   <span><strong>Effort:</strong> Medium</span>
+                   <span><strong>Timeline:</strong> 24 hours</span>
+                 </div>
+               </div>
+             
+               <div class="card">
+                 <div class="card-header">
+                   <h3 class="subsection-title">Data Exfiltration</h3>
+                   <span class="badge badge-immediate">
+                     IMMEDIATE
+                   </span>
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Finding:</strong> Detected 6 high-volume data transfers
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Recommendation:</strong> Investigate data transfers and implement DLP controls
+                 </div>
+                 
+                 <div class="traffic-item">
+                   <span><strong>Effort:</strong> High</span>
+                   <span><strong>Timeline:</strong> 48 hours</span>
+                 </div>
+               </div>
+             
+               <div class="card">
+                 <div class="card-header">
+                   <h3 class="subsection-title">Suspicious Connections</h3>
+                   <span class="badge badge-scheduled">
+                     SCHEDULED
+                   </span>
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Finding:</strong> Medium-severity suspicious connections detected
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Recommendation:</strong> Schedule detailed analysis and implement monitoring
+                 </div>
+                 
+                 <div class="traffic-item">
+                   <span><strong>Effort:</strong> Medium</span>
+                   <span><strong>Timeline:</strong> 1-2 weeks</span>
+                 </div>
+               </div>
+             
+               <div class="card">
+                 <div class="card-header">
+                   <h3 class="subsection-title">Monitoring</h3>
+                   <span class="badge badge-medium">
+                     ONGOING
+                   </span>
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Finding:</strong> Continuous network monitoring needed
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Recommendation:</strong> Implement 24/7 SIEM monitoring and automated threat detection
+                 </div>
+                 
+                 <div class="traffic-item">
+                   <span><strong>Effort:</strong> High</span>
+                   <span><strong>Timeline:</strong> 1-3 months</span>
+                 </div>
+               </div>
+             
+               <div class="card">
+                 <div class="card-header">
+                   <h3 class="subsection-title">Threat Intelligence</h3>
+                   <span class="badge badge-medium">
+                     ONGOING
+                   </span>
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Finding:</strong> Limited threat intelligence integration
+                 </div>
+                 
+                 <div class="mb-4">
+                   <strong>Recommendation:</strong> Integrate multiple threat intelligence feeds for better detection
+                 </div>
+                 
+                 <div class="traffic-item">
+                   <span><strong>Effort:</strong> Medium</span>
+                   <span><strong>Timeline:</strong> 2-4 weeks</span>
+                 </div>
+               </div>
+             
+           </div>
+         </section>
+
+                 
+
+                 <!-- Footer -->
+         <div class="separator"></div>
+         <div class="text-center card-label">
+           <p>This report was automatically generated by LEVANT AI Security Platform</p>
+           <p>Report ID: N/A</p>
+         </div>
+      </div>
+    </body>
+    </html>
+  
