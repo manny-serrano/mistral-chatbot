@@ -1,5 +1,9 @@
-# generated / runtime data – never commit
-.env
+# =============================================================================
+# MISTRAL NETWORK SECURITY ANALYSIS - COMPREHENSIVE GITIGNORE
+# =============================================================================
+
+# Generated / runtime data – never commit
+.env*
 volumes/
 neo4j-graphdatabase/neo4j/data/
 neo4j-graphdatabase/neo4j/logs/
@@ -24,9 +28,18 @@ neo4j-graphdatabase/neo4j/
 .DS_Store
 .DS_Store?
 ._*
+Thumbs.db
+
 # Log files
 *.log
 api_server*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Process ID files
+*.pid
 
 # Cache directories
 .cache/
@@ -35,9 +48,19 @@ __pycache__/
 # Temporary files
 cookies.txt
 
-# Build output
-.next/
-
 # Node.js dependencies
 node_modules/
+**/node_modules/
 package-lock.json
+
+# Next.js build output
+.next/
+/out/
+/build
+
+# TypeScript build info
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel deployment
+.vercel
