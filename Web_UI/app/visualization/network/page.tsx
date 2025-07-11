@@ -234,14 +234,17 @@ export default function NetworkVisualizationPage() {
           // Transform the existing stats into traffic analysis format
           const totalFlows = data.total_flows || 0
           const maliciousFlows = data.malicious_flows || 0
-          const maliciousPercentage = totalFlows > 0 ? Math.round((maliciousFlows / totalFlows) * 100 * 10) / 10 : 0
+          // Use the backend's calculated percentage from threat_indicators
+          const maliciousPercentage = (data.threat_indicators && data.threat_indicators.length > 0) 
+            ? data.threat_indicators[0].percentage 
+            : (totalFlows > 0 ? Math.round((maliciousFlows / totalFlows) * 100 * 10) / 10 : 0)
           
           // Transform top_ports data
           const portDistribution = (data.top_ports || []).map((port: any, index: number) => ({
             port: port.port,
             service: port.service || 'unknown',
             flow_count: port.count,
-            percentage: index === 0 ? 35 : index === 1 ? 25 : index === 2 ? 20 : 10 // Estimated percentages
+            percentage: port.percentage || 0 // Use real percentages from database
           }))
           
           const transformedData = {
@@ -562,14 +565,14 @@ export default function NetworkVisualizationPage() {
               <CardContent className="p-6">
                 <div className="font-medium mb-4 text-gray-300 text-lg">Node Legend:</div>
                 <div className="flex flex-wrap gap-x-6 gap-y-4">
-                  <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-teal-400"></div><span className="text-white font-medium">🖥️ Source Hosts</span></div>
-                  <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-orange-400"></div><span className="text-white font-medium">🌐 Destination Hosts</span></div>
-                  <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-pink-400 border border-pink-300"></div><span className="text-white font-medium">💀 Malicious</span></div>
+                  <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-teal-400"></div><span className="text-white font-medium">📡 Source Hosts</span></div>
+                  <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-orange-400"></div><span className="text-white font-medium">📍 Destination Hosts</span></div>
+                  <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-pink-400 border border-pink-300"></div><span className="text-white font-medium">⚠️ Malicious</span></div>
                   {searchQuery && (
                     <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-yellow-400 border border-yellow-300"></div><span className="text-white font-medium">⭐ Searched Node</span></div>
                   )}
                 </div>
-                <div className="col-span-full text-sm text-zinc-400 mt-4">Hover a node to see its IP / hostname; malicious nodes are marked with a skull.</div>
+                <div className="col-span-full text-sm text-zinc-400 mt-4">Hover a node to see its IP / hostname; malicious nodes are marked with a warning indicator.</div>
               </CardContent>
             </Card>
           </div>

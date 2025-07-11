@@ -88,9 +88,9 @@ export const CustomNetworkGraph = forwardRef<any, CustomNetworkGraphProps>(({
   }
 
   const getNodeEmoji = (node: NetworkNode): string => {
-    if (node.malicious) return '💀'
-    if (node.group === 'source_host') return '🖥️'
-    if (node.group === 'dest_host') return '🌐'
+    if (node.malicious) return '⚠️'
+    if (node.group === 'source_host') return '📡'
+    if (node.group === 'dest_host') return '📍'
     return ''
   }
 
@@ -171,7 +171,7 @@ export const CustomNetworkGraph = forwardRef<any, CustomNetworkGraphProps>(({
           if (!tooltipRef.current) return
           const ipStr = d.ip || d.id || ''
           const labelStr = d.label && d.label !== ipStr ? d.label : ''
-          tooltipRef.current.innerHTML = `${ipStr}${labelStr ? `<br/><span style='font-size:10px;color:#94a3b8'>${labelStr}</span>` : ''}${d.malicious ? '<br/><span style="font-size:10px;color:#f87171">⚠ malicious</span>' : ''}`
+          tooltipRef.current.innerHTML = `${ipStr}${labelStr ? `<br/><span style='font-size:10px;color:#94a3b8'>${labelStr}</span>` : ''}${d.malicious ? '<br/><span style="font-size:10px;color:#f87171">⚠️ malicious</span>' : ''}`
           tooltipRef.current.style.opacity = '1'
           select(this).select('text.label').style('display', 'block')
         })

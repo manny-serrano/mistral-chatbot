@@ -254,11 +254,12 @@ class Config:
         self.log_level = os.getenv("LOG_LEVEL", "INFO").upper()
         self.environment = os.getenv("ENVIRONMENT", "development")
         self.cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
+        self.lightweight_mode = os.getenv("LIGHTWEIGHT_MODE", "false").lower() == "true"
         
         # Add Neo4j configuration
         self.neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         self.neo4j_user = os.getenv("NEO4J_USER", "neo4j")
-        self.neo4j_password = os.getenv("NEO4J_PASSWORD", "")
+        self.neo4j_password = os.getenv("NEO4J_PASSWORD", "password123")  # Fixed: was empty string
         
         # Validate configuration
         if self.api_port < 1 or self.api_port > 65535:
@@ -444,6 +445,147 @@ class Neo4jVisualizationHelper:
             logger.info("Successfully closed all Neo4j connections")
         except Exception as e:
             logger.error(f"Error closing Neo4j connections: {e}")
+
+    def get_network_graph_data(self, limit: int = 100, ip_address: Optional[str] = None) -> Dict[str, Any]:
+        """Get network graph data from Neo4j for visualization."""
+        try:
+            logger.info(f"Querying Neo4j for network graph data - limit: {limit}, ip_address: {ip_address}")
+            
+            if not self.driver:
+                logger.error("Neo4j driver not connected")
+                raise Exception("Neo4j driver not connected")
+            
+            with self.driver.session() as session:
+                if ip_address:
+                    # Query for specific IP address and its connections - hosts only
+                    query = """
+                    MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port),
+                          (dst:Host)-[:RECEIVED]->(f)
+                    WHERE src.ip = $ip_address OR dst.ip = $ip_address
+                    WITH src, dst, f
+                    LIMIT $limit
+                    
+                    WITH collect(DISTINCT {
+                        id: src.ip,
+                        type: "host",
+                        label: src.ip,
+                        group: CASE WHEN src.ip = $ip_address THEN "source_host" ELSE "dest_host" END,
+                        ip: src.ip,
+                        malicious: coalesce(f.malicious, false)
+                    }) as source_nodes,
+                    
+                    collect(DISTINCT {
+                        id: dst.ip,
+                        type: "host", 
+                        label: dst.ip,
+                        group: CASE WHEN dst.ip = $ip_address THEN "source_host" ELSE "dest_host" END,
+                        ip: dst.ip,
+                        malicious: coalesce(f.malicious, false)
+                    }) as dest_nodes,
+                    
+                    collect(DISTINCT {
+                        source: src.ip,
+                        target: dst.ip,
+                        type: "FLOW",
+                        weight: 1
+                    }) as host_links
+                    
+                    RETURN source_nodes + dest_nodes as nodes,
+                           host_links as links
+                    """
+                    
+                    result = session.run(query, {"ip_address": ip_address, "limit": limit})
+                    
+                else:
+                    # Query for general network overview - hosts only, no ports
+                    query = """
+                    MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port),
+                          (dst:Host)-[:RECEIVED]->(f)
+                    WHERE (f.malicious IS NULL OR f.malicious = false) 
+                      AND (f.honeypot IS NULL OR f.honeypot = false)
+                    WITH src, dst, f
+                    LIMIT $limit
+                    
+                    WITH collect(DISTINCT {
+                        id: src.ip,
+                        type: "host",
+                        label: src.ip,
+                        group: "source_host",
+                        ip: src.ip,
+                        malicious: coalesce(f.malicious, false)
+                    }) as source_nodes,
+                    
+                    collect(DISTINCT {
+                        id: dst.ip,
+                        type: "host",
+                        label: dst.ip, 
+                        group: "dest_host",
+                        ip: dst.ip,
+                        malicious: coalesce(f.malicious, false)
+                    }) as dest_nodes,
+                    
+                    collect(DISTINCT {
+                        source: src.ip,
+                        target: dst.ip,
+                        type: "FLOW",
+                        weight: 1
+                    }) as host_links
+                    
+                    RETURN source_nodes + dest_nodes as nodes,
+                           host_links as links
+                    """
+                    
+                    result = session.run(query, {"limit": limit})
+                
+                record = result.single()
+                
+                if not record:
+                    logger.warning("No network data found in Neo4j")
+                    return {
+                        "nodes": [],
+                        "links": [],
+                        "message": "No network data available in the database"
+                    }
+                
+                # Convert Neo4j results to NetworkNode/NetworkLink format
+                nodes_data = record["nodes"] or []
+                links_data = record["links"] or []
+                
+                # Convert to the format expected by the API
+                nodes = []
+                for node_data in nodes_data:
+                    node = NetworkNode(
+                        id=node_data["id"],
+                        type=node_data["type"],
+                        label=node_data["label"],
+                        group=node_data["group"],
+                        ip=node_data.get("ip"),
+                        port=node_data.get("port"),
+                        service=node_data.get("service"),
+                        malicious=node_data.get("malicious", False)
+                    )
+                    nodes.append(node)
+                
+                links = []
+                for link_data in links_data:
+                    link = NetworkLink(
+                        source=link_data["source"],
+                        target=link_data["target"],
+                        type=link_data["type"],
+                        weight=link_data.get("weight", 1)
+                    )
+                    links.append(link)
+                
+                logger.info(f"Retrieved {len(nodes)} nodes and {len(links)} links from Neo4j")
+                
+                return {
+                    "nodes": nodes,
+                    "links": links
+                }
+                
+        except Exception as e:
+            logger.error(f"Error retrieving network graph data: {e}")
+            raise
 
 # Initialize Neo4j helper
 neo4j_helper = Neo4jVisualizationHelper()
@@ -826,8 +968,11 @@ async def lifespan(app: FastAPI):
         # Initialize Neo4j helper for visualization
         try:
             neo4j_helper.connect()
+            logger.info("Neo4j visualization helper initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Neo4j visualization helper: {e}")
+            # Try to initialize it anyway for basic functionality
+            neo4j_helper.driver = None
     
     yield
     
@@ -1243,14 +1388,16 @@ async def get_optimized_response(query_type: str) -> Optional[Dict[str, Any]]:
             return None
             
         if query_type == "network_statistics":
+            protocols_str = ', '.join(f"{p['protocol']} ({p['percentage']}%)" for p in stats.get('top_protocols', []))
+            ports_str = ', '.join(f"{p['port']} ({p['percentage']}%)" for p in stats.get('top_ports', []))
             return {
                 "result": (
                     f"Network Statistics:\n"
                     f"• Total Flows: {stats.get('total_flows', 0):,}\n"
                     f"• Active Connections: {stats.get('active_connections', 0):,}\n"
                     f"• Total Hosts: {stats.get('total_hosts', 0):,}\n"
-                    f"• Protocols: {', '.join(f'{p['protocol']} ({p['percentage']}%)' for p in stats.get('top_protocols', []))}\n"
-                    f"• Top Ports: {', '.join(f'{p['port']} ({p['percentage']}%)' for p in stats.get('top_ports', []))}"
+                    f"• Protocols: {protocols_str}\n"
+                    f"• Top Ports: {ports_str}"
                 ),
                 "processing_time": 0.1
             }
@@ -1263,15 +1410,17 @@ async def get_optimized_response(query_type: str) -> Optional[Dict[str, Any]]:
             
         elif query_type == "protocol_list":
             protocols = stats.get('top_protocols', [])
+            protocols_str = ', '.join(f"{p['protocol']} ({p['percentage']}%)" for p in protocols)
             return {
-                "result": f"Available protocols: {', '.join(f'{p['protocol']} ({p['percentage']}%)' for p in protocols)}",
+                "result": f"Available protocols: {protocols_str}",
                 "processing_time": 0.05
             }
             
         elif query_type == "top_ports":
             ports = stats.get('top_ports', [])
+            ports_str = ', '.join(f"{p['port']} ({p['percentage']}%)" for p in ports)
             return {
-                "result": f"Top destination ports: {', '.join(f'{p['port']} ({p['percentage']}%)' for p in ports)}",
+                "result": f"Top destination ports: {ports_str}",
                 "processing_time": 0.05
             }
             
@@ -1793,70 +1942,98 @@ async def get_network_stats():
 async def fetch_fresh_stats():
     """Fetch fresh network statistics with optimized queries."""
     try:
-        # Use connection pooling and optimized query
-        async with neo4j_helper.driver.session() as session:
-            # Single optimized query that gets all stats at once
-            query = """
-            MATCH (src:Host)-[f:FLOW]->(dst:Host)
-            WITH 
-                count(f) as total_flows,
-                count(DISTINCT src) + count(DISTINCT dst) as total_hosts,
-                collect(DISTINCT f.protocol) as protocols,
-                collect(DISTINCT f.dst_port) as ports,
-                sum(CASE WHEN f.is_malicious = true THEN 1 ELSE 0 END) as malicious_count,
-                sum(CASE WHEN f.active = true THEN 1 ELSE 0 END) as active_count,
-                sum(CASE WHEN f.bytes_sent IS NOT NULL THEN f.bytes_sent ELSE 0 END) as total_bytes
-            RETURN 
-                total_flows, total_hosts, protocols, ports, 
-                malicious_count, active_count, total_bytes
+        # Ensure Neo4j helper is connected
+        if not neo4j_helper.driver:
+            try:
+                neo4j_helper.connect()
+            except Exception as e:
+                logger.error(f"Failed to connect to Neo4j in fetch_fresh_stats: {e}")
+                raise
+        
+        # Use connection pooling and optimized query  
+        with neo4j_helper.driver.session() as session:
+            # Get basic stats first (including malicious flows in total count)
+            basic_stats_query = """
+            MATCH (src:Host)-[:SENT]->(f:Flow)-[:USES_DST_PORT]->(dst_port:Port),
+                  (dst:Host)-[:RECEIVED]->(f)
+            WITH count(f) as total_flows,
+                 sum(CASE WHEN f.malicious = true THEN 1 ELSE 0 END) as malicious_count,
+                 count(CASE WHEN (f.malicious IS NULL OR f.malicious = false) AND (f.honeypot IS NULL OR f.honeypot = false) THEN 1 END) as active_count
+            MATCH (h:Host) 
+            RETURN total_flows, count(h) as total_hosts, malicious_count, active_count
             """
             
-            # Execute with timeout
-            result = await asyncio.wait_for(
-                session.run(query),
-                timeout=1.0  # 1 second timeout
-            )
-            data = await result.single()
+            # Get port distribution with actual flow counts
+            port_stats_query = """
+            MATCH (f:Flow)-[:USES_DST_PORT]->(dst_port:Port)
+            WHERE (f.malicious IS NULL OR f.malicious = false) 
+              AND (f.honeypot IS NULL OR f.honeypot = false)
+            RETURN dst_port.port as port, dst_port.service as service, count(f) as flow_count
+            ORDER BY flow_count DESC
+            LIMIT 10
+            """
             
-            if not data:
+            # Get protocol distribution with actual flow counts
+            protocol_stats_query = """
+            MATCH (f:Flow)-[:USES_PROTOCOL]->(proto:Protocol)
+            WHERE (f.malicious IS NULL OR f.malicious = false) 
+              AND (f.honeypot IS NULL OR f.honeypot = false)
+            RETURN proto.name as protocol, count(f) as flow_count
+            ORDER BY flow_count DESC
+            LIMIT 10
+            """
+            
+            # Execute basic stats query
+            result = session.run(basic_stats_query)
+            basic_data = result.single()
+            
+            if not basic_data:
                 raise ValueError("No network statistics available")
             
-            # Process results efficiently using list comprehension
-            total_flows = data['total_flows']
-            total_hosts = data['total_hosts']
-            protocols = data['protocols']
-            ports = data['ports']
-            malicious_flows = data['malicious_count']
-            active_connections = data['active_count']
-            total_bytes = data['total_bytes']
+            total_flows = basic_data['total_flows']
+            total_hosts = basic_data['total_hosts']
+            malicious_flows = basic_data['malicious_count']
+            active_connections = basic_data['active_count']
             
-            # Calculate protocol distribution efficiently
-            protocol_counts = {}
-            for p in protocols:
-                protocol_counts[p] = protocol_counts.get(p, 0) + 1
+            # Execute port stats query
+            port_result = session.run(port_stats_query)
+            port_data = []
+            for record in port_result:
+                port_data.append({
+                    "port": record['port'],
+                    "service": record['service'] or 'unknown',
+                    "count": record['flow_count']
+                })
             
-            top_protocols = [
-                {"protocol": p, "count": c, "percentage": round(c/len(protocols)*100, 1)}
-                for p, c in sorted(
-                    protocol_counts.items(), 
-                    key=lambda x: x[1], 
-                    reverse=True
-                )[:5]
-            ]
+            # Calculate port percentages based on actual flow counts
+            top_ports = []
+            for port_info in port_data:
+                percentage = round((port_info['count'] / total_flows) * 100, 1) if total_flows > 0 else 0
+                top_ports.append({
+                    "port": port_info['port'],
+                    "service": port_info['service'],
+                    "count": port_info['count'],
+                    "percentage": percentage
+                })
             
-            # Calculate port distribution efficiently
-            port_counts = {}
-            for p in ports:
-                port_counts[p] = port_counts.get(p, 0) + 1
+            # Execute protocol stats query
+            protocol_result = session.run(protocol_stats_query)
+            protocol_data = []
+            for record in protocol_result:
+                protocol_data.append({
+                    "protocol": record['protocol'],
+                    "count": record['flow_count']
+                })
             
-            top_ports = [
-                {"port": p, "count": c, "percentage": round(c/len(ports)*100, 1)}
-                for p, c in sorted(
-                    port_counts.items(), 
-                    key=lambda x: x[1], 
-                    reverse=True
-                )[:5]
-            ]
+            # Calculate protocol percentages based on actual flow counts
+            top_protocols = []
+            for proto_info in protocol_data:
+                percentage = round((proto_info['count'] / total_flows) * 100, 1) if total_flows > 0 else 0
+                top_protocols.append({
+                    "protocol": proto_info['protocol'],
+                    "count": proto_info['count'],
+                    "percentage": percentage
+                })
             
             # Calculate threat indicators
             threat_indicators = [{
@@ -1866,7 +2043,7 @@ async def fetch_fresh_stats():
             }]
             
             # Format data throughput
-            data_throughput = f"{total_bytes / (1024*1024):.2f} MB" if total_bytes else "N/A"
+            data_throughput = "N/A"
             
             return {
                 "network_nodes": total_hosts,
@@ -1874,7 +2051,7 @@ async def fetch_fresh_stats():
                 "data_throughput": data_throughput,
                 "total_hosts": total_hosts,
                 "total_flows": total_flows,
-                "total_protocols": len(protocols),
+                "total_protocols": len(protocol_data),
                 "malicious_flows": malicious_flows,
                 "top_ports": top_ports,
                 "top_protocols": top_protocols,
