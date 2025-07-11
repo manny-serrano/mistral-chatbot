@@ -1459,7 +1459,7 @@ async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
             return {
                 'result': result,
                 'query_type': query_type,
-                'database_used': ['optimized_cache'],
+                'database_used': 'optimized_cache',
                 'processing_time': 0.1,
                 'error': None
             }
@@ -1507,10 +1507,29 @@ async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
                 errors.append(str(e))
         
         if results:
+            # Safely extract text results and types
+            text_results = []
+            database_types = []
+            
+            for r in results:
+                if r.get('result'):
+                    result_text = r['result']
+                    if isinstance(result_text, dict):
+                        result_text = result_text.get('result', str(result_text))
+                    elif not isinstance(result_text, str):
+                        result_text = str(result_text)
+                    text_results.append(result_text)
+                
+                if r.get('type'):
+                    db_type = r['type']
+                    if not isinstance(db_type, str):
+                        db_type = str(db_type)
+                    database_types.append(db_type)
+            
             combined_result = {
-                'result': '\n'.join(r['result'] for r in results if r.get('result')),
+                'result': '\n'.join(text_results),
                 'query_type': 'PARALLEL',
-                'database_used': [r['type'] for r in results],
+                'database_used': ', '.join(database_types),
                 'source_documents': [],
                 'processing_time': sum(r.get('processing_time', 0) for r in results),
                 'error': None
@@ -1521,7 +1540,7 @@ async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
         return {
             'result': 'Analysis failed. Please try again.',
             'query_type': 'ERROR',
-            'database_used': [],
+            'database_used': 'none',
             'error': error_msg,
             'processing_time': 0.0
         }
@@ -1531,7 +1550,7 @@ async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
         return {
             'result': 'An unexpected error occurred.',
             'query_type': 'ERROR',
-            'database_used': [],
+            'database_used': 'none',
             'error': str(e),
             'processing_time': 0.0
         }
@@ -1599,8 +1618,12 @@ async def analyze_security_query(request: SecurityQueryRequest):
     # Check analyze cache first
     cached_result = await get_cached_analyze_result(text)
     if cached_result:
+        # Update timestamp and processing time for cached result
+        cached_result_copy = cached_result.copy()
+        cached_result_copy.pop('timestamp', None)  # Remove old timestamp if exists
+        cached_result_copy.pop('processing_time', None)  # Remove old processing time if exists
         return SecurityQueryResponse(
-            **cached_result,
+            **cached_result_copy,
             timestamp=datetime.now().isoformat(),
             processing_time=0.01
         )
@@ -1619,8 +1642,12 @@ async def analyze_security_query(request: SecurityQueryRequest):
         # Check cache again
         cached_result = await get_cached_analyze_result(text)
         if cached_result:
+            # Update timestamp and processing time for cached result
+            cached_result_copy = cached_result.copy()
+            cached_result_copy.pop('timestamp', None)  # Remove old timestamp if exists
+            cached_result_copy.pop('processing_time', None)  # Remove old processing time if exists
             return SecurityQueryResponse(
-                **cached_result,
+                **cached_result_copy,
                 timestamp=datetime.now().isoformat(),
                 processing_time=0.05
             )
@@ -1684,7 +1711,6 @@ async def analyze_security_query(request: SecurityQueryRequest):
             "source_documents": source_docs if request.include_sources else None,
             "processing_time": processing_time,
             "error": result.get('error'),
-            "timestamp": datetime.now().isoformat(),
             "success": not bool(result.get('error'))
         }
         
@@ -1694,7 +1720,10 @@ async def analyze_security_query(request: SecurityQueryRequest):
         # Unmark request as processing
         unmark_request_processing(cache_key)
         
-        return SecurityQueryResponse(**response_data)
+        return SecurityQueryResponse(
+            **response_data,
+            timestamp=datetime.now().isoformat()
+        )
         
     except Exception as e:
         logger.error(f"Error processing query: {e}")
@@ -2555,7 +2584,9 @@ async def semantic_analysis(query: str, agent) -> Dict[str, Any]:
             return_source_documents=True
         )
         result = await qa_chain.ainvoke({"query": query})
-        return {"type": "semantic", "result": result}
+        # Extract the text result from LangChain response
+        text_result = result.get('result', '') if isinstance(result, dict) else str(result)
+        return {"type": "semantic", "result": text_result}
     except Exception as e:
         logger.error(f"Semantic analysis error: {e}")
         return {"type": "semantic", "error": str(e)}
@@ -2573,7 +2604,9 @@ async def graph_analysis(query: str, agent) -> Dict[str, Any]:
             return_source_documents=True
         )
         result = await qa_chain.ainvoke({"query": query})
-        return {"type": "graph", "result": result}
+        # Extract the text result from LangChain response
+        text_result = result.get('result', '') if isinstance(result, dict) else str(result)
+        return {"type": "graph", "result": text_result}
     except Exception as e:
         logger.error(f"Graph analysis error: {e}")
         return {"type": "graph", "error": str(e)}
