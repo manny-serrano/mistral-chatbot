@@ -152,6 +152,26 @@ services:
 
 
   # =============================================================================
+  # FRONTEND APPLICATION
+  # =============================================================================
+  
+  frontend:
+    container_name: mistral-frontend
+    build:
+      context: ./Web_UI
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://67.159.74.251:8000
+      - NEXT_PUBLIC_APP_URL=http://67.159.74.251:3000
+    depends_on:
+      - mistral-app
+    networks:
+      - mistral_network
+    restart: unless-stopped
+
+  # =============================================================================
   # OPTIONAL: MANAGEMENT SERVICES
   # =============================================================================
   
@@ -162,7 +182,7 @@ services:
   #   environment:
   #     MILVUS_URL: milvus:19530
   #   ports:
-  #     - "3000:3000"
+  #     - "3001:3000"
   #   depends_on:
   #     - milvus
   #   networks:
