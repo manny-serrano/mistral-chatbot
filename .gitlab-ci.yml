@@ -7,7 +7,7 @@ variables:
   DOCKER_TLS_CERTDIR: ""
 
 before_script:
-  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+  - 'which ssh-agent || ( apk update && apk add openssh-client )'
   - eval $(ssh-agent -s)
   - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
   - mkdir -p ~/.ssh
@@ -43,6 +43,24 @@ deploy:
         echo "🚀 Starting deployment..."
         cd /home/$VM_USER/mistral-enhancing-network-security-analysis
         
+        # Check Docker installation and permissions
+        if ! command -v docker &> /dev/null; then
+          echo "❌ Docker not found. Installing Docker..."
+          sudo apt update
+          sudo apt install -y docker.io
+          sudo usermod -aG docker $USER
+          sudo systemctl enable docker
+          sudo systemctl start docker
+          echo "⚠️  You may need to log out and back in for Docker group changes to take effect"
+        fi
+        
+        # Check if user is in docker group
+        if ! groups $USER | grep -q docker; then
+          echo "⚠️  User $USER not in docker group. Adding..."
+          sudo usermod -aG docker $USER
+          echo "⚠️  You may need to log out and back in for group changes to take effect"
+        fi
+        
         # Pull latest changes
         echo "📥 Pulling latest changes..."
         git pull origin main
@@ -65,9 +83,21 @@ deploy:
       EOL
         fi
         
+        # Check which Docker Compose command to use
+        if command -v docker-compose &> /dev/null; then
+          DOCKER_COMPOSE="docker-compose"
+        elif docker compose version &> /dev/null; then
+          DOCKER_COMPOSE="docker compose"
+        else
+          echo "❌ Docker Compose not found!"
+          exit 1
+        fi
+        
+        echo "Using Docker Compose command: $DOCKER_COMPOSE"
+        
         # Stop existing services
         echo "🛑 Stopping existing services..."
-        docker-compose down || true
+        $DOCKER_COMPOSE down || true
         
         # Clean up old images (optional)
         echo "🧹 Cleaning up old Docker images..."
@@ -75,7 +105,7 @@ deploy:
         
         # Build and start services
         echo "🔨 Building and starting services..."
-        docker-compose up -d --build
+        $DOCKER_COMPOSE up -d --build
         
         # Wait for services to be ready
         echo "⏳ Waiting for services to start..."
@@ -83,7 +113,7 @@ deploy:
         
         # Check if services are running
         echo "🔍 Checking service status..."
-        docker-compose ps
+        $DOCKER_COMPOSE ps
         
         # Health checks
         echo "🏥 Running health checks..."
