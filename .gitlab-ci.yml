@@ -37,7 +37,7 @@ deploy:
     - echo "Testing SSH connection to $VM_USER@$VM_HOST..."
     - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "echo 'SSH connection successful'"
     - |
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "export OPENAI_API_KEY='$OPENAI_API_KEY'; export VM_HOST='$VM_HOST'; bash -s" << 'EOF'
+      cat > deploy_script.sh << 'SCRIPT_EOF'
         set -e
         
         echo "🚀 Starting deployment..."
@@ -160,7 +160,10 @@ deploy:
         echo "API: http://$VM_HOST:8000"
         echo "Neo4j: http://$VM_HOST:7474"
         echo "MinIO: http://$VM_HOST:9001"
-      EOF
+      SCRIPT_EOF
+    - chmod +x deploy_script.sh
+    - scp -o StrictHostKeyChecking=no deploy_script.sh $VM_USER@$VM_HOST:/tmp/
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "export OPENAI_API_KEY='$OPENAI_API_KEY'; export VM_HOST='$VM_HOST'; bash /tmp/deploy_script.sh"
     - echo "✅ Deployment completed successfully!"
   environment:
     name: production
