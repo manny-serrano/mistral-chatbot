@@ -12,7 +12,6 @@ before_script:
   - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
   - mkdir -p ~/.ssh
   - chmod 700 ~/.ssh
-  - echo "VM_HOST is set to: $VM_HOST"
 
 build:
   stage: build
@@ -31,10 +30,10 @@ deploy:
     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-    - echo "VM_HOST is set to: $VM_HOST"
-    - echo "VM_USER is set to: $VM_USER"
   script:
     - echo "Deploying to production VM..."
+    - echo "VM_HOST is set to: $VM_HOST"
+    - echo "VM_USER is set to: $VM_USER"
     - echo "Testing SSH connection to $VM_USER@$VM_HOST..."
     - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "echo 'SSH connection successful'"
     - |
