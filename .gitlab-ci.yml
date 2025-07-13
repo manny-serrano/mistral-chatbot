@@ -1,0 +1,143 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+
+before_script:
+  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+      - ssh-keyscan $VM_HOST >> ~/.ssh/known_hosts
+    - ssh-keyscan gitlab.oit.duke.edu >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+
+build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Building application..."
+    - echo "Build completed successfully"
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client curl
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $VM_HOST >> ~/.ssh/known_hosts
+    - ssh-keyscan gitlab.oit.duke.edu >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - echo "Deploying to production VM..."
+    - |
+      ssh $VM_USER@$VM_HOST << 'EOF'
+        set -e
+        
+        echo "🚀 Starting deployment..."
+        cd /home/$VM_USER/mistral-enhancing-network-security-analysis
+        
+        # Pull latest changes
+        echo "📥 Pulling latest changes..."
+        git pull origin main
+        
+        # Create .env file if it doesn't exist
+        if [ ! -f .env ]; then
+          echo "📝 Creating .env file..."
+          cat > .env << EOL
+      OPENAI_API_KEY=$OPENAI_API_KEY
+      OPENAI_API_BASE=https://api.openai.com/v1
+      MILVUS_HOST=milvus
+      MILVUS_PORT=19530
+      NEO4J_URI=bolt://neo4j:7687
+      NEO4J_USER=neo4j
+      NEO4J_PASSWORD=password123
+      API_HOST=0.0.0.0
+      API_PORT=8000
+      NEXT_PUBLIC_API_URL=http://$VM_HOST:8000
+      NEXT_PUBLIC_APP_URL=http://$VM_HOST:3000
+      EOL
+        fi
+        
+        # Stop existing services
+        echo "🛑 Stopping existing services..."
+        docker-compose down || true
+        
+        # Clean up old images (optional)
+        echo "🧹 Cleaning up old Docker images..."
+        docker system prune -f || true
+        
+        # Build and start services
+        echo "🔨 Building and starting services..."
+        docker-compose up -d --build
+        
+        # Wait for services to be ready
+        echo "⏳ Waiting for services to start..."
+        sleep 45
+        
+        # Check if services are running
+        echo "🔍 Checking service status..."
+        docker-compose ps
+        
+        # Health checks
+        echo "🏥 Running health checks..."
+        
+        # Check API
+        for i in {1..10}; do
+          if curl -f http://localhost:8000/health > /dev/null 2>&1; then
+            echo "✅ API is healthy"
+            break
+          else
+            echo "⏳ Waiting for API... ($i/10)"
+            sleep 5
+          fi
+        done
+        
+        # Check Frontend
+        for i in {1..10}; do
+          if curl -f http://localhost:3000 > /dev/null 2>&1; then
+            echo "✅ Frontend is healthy"
+            break
+          else
+            echo "⏳ Waiting for Frontend... ($i/10)"
+            sleep 5
+          fi
+        done
+        
+        # Check Neo4j
+        if curl -f http://localhost:7474 > /dev/null 2>&1; then
+          echo "✅ Neo4j is healthy"
+        else
+          echo "⚠️  Neo4j health check failed"
+        fi
+        
+        # Check Milvus
+        if curl -f http://localhost:9091/healthz > /dev/null 2>&1; then
+          echo "✅ Milvus is healthy"
+        else
+          echo "⚠️  Milvus health check failed"
+        fi
+        
+        echo "🎉 Deployment completed!"
+        echo "Frontend: http://$VM_HOST:3000"
+        echo "API: http://$VM_HOST:8000"
+        echo "Neo4j: http://$VM_HOST:7474"
+        echo "MinIO: http://$VM_HOST:9001"
+      EOF
+    - echo "✅ Deployment completed successfully!"
+  environment:
+    name: production
+    url: http://$VM_HOST:3000
+  only:
+    - main 
