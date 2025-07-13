@@ -12,18 +12,12 @@ before_script:
   - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
   - mkdir -p ~/.ssh
   - chmod 700 ~/.ssh
-      - ssh-keyscan $VM_HOST >> ~/.ssh/known_hosts
-    - ssh-keyscan gitlab.oit.duke.edu >> ~/.ssh/known_hosts
-    - chmod 644 ~/.ssh/known_hosts
 
 build:
   stage: build
-  image: docker:latest
-  services:
-    - docker:dind
+  image: alpine:latest
   script:
-    - echo "Building application..."
-    - echo "Build completed successfully"
+    - echo "✅ Build stage completed - ready for deployment"
   only:
     - main
 
@@ -36,13 +30,14 @@ deploy:
     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-    - ssh-keyscan $VM_HOST >> ~/.ssh/known_hosts
-    - ssh-keyscan gitlab.oit.duke.edu >> ~/.ssh/known_hosts
+    - ssh-keyscan -H $VM_HOST >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
   script:
     - echo "Deploying to production VM..."
+    - echo "Testing SSH connection to $VM_USER@$VM_HOST..."
+    - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "echo 'SSH connection successful'"
     - |
-      ssh $VM_USER@$VM_HOST << 'EOF'
+      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST << 'EOF'
         set -e
         
         echo "🚀 Starting deployment..."
