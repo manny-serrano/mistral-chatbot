@@ -12,6 +12,7 @@ before_script:
   - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
   - mkdir -p ~/.ssh
   - chmod 700 ~/.ssh
+  - echo "VM_HOST is set to: $VM_HOST"
 
 build:
   stage: build
@@ -30,8 +31,8 @@ deploy:
     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-    - ssh-keyscan -H $VM_HOST >> ~/.ssh/known_hosts
-    - chmod 644 ~/.ssh/known_hosts
+    - echo "VM_HOST is set to: $VM_HOST"
+    - echo "VM_USER is set to: $VM_USER"
   script:
     - echo "Deploying to production VM..."
     - echo "Testing SSH connection to $VM_USER@$VM_HOST..."
