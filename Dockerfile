@@ -41,8 +41,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 
 # Install packages with network storage cache and space optimization
-RUN --mount=type=cache,target=/srv/homedir/mistral-app/pip-cache,sharing=locked \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --cache-dir="$PIP_CACHE_DIR" \
     --find-links https://download.pytorch.org/whl/cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \

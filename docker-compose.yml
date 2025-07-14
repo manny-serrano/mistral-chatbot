@@ -6,7 +6,6 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - BUILDKIT_INLINE_CACHE=1
         - NETWORK_STORAGE=${NETWORK_STORAGE_PATH:-/tmp}
     ports:
       - "8000:8000"

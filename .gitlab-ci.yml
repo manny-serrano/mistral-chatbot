@@ -44,12 +44,15 @@ deploy:
     - scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/optimize-model-storage.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/storage-troubleshoot.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no scripts/fix-docker-volumes.sh $VM_USER@$VM_HOST:/tmp/
     - echo "🔧 Running storage troubleshooting and optimization..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/storage-troubleshoot.sh"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/storage-troubleshoot.sh"
     - echo "🧹 Running pre-deployment cleanup..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/manage-storage.sh cleanup"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "docker system prune -af --volumes || true"
+    - echo "🔧 Fixing Docker volume conflicts..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/fix-docker-volumes.sh"
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/fix-docker-volumes.sh"
     - echo "📈 Post-cleanup storage status:"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h / | tail -1"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir | tail -1"

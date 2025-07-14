@@ -136,23 +136,31 @@ docker system prune -f || true
 # Optimize Docker build for limited storage
 echo "🔨 Building and starting services with storage optimization..."
 
+# Remove conflicting Docker volumes first
+echo "🧹 Removing conflicting Docker volumes..."
+docker volume rm mistral-enhancing-network-security-analysis_neo4j_data 2>/dev/null || true
+docker volume rm mistral-enhancing-network-security-analysis_neo4j_logs 2>/dev/null || true
+docker volume rm mistral-enhancing-network-security-analysis_milvus_data 2>/dev/null || true
+docker volume rm mistral-enhancing-network-security-analysis_etcd_data 2>/dev/null || true
+docker volume rm mistral-enhancing-network-security-analysis_minio_data 2>/dev/null || true
+
 # Set Docker build arguments for network storage
 if [ "$USE_NETWORK_STORAGE" = true ]; then
   echo "🗂️ Configuring Docker build to use network storage..."
-  export DOCKER_BUILDKIT=1
-  export BUILDKIT_PROGRESS=plain
+  # Disable BuildKit if buildx is not available
+  export DOCKER_BUILDKIT=0
   
   # Ensure network storage mount is available for Docker
   mkdir -p "$APP_STORAGE/docker-build-cache" "$APP_STORAGE/pip-cache" "$APP_STORAGE/docker-tmp"
   
-  # Build with network storage bind mounts
+  # Build with network storage optimization but without BuildKit
   $DOCKER_COMPOSE build --no-cache \
-    --build-arg BUILDKIT_INLINE_CACHE=1 \
     --build-arg NETWORK_STORAGE="$NETWORK_STORAGE" \
     mistral-app 2>&1 | tee "$APP_STORAGE/logs/docker-build.log"
 else
   echo "⚠️ Building with local storage only - may run out of space"
   # Build one service at a time to reduce memory usage
+  export DOCKER_BUILDKIT=0
   $DOCKER_COMPOSE build --no-cache mistral-app
 fi
 
