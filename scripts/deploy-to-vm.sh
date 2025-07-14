@@ -20,6 +20,12 @@ else
   # Create network storage directories
   echo "📁 Setting up network storage directories..."
   mkdir -p "$APP_STORAGE"/{logs,backups,data,docker-volumes}
+  
+  # Create specific data directories for Docker volume mounts
+  echo "📁 Creating Docker volume mount directories..."
+  mkdir -p "$APP_STORAGE/data"/{neo4j,etcd,minio}
+  mkdir -p "$APP_STORAGE/logs"/{neo4j}
+  
   chown -R ${VM_USER:-vcm}:${VM_USER:-vcm} "$APP_STORAGE" 2>/dev/null || true
 fi
 

@@ -9,8 +9,9 @@ COPY pnpm-lock.yaml ./
 # Install pnpm
 RUN npm install -g pnpm
 
-# Install dependencies
-RUN pnpm install
+# Install dependencies and approve build scripts
+RUN pnpm install --frozen-lockfile
+RUN pnpm approve-builds core-js core-js-pure sharp unrs-resolver
 
 # Copy source code
 COPY . .
