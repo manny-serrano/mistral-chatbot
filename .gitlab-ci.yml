@@ -33,6 +33,8 @@ deploy:
     - echo "Testing SSH connectivity..."
     - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'" || (echo "❌ SSH connection failed" && echo "🚨 VM is reachable but SSH service appears to be down" && echo "📋 Manual intervention required" && echo "1. Access VM via Duke's web console" && echo "2. Check SSH service sudo systemctl status ssh" && echo "3. Start SSH if needed sudo systemctl start ssh" && echo "4. Check firewall sudo ufw status" && echo "5. Allow SSH sudo ufw allow ssh" && echo "6. Re-run this pipeline after fixing SSH" && exit 1)
     - echo "✅ SSH connection successful"
+    - echo "🔍 Checking storage availability..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h / && echo '---' && if [ -d /srv/homedir ]; then echo 'Network storage available:' && df -h /srv/homedir; else echo 'Network storage not mounted'; fi"
     - echo "Proceeding with deployment..."
     - scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "export OPENAI_API_KEY='$OPENAI_API_KEY'; export VM_HOST='$VM_HOST'; bash /tmp/deploy-to-vm.sh"
