@@ -6,13 +6,6 @@ variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
 
-before_script:
-  - 'which ssh-agent || ( apk update && apk add openssh-client )'
-  - eval $(ssh-agent -s)
-  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-  - mkdir -p ~/.ssh
-  - chmod 700 ~/.ssh
-
 build:
   stage: build
   image: alpine:latest
@@ -31,15 +24,41 @@ deploy:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
   script:
-    - echo "Deploying to production VM..."
-    - echo "VM_HOST is set to $VM_HOST"
-    - echo "VM_USER is set to $VM_USER"
-    - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "echo 'SSH connection successful'"
-    - scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "export OPENAI_API_KEY='$OPENAI_API_KEY'; export VM_HOST='$VM_HOST'; bash /tmp/deploy-to-vm.sh"
-    - echo "✅ Deployment completed successfully!"
+    - echo "🔍 Checking VM connectivity..."
+    - echo "VM_HOST: $VM_HOST"
+    - echo "VM_USER: $VM_USER"
+    - echo "Testing network connectivity to IP..."
+    - |
+      if ping -c 3 $VM_HOST; then
+        echo "✅ VM is reachable via ping"
+      else
+        echo "❌ VM is not reachable via ping"
+        echo "🚨 VM appears to be down or network issue"
+        exit 1
+      fi
+    - echo "Testing SSH connectivity..."
+    - |
+      if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'" 2>/dev/null; then
+        echo "✅ SSH connection successful"
+        echo "Proceeding with deployment..."
+        scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
+        ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "export OPENAI_API_KEY='$OPENAI_API_KEY'; export VM_HOST='$VM_HOST'; bash /tmp/deploy-to-vm.sh"
+        echo "✅ Deployment completed successfully!"
+      else
+        echo "❌ SSH connection failed"
+        echo "🚨 VM is reachable but SSH service appears to be down"
+        echo "📋 Manual intervention required:"
+        echo "1. Access VM via Duke's web console"
+        echo "2. Check SSH service: sudo systemctl status ssh"
+        echo "3. Start SSH if needed: sudo systemctl start ssh"
+        echo "4. Check firewall: sudo ufw status"
+        echo "5. Allow SSH: sudo ufw allow ssh"
+        echo "6. Re-run this pipeline after fixing SSH"
+        exit 1
+      fi
   environment:
     name: production
     url: http://$VM_HOST:3000
   only:
-    - main 
+    - main
+  allow_failure: true 

@@ -163,8 +163,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://67.159.74.251:8000
-      - NEXT_PUBLIC_APP_URL=http://67.159.74.251:3000
+      - NEXT_PUBLIC_API_URL=http://${VM_HOST:-localhost}:8000
+      - NEXT_PUBLIC_APP_URL=http://${VM_HOST:-localhost}:3000
     depends_on:
       - mistral-app
     networks:

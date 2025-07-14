@@ -50,4 +50,27 @@ neo4j-graphdatabase/neo4j/
 # Build artifacts
 build/
 dist/
-*.egg-info/ 
+*.egg-info/
+
+# Large data directories
+cybersecurity_reports/
+Samples_flow/
+Suspicious_DATA/
+.cache/
+.next/
+
+# Additional Python files
+*.pyc
+*.pyo
+*.pyd
+**/__pycache__/
+
+# Test and development files
+test_*.js
+test_*.html
+test_*.pdf
+*_test.py
+debug_*.json
+wrapped_report.json
+clean_report.json
+report_data.json 

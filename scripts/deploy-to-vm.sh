@@ -2,7 +2,7 @@
 set -e
 
 echo "🚀 Starting deployment..."
-cd /home/vcm/mistral-enhancing-network-security-analysis
+cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis
 
 echo "📥 Pulling latest changes..."
 git pull origin main
@@ -45,9 +45,11 @@ $DOCKER_COMPOSE down || true
 echo "🧹 Cleaning up old Docker images..."
 docker system prune -f || true
 
-# Build and start services
+# Build and start services with limited resources
 echo "🔨 Building and starting services..."
-$DOCKER_COMPOSE up -d --build
+# Build one service at a time to reduce memory usage
+$DOCKER_COMPOSE build --no-cache mistral-app
+$DOCKER_COMPOSE up -d
 
 # Wait for services to be ready
 echo "⏳ Waiting for services to start..."
