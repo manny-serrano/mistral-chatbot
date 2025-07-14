@@ -28,15 +28,15 @@ deploy:
     - echo "VM_HOST:$VM_HOST"
     - echo "VM_USER:$VM_USER"
     - echo "Testing network connectivity to IP..."
-    - ping -c 3 $VM_HOST || (echo "❌ VM is not reachable via ping" && echo "🚨 VM appears to be down or network issue" && exit 1)
+    - ping -c 3 $VM_HOST || (echo "❌ VM is not reachable via ping" && exit 1)
     - echo "✅ VM is reachable via ping"
     - echo "Testing SSH connectivity..."
-    - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'" || (echo "❌ SSH connection failed" && echo "🚨 VM is reachable but SSH service appears to be down" && echo "📋 Manual intervention required" && echo "1. Access VM via Duke's web console" && echo "2. Check SSH service sudo systemctl status ssh" && echo "3. Start SSH if needed sudo systemctl start ssh" && echo "4. Check firewall sudo ufw status" && echo "5. Allow SSH sudo ufw allow ssh" && echo "6. Re-run this pipeline after fixing SSH" && exit 1)
+    - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'" || (echo "❌ SSH connection failed - manual intervention required" && exit 1)
     - echo "✅ SSH connection successful"
     - echo "🔍 Checking storage before deployment..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h / && echo '---Local Storage---' && if [ -d /srv/homedir ]; then echo 'Network storage available:' && df -h /srv/homedir && echo '---Network Storage---'; else echo 'WARNING: Network storage not mounted' && exit 1; fi"
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h / && if [ -d /srv/homedir ]; then df -h /srv/homedir; else echo 'WARNING: Network storage not mounted' && exit 1; fi"
     - echo "🗂️ Pre-deployment storage optimization..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "[ -d /srv/homedir ] && mkdir -p /srv/homedir/mistral-app/docker-build-cache /srv/homedir/mistral-app/pip-cache /srv/homedir/mistral-app/docker-tmp || echo 'Network storage not available'"
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/docker-build-cache /srv/homedir/mistral-app/pip-cache /srv/homedir/mistral-app/docker-tmp || true"
     - echo "📦 Copying optimization scripts..."
     - scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/optimize-model-storage.sh $VM_USER@$VM_HOST:/tmp/
