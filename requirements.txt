@@ -1,20 +1,19 @@
 # =============================================================================
-# MISTRAL NETWORK SECURITY ANALYSIS - CONSOLIDATED REQUIREMENTS
+# MISTRAL NETWORK SECURITY ANALYSIS - OPTIMIZED REQUIREMENTS
 # =============================================================================
-# This file consolidates all dependencies with pinned versions for stability
+# Lightweight dependencies with space optimization for smaller model
 
 # -----------------------------------------------------------------------------
-# Core Machine Learning & NLP
+# Core Machine Learning & NLP (Optimized)
 # -----------------------------------------------------------------------------
 sentence-transformers==3.0.1
-transformers>=4.35.0,<5.0.0
+transformers[torch]>=4.35.0,<5.0.0  # Only torch backend, no TensorFlow/JAX
 tokenizers>=0.15.0
-torch>=2.0.0
-numpy>=1.24.0
-scikit-learn==1.4.0
+torch>=2.0.0,<2.3.0
+numpy>=1.24.0,<2.0.0
 
 # -----------------------------------------------------------------------------
-# Vector Database & Embeddings (Milvus)
+# Vector Database & Embeddings
 # -----------------------------------------------------------------------------
 pymilvus==2.5.10
 
@@ -24,11 +23,10 @@ pymilvus==2.5.10
 neo4j==5.15.0
 
 # -----------------------------------------------------------------------------
-# LangChain Framework & RAG
+# LangChain Framework (Essential only)
 # -----------------------------------------------------------------------------
-langchain==0.3.25
-langchain-community==0.3.25
 langchain-core==0.3.65
+langchain-community==0.3.25
 langchain-milvus>=0.1.0
 langchain-openai>=0.2.0
 langchain-huggingface>=0.1.0
@@ -37,13 +35,12 @@ langchain-huggingface>=0.1.0
 # AI/LLM APIs
 # -----------------------------------------------------------------------------
 openai==1.84.0
-huggingface-hub>=0.20.0
+huggingface-hub>=0.20.0,<1.0.0
 
 # -----------------------------------------------------------------------------
-# Data Processing & Analysis
+# Data Processing (Essential)
 # -----------------------------------------------------------------------------
 pandas==2.2.3
-openpyxl>=3.1.2
 tqdm==4.66.1
 
 # -----------------------------------------------------------------------------
@@ -52,47 +49,32 @@ tqdm==4.66.1
 python-dotenv>=1.0.0
 
 # -----------------------------------------------------------------------------
-# Web API Framework (for frontend integration)
+# Web API Framework
 # -----------------------------------------------------------------------------
 fastapi>=0.104.0,<1.0.0
 uvicorn[standard]>=0.24.0,<1.0.0
 pydantic>=2.0.0,<3.0.0
 
 # -----------------------------------------------------------------------------
-# HTTP Requests & Async HTTP Client
+# HTTP & Database (Essential)
 # -----------------------------------------------------------------------------
 requests>=2.31.0,<3.0.0
 aiohttp>=3.8.0,<4.0.0
-httpx>=0.24.0,<1.0.0
-
-# -----------------------------------------------------------------------------
-# Database & Storage
-# -----------------------------------------------------------------------------
 sqlalchemy>=2.0.0,<3.0.0
-boto3>=1.26.0
 
 # -----------------------------------------------------------------------------
-# Task Scheduling
-# -----------------------------------------------------------------------------
-schedule>=1.2.0
-
-# -----------------------------------------------------------------------------
-# System & Utilities
+# System Utilities
 # -----------------------------------------------------------------------------
 psutil==5.9.8
 
-# -----------------------------------------------------------------------------
-# Development & Testing (Optional - uncomment if needed)
-# -----------------------------------------------------------------------------
-# pytest>=7.0.0
-# pytest-asyncio>=0.21.0
-# black>=23.0.0
-# flake8>=6.0.0
-# mypy>=1.0.0
-
-# -----------------------------------------------------------------------------
-# Security & Validation
-# -----------------------------------------------------------------------------
-# Add security-focused dependencies if needed
-# validators>=0.22.0
-# cryptography>=41.0.0
+# =============================================================================
+# OPTIMIZATIONS APPLIED:
+# - Removed scikit-learn (500MB+) - not used in current codebase
+# - Removed openpyxl - Excel processing not essential
+# - Removed boto3 - AWS S3 functionality not currently used
+# - Removed schedule - task scheduling handled by system cron
+# - Removed httpx - redundant with requests+aiohttp
+# - Removed langchain metapackage - using specific components only
+# - Limited torch to specific version range for stability
+# - Using transformers[torch] to avoid TensorFlow dependencies
+# =============================================================================

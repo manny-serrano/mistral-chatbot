@@ -1349,13 +1349,14 @@ async def health_check():
         overall_status=overall_status
     )
 
-# Optimize query patterns for dynamic responses
+# Optimize query patterns for dynamic responses (FIXED: Made patterns more specific)
 QUERY_PATTERNS = {
-    r"\b(show|display|list|get)\s+(network|traffic)\s+(stats|statistics)": "network_statistics",
-    r"\b(count|total|how\s+many)\s+(flows?|connections?)": "flow_count",
-    r"\b(show|list|display)\s+protocols?\b": "protocol_list",
-    r"\b(show|list|display)\s+top\s+ports?\b": "top_ports",
-    r"\b(show|find|list)\s+(malicious|suspicious|threat)\s+(flows?|traffic|connections?)\b": "malicious_flows"
+    r"\b(show|display|list|get)\s+(network|overall)\s+(stats|statistics)": "network_statistics",
+    r"\b(count|total|how\s+many)\s+(flows?|connections?)\s*$": "flow_count",  # Added $ to make more specific
+    r"\b(show|list|display)\s+protocols?\s*$": "protocol_list",  # Added $ to make more specific
+    r"\b(show|list|display)\s+top\s+ports?\s*$": "top_ports",  # Added $ to make more specific
+    # REMOVED the malicious flows pattern as it was too broad and interfering with semantic search
+    # r"\b(show|find|list)\s+(malicious|suspicious|threat)\s+(flows?|traffic|connections?)\b": "malicious_flows"
 }
 
 async def is_simple_query(query: str) -> tuple[bool, Optional[Dict[str, Any]]]:
@@ -1450,109 +1451,146 @@ async def optimize_query(query: str) -> tuple[str, Optional[str]]:
         logger.error(f"Error in optimize_query: {e}")
         return query, None
 
-async def process_parallel_analysis(query: str, agent) -> Dict[str, Any]:
-    """Process analysis tasks in parallel with optimized execution."""
+async def process_parallel_analysis(query: str, agent, analysis_type: str = "auto") -> Dict[str, Any]:
+    """Process analysis tasks in parallel with optimized execution and respect for analysis type."""
     try:
-        # First try optimized query handling
-        result, query_type = await optimize_query(query)
-        if query_type == "OPTIMIZED_QUERY":
-            return {
-                'result': result,
-                'query_type': query_type,
-                'database_used': 'optimized_cache',
-                'processing_time': 0.1,
-                'error': None
-            }
+        # FIXED: Only try optimized query handling if analysis_type is "auto"
+        # Respect user's explicit choice for semantic, graph, or hybrid analysis
+        if analysis_type == "auto":
+            result, query_type = await optimize_query(query)
+            if query_type == "OPTIMIZED_QUERY":
+                return {
+                    'result': result,
+                    'query_type': query_type,
+                    'database_used': 'optimized_cache',
+                    'processing_time': 0.1,
+                    'error': None
+                }
         
-        # If not an optimized query, proceed with parallel analysis
+        # If not an optimized query or explicit analysis type requested, proceed with analysis
         tasks = []
         
-        if hasattr(agent, 'milvus_retriever'):
+        # FIXED: Respect explicit analysis type requests
+        if analysis_type in ["auto", "semantic", "hybrid"] and hasattr(agent, 'milvus_retriever'):
             tasks.append(asyncio.create_task(
                 asyncio.wait_for(
                     semantic_analysis(query, agent),
-                    timeout=3.0
+                    timeout=8.0  # FIXED: Increased timeout from 3 to 8 seconds
                 )
             ))
             
-        if hasattr(agent, 'neo4j_retriever'):
+        if analysis_type in ["auto", "graph", "hybrid"] and hasattr(agent, 'neo4j_retriever'):
             tasks.append(asyncio.create_task(
                 asyncio.wait_for(
                     graph_analysis(query, agent),
-                    timeout=2.0
+                    timeout=6.0  # FIXED: Increased timeout from 2 to 6 seconds
                 )
             ))
         
-        # Wait for first successful result
-        done, pending = await asyncio.wait(
-            tasks,
-            return_when=asyncio.FIRST_COMPLETED
-        )
+        # For explicit semantic or graph requests, only run that analysis
+        if analysis_type == "semantic" and len(tasks) > 1:
+            tasks = [tasks[0]]  # Keep only semantic task
+        elif analysis_type == "graph" and len(tasks) > 0:
+            tasks = [tasks[-1]]  # Keep only graph task
         
-        # Cancel remaining tasks
-        for task in pending:
-            task.cancel()
+        if not tasks:
+            return {
+                'result': 'No suitable analysis method available for this query type.',
+                'query_type': 'ERROR',
+                'database_used': 'none',
+                'error': 'No analysis tasks created'
+            }
         
-        # Process results
-        results = []
-        errors = []
-        for task in done:
-            try:
-                result = await task
-                if result and not result.get('error'):
+        # Wait for first successful result (or all results for hybrid)
+        if analysis_type == "hybrid":
+            # For hybrid, wait for all tasks
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        else:
+            # For auto/semantic/graph, wait for first completion
+            done, pending = await asyncio.wait(
+                tasks,
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # Cancel remaining tasks
+            for task in pending:
+                task.cancel()
+            
+            # Process results
+            results = []
+            for task in done:
+                try:
+                    result = await task
                     results.append(result)
-                elif result and result.get('error'):
-                    errors.append(result['error'])
-            except Exception as e:
-                errors.append(str(e))
+                except Exception as e:
+                    results.append(e)
         
-        if results:
+        # Process and return results
+        successful_results = []
+        errors = []
+        
+        for result in results:
+            if isinstance(result, Exception):
+                errors.append(str(result))
+            elif result and not result.get('error'):
+                successful_results.append(result)
+            elif result and result.get('error'):
+                errors.append(result['error'])
+        
+        if successful_results:
             # Safely extract text results and types
             text_results = []
             database_types = []
             
-            for r in results:
+            for r in successful_results:
                 if r.get('result'):
                     result_text = r['result']
                     if isinstance(result_text, dict):
                         result_text = result_text.get('result', str(result_text))
                     elif not isinstance(result_text, str):
                         result_text = str(result_text)
+                    
                     text_results.append(result_text)
-                
-                if r.get('type'):
-                    db_type = r['type']
-                    if not isinstance(db_type, str):
-                        db_type = str(db_type)
-                    database_types.append(db_type)
+                    database_types.append(r.get('database_used', 'unknown'))
             
-            combined_result = {
-                'result': '\n'.join(text_results),
-                'query_type': 'PARALLEL',
-                'database_used': ', '.join(database_types),
-                'source_documents': [],
-                'processing_time': sum(r.get('processing_time', 0) for r in results),
+            # Combine results if multiple
+            if len(text_results) > 1:
+                combined_result = "\n\n".join(text_results)
+                combined_db = "hybrid"
+            else:
+                combined_result = text_results[0] if text_results else "No results found"
+                combined_db = database_types[0] if database_types else "unknown"
+            
+            return {
+                'result': combined_result,
+                'query_type': f'{analysis_type.upper()}_ANALYSIS',
+                'database_used': combined_db,
+                'source_documents': successful_results[0].get('source_documents', []) if successful_results else [],
+                'collections_used': successful_results[0].get('collections_used') if successful_results else None,
+                'processing_time': max(r.get('processing_time', 0) for r in successful_results) if successful_results else 0,
                 'error': None
             }
-            return combined_result
+        else:
+            # All tasks failed or timed out
+            error_msg = f"Analysis failed or timed out. Errors: {'; '.join(errors) if errors else 'Unknown error'}"
+            logger.error(f"All analysis tasks failed: {error_msg}")
             
-        error_msg = '; '.join(errors) if errors else 'All analyses failed'
-        return {
-            'result': 'Analysis failed. Please try again.',
-            'query_type': 'ERROR',
-            'database_used': 'none',
-            'error': error_msg,
-            'processing_time': 0.0
-        }
-            
+            return {
+                'result': 'Analysis failed. Please try again.',
+                'query_type': 'ERROR',
+                'database_used': 'none',
+                'error': error_msg,
+                'processing_time': 0
+            }
+        
     except Exception as e:
-        logger.error(f"Error in parallel analysis: {e}")
+        logger.error(f"Error in process_parallel_analysis: {e}")
         return {
-            'result': 'An unexpected error occurred.',
+            'result': f'Error processing analysis: {str(e)}',
             'query_type': 'ERROR',
             'database_used': 'none',
             'error': str(e),
-            'processing_time': 0.0
+            'processing_time': 0
         }
 
 # Add enhanced caching for analyze endpoint
@@ -1684,7 +1722,7 @@ async def analyze_security_query(request: SecurityQueryRequest):
         full_query = context + text if context else text
         
         # Process query using parallel analysis
-        result = await process_parallel_analysis(full_query, agent)
+        result = await process_parallel_analysis(full_query, agent, request.analysis_type)
         
         # Calculate processing time
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -2572,44 +2610,141 @@ async def get_cached_response(request: Request) -> Optional[Response]:
     return None
 
 async def semantic_analysis(query: str, agent) -> Dict[str, Any]:
-    """Perform semantic analysis using Milvus."""
+    """Perform semantic analysis using Milvus vector database."""
     try:
-        if not hasattr(agent, 'milvus_retriever'):
-            return {"type": "semantic", "result": None}
+        logger.info(f"Starting semantic analysis for query: {query[:50]}...")
+        
+        # FIXED: Call the agent directly with proper error handling
+        if not agent:
+            raise Exception("Agent not available for semantic analysis")
+        
+        # Use the agent's query method directly, forcing semantic query type
+        result = agent.query(query)
+        
+        # FIXED: Ensure we're getting semantic results from Milvus
+        if result.get('database_used') in ['milvus', 'milvus_multi_collection', 'milvus_fallback']:
+            return {
+                'result': result.get('result', 'No semantic analysis results found'),
+                'database_used': result.get('database_used', 'milvus'),
+                'source_documents': result.get('source_documents', []),
+                'collections_used': result.get('collections_used'),
+                'query_type': 'SEMANTIC_QUERY',
+                'processing_time': 0.5,
+                'error': result.get('error')
+            }
+        else:
+            # Force semantic search if agent didn't use Milvus
+            logger.warning(f"Agent used {result.get('database_used')} instead of Milvus, forcing semantic search")
             
-        from langchain.chains import RetrievalQA
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=agent.llm,
-            retriever=agent.milvus_retriever,
-            return_source_documents=True
-        )
-        result = await qa_chain.ainvoke({"query": query})
-        # Extract the text result from LangChain response
-        text_result = result.get('result', '') if isinstance(result, dict) else str(result)
-        return {"type": "semantic", "result": text_result}
+            # Try to access Milvus retriever directly
+            if hasattr(agent, 'milvus_retriever') and agent.milvus_retriever:
+                # Get documents directly from Milvus
+                docs = agent.milvus_retriever._get_relevant_documents(query)
+                
+                if docs:
+                    # Format the documents into a readable result
+                    doc_texts = [doc.page_content for doc in docs[:5]]  # Limit to 5 docs
+                    result_text = f"Semantic Analysis Results:\n\n" + "\n\n".join(doc_texts)
+                    
+                    return {
+                        'result': result_text,
+                        'database_used': 'milvus_direct',
+                        'source_documents': docs,
+                        'collections_used': getattr(agent.milvus_retriever, 'collections', {}).keys() if hasattr(agent.milvus_retriever, 'collections') else None,
+                        'query_type': 'SEMANTIC_QUERY',
+                        'processing_time': 1.0,
+                        'error': None
+                    }
+                else:
+                    return {
+                        'result': 'No relevant documents found in semantic search',
+                        'database_used': 'milvus_direct',
+                        'source_documents': [],
+                        'collections_used': None,
+                        'query_type': 'SEMANTIC_QUERY', 
+                        'processing_time': 0.5,
+                        'error': 'No documents found'
+                    }
+            else:
+                raise Exception("Milvus retriever not available")
+                
     except Exception as e:
-        logger.error(f"Semantic analysis error: {e}")
-        return {"type": "semantic", "error": str(e)}
+        logger.error(f"Error in semantic analysis: {e}")
+        return {
+            'result': f'Semantic analysis failed: {str(e)}',
+            'database_used': 'none',
+            'source_documents': [],
+            'query_type': 'SEMANTIC_QUERY',
+            'processing_time': 0,
+            'error': str(e)
+        }
 
 async def graph_analysis(query: str, agent) -> Dict[str, Any]:
-    """Perform graph analysis using Neo4j."""
+    """Perform graph analysis using Neo4j database."""
     try:
-        if not hasattr(agent, 'neo4j_retriever'):
-            return {"type": "graph", "result": None}
+        logger.info(f"Starting graph analysis for query: {query[:50]}...")
+        
+        # FIXED: Call the agent directly with proper error handling
+        if not agent:
+            raise Exception("Agent not available for graph analysis")
+        
+        # Use the agent's query method directly
+        result = agent.query(query)
+        
+        # FIXED: Ensure we're getting graph results from Neo4j
+        if result.get('database_used') in ['neo4j', 'neo4j_fallback']:
+            return {
+                'result': result.get('result', 'No graph analysis results found'),
+                'database_used': result.get('database_used', 'neo4j'),
+                'source_documents': result.get('source_documents', []),
+                'query_type': 'GRAPH_QUERY',
+                'processing_time': 0.5,
+                'error': result.get('error')
+            }
+        else:
+            # Force graph search if agent didn't use Neo4j
+            logger.warning(f"Agent used {result.get('database_used')} instead of Neo4j, forcing graph search")
             
-        from langchain.chains import RetrievalQA
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=agent.llm,
-            retriever=agent.neo4j_retriever,
-            return_source_documents=True
-        )
-        result = await qa_chain.ainvoke({"query": query})
-        # Extract the text result from LangChain response
-        text_result = result.get('result', '') if isinstance(result, dict) else str(result)
-        return {"type": "graph", "result": text_result}
+            # Try to access Neo4j retriever directly
+            if hasattr(agent, 'neo4j_retriever') and agent.neo4j_retriever:
+                # Get documents directly from Neo4j
+                docs = agent.neo4j_retriever._get_relevant_documents(query)
+                
+                if docs:
+                    # Format the documents into a readable result
+                    doc_texts = [doc.page_content for doc in docs[:10]]  # Limit to 10 docs
+                    result_text = f"Graph Analysis Results:\n\n" + "\n\n".join(doc_texts)
+                    
+                    return {
+                        'result': result_text,
+                        'database_used': 'neo4j_direct',
+                        'source_documents': docs,
+                        'query_type': 'GRAPH_QUERY',
+                        'processing_time': 1.0,
+                        'error': None
+                    }
+                else:
+                    return {
+                        'result': 'No relevant data found in graph analysis',
+                        'database_used': 'neo4j_direct',
+                        'source_documents': [],
+                        'query_type': 'GRAPH_QUERY',
+                        'processing_time': 0.5,
+                        'error': 'No data found'
+                    }
+            else:
+                raise Exception("Neo4j retriever not available")
+                
     except Exception as e:
-        logger.error(f"Graph analysis error: {e}")
-        return {"type": "graph", "error": str(e)}
+        logger.error(f"Error in graph analysis: {e}")
+        return {
+            'result': f'Graph analysis failed: {str(e)}',
+            'database_used': 'none',
+            'source_documents': [],
+            'query_type': 'GRAPH_QUERY',
+            'processing_time': 0,
+            'error': str(e)
+        }
 
 async def pattern_analysis(query: str) -> Dict[str, Any]:
     """Check for known patterns and quick responses."""

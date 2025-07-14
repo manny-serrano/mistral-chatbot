@@ -76,12 +76,41 @@ NETWORK_STORAGE_PATH=$APP_STORAGE
 LOG_PATH=$APP_STORAGE/logs
 BACKUP_PATH=$APP_STORAGE/backups
 DATA_PATH=$APP_STORAGE/data
+
+# Model Cache Optimization
+MODEL_CACHE_DIR=$APP_STORAGE/model-cache
+HUGGINGFACE_HUB_CACHE=$APP_STORAGE/model-cache/huggingface
+HF_HOME=$APP_STORAGE/model-cache/huggingface
+TRANSFORMERS_CACHE=$APP_STORAGE/model-cache/huggingface/transformers
+SENTENCE_TRANSFORMERS_HOME=$APP_STORAGE/model-cache/sentence-transformers
+
+# Space Optimization Settings
+USE_SMALLER_MODEL=false
+LOW_MEMORY_MODE=true
+CLEAR_CACHE_AFTER_LOAD=false
 EOL
   fi
   
   # Create symlinks for easy access
   ln -sf "$APP_STORAGE/logs" ./network-logs 2>/dev/null || true
   ln -sf "$APP_STORAGE/data" ./network-data 2>/dev/null || true
+  
+  # Setup model cache optimization
+  echo "🤖 Setting up model cache optimization..."
+  mkdir -p "$APP_STORAGE/model-cache"/{huggingface,sentence-transformers}
+  
+  # Run model cache optimization script if it exists
+  if [ -f "./scripts/optimize-model-storage.sh" ]; then
+    echo "🔧 Running model storage optimization..."
+    chmod +x ./scripts/optimize-model-storage.sh
+    ./scripts/optimize-model-storage.sh 2>/dev/null || echo "Model optimization completed with warnings"
+    
+    # Source build optimization environment if created
+    if [ -f "$APP_STORAGE/docker-build.env" ]; then
+      echo "📋 Loading build optimization environment..."
+      source "$APP_STORAGE/docker-build.env"
+    fi
+  fi
 fi
 
 # Check which Docker Compose command to use
@@ -104,10 +133,36 @@ $DOCKER_COMPOSE down || true
 echo "🧹 Cleaning up old Docker images..."
 docker system prune -f || true
 
-# Build and start services with limited resources
-echo "🔨 Building and starting services..."
-# Build one service at a time to reduce memory usage
-$DOCKER_COMPOSE build --no-cache mistral-app
+# Optimize Docker build for limited storage
+echo "🔨 Building and starting services with storage optimization..."
+
+# Set Docker build arguments for network storage
+if [ "$USE_NETWORK_STORAGE" = true ]; then
+  echo "🗂️ Configuring Docker build to use network storage..."
+  export DOCKER_BUILDKIT=1
+  export BUILDKIT_PROGRESS=plain
+  
+  # Ensure network storage mount is available for Docker
+  mkdir -p "$APP_STORAGE/docker-build-cache" "$APP_STORAGE/pip-cache" "$APP_STORAGE/docker-tmp"
+  
+  # Build with network storage bind mounts
+  $DOCKER_COMPOSE build --no-cache \
+    --build-arg BUILDKIT_INLINE_CACHE=1 \
+    --build-arg NETWORK_STORAGE="$NETWORK_STORAGE" \
+    mistral-app 2>&1 | tee "$APP_STORAGE/logs/docker-build.log"
+else
+  echo "⚠️ Building with local storage only - may run out of space"
+  # Build one service at a time to reduce memory usage
+  $DOCKER_COMPOSE build --no-cache mistral-app
+fi
+
+# Check available space after build
+echo "📊 Storage status after build:"
+df -h / | tail -1
+if [ "$USE_NETWORK_STORAGE" = true ]; then
+  df -h "$NETWORK_STORAGE" | tail -1
+fi
+
 $DOCKER_COMPOSE up -d
 
 # Wait for services to be ready

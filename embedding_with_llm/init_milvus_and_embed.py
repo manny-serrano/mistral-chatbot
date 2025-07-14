@@ -30,15 +30,26 @@ class Config:
     def __init__(self):
         self.milvus_host = os.getenv("MILVUS_HOST", "localhost")
         self.milvus_port = int(os.getenv("MILVUS_PORT", "19530"))
-        self.model_name = os.getenv("EMB_MODEL", "BAAI/bge-large-en-v1.5")
+        self.model_name = os.getenv("EMB_MODEL", "all-MiniLM-L6-v2")
         self.file_pattern = os.getenv("FLOW_LOG_PATTERN")
         self.max_retries = int(os.getenv("MILVUS_MAX_RETRIES", "60"))
         self.retry_delay = int(os.getenv("MILVUS_RETRY_DELAY", "2"))
         
-        # Batch processing configuration
-        self.embedding_batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", "256"))
-        self.embedding_internal_batch = int(os.getenv("EMBEDDING_INTERNAL_BATCH", "32"))
+        # Batch processing configuration (optimized for smaller model)
+        self.embedding_batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", "512"))
+        self.embedding_internal_batch = int(os.getenv("EMBEDDING_INTERNAL_BATCH", "64"))
         self.insert_batch_size = int(os.getenv("INSERT_BATCH_SIZE", "100"))
+        
+        # Space optimization settings
+        self.model_cache_dir = os.getenv("MODEL_CACHE_DIR", "/srv/homedir/mistral-app/model-cache")
+        self.low_memory_mode = os.getenv("LOW_MEMORY_MODE", "true").lower() == "true"
+        self.use_network_storage = os.path.exists("/srv/homedir") and os.access("/srv/homedir", os.W_OK)
+        
+        # Vector configuration (explicit for Docker deployment)
+        self.expected_dimensions = int(os.getenv("VECTOR_DIMENSIONS", "384"))
+        self.model_size_optimized = os.getenv("MODEL_SIZE_OPTIMIZED", "true").lower() == "true"
+        self.index_type = os.getenv("MILVUS_INDEX_TYPE", "IVF_FLAT")
+        self.metric_type = os.getenv("MILVUS_METRIC_TYPE", "COSINE")
         
         # Validate configuration
         if self.milvus_port < 1 or self.milvus_port > 65535:
@@ -81,11 +92,32 @@ class MilvusEmbedder:
         raise RuntimeError(f"Failed to connect to Milvus after {self.config.max_retries * self.config.retry_delay} seconds")
     
     def _load_embedding_model(self):
-        """Load the sentence transformer model."""
+        """Load the sentence transformer model with optimization."""
         try:
-            logger.info(f"Loading embedding model: {self.config.model_name}")
-            self.model = SentenceTransformer(self.config.model_name)
-            logger.info(f"Successfully loaded model with {self.model.get_sentence_embedding_dimension()} dimensions")
+            logger.info(f"Loading optimized embedding model: {self.config.model_name}")
+            
+            # Use network storage cache if available
+            cache_dir = None
+            if self.config.use_network_storage:
+                cache_dir = f"{self.config.model_cache_dir}/sentence-transformers"
+                os.makedirs(cache_dir, exist_ok=True)
+                logger.info(f"Using network storage cache: {cache_dir}")
+            
+            # Load model with optimizations
+            if self.config.low_memory_mode:
+                logger.info("Loading model in low memory mode")
+                self.model = SentenceTransformer(
+                    self.config.model_name,
+                    cache_folder=cache_dir,
+                    device='cpu'
+                )
+            else:
+                self.model = SentenceTransformer(self.config.model_name, cache_folder=cache_dir)
+            
+            dimensions = self.model.get_sentence_embedding_dimension()
+            logger.info(f"Successfully loaded model with {dimensions} dimensions")
+            logger.info(f"Space optimization - Network storage: {self.config.use_network_storage}, Low memory: {self.config.low_memory_mode}")
+            
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
             raise
@@ -131,33 +163,127 @@ class MilvusEmbedder:
                 logger.warning(f"Could not load collection: {e}")
     
     def _create_collection(self, collection_name: str):
-        """Create a new collection with optimized schema."""
+        """Create a new collection with optimized schema and migration support."""
         try:
             emb_dim = self.model.get_sentence_embedding_dimension()
+            
+            # Validate dimensions match expected configuration
+            if emb_dim != self.config.expected_dimensions:
+                logger.warning(f"⚠️  DIMENSION MISMATCH:")
+                logger.warning(f"   Expected: {self.config.expected_dimensions}D (from config)")
+                logger.warning(f"   Actual: {emb_dim}D (from model {self.config.model_name})")
+                logger.warning(f"   Using actual model dimensions: {emb_dim}D")
+            
+            # Check for dimension compatibility with existing collections
+            existing_collections = utility.list_collections()
+            dimension_conflicts = []
+            
+            if existing_collections:
+                logger.info(f"Found existing collections: {', '.join(existing_collections)}")
+                for existing_name in existing_collections:
+                    if existing_name != collection_name:
+                        try:
+                            existing_col = Collection(existing_name)
+                            existing_col.load()
+                            # Try to detect dimension conflicts
+                            logger.info(f"✓ Existing collection '{existing_name}' detected")
+                            existing_col.release()
+                        except Exception as e:
+                            logger.debug(f"Could not check collection '{existing_name}': {e}")
+                
+                if self.config.model_size_optimized:
+                    logger.warning(f"🔄 MODEL OPTIMIZATION ACTIVE:")
+                    logger.warning(f"   New model: {self.config.model_name} ({emb_dim}D)")
+                    logger.warning(f"   Previous models likely used different dimensions (e.g., 1024D)")
+                    logger.warning(f"   🚨 MIGRATION REQUIRED if switching from larger models")
+                    logger.warning(f"   💡 Consider creating new collection name: '{collection_name}_384d' or '{collection_name}_optimized'")
+                    logger.warning(f"   💡 Or drop existing collections: `collection.drop()` in Python")
+            
             fields = [
                 FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
                 FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=emb_dim),
                 FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=2048),
                 FieldSchema(name="source_file", dtype=DataType.VARCHAR, max_length=512)
             ]
-            schema = CollectionSchema(fields, description="Network security embeddings collection")
+            
+            schema = CollectionSchema(
+                fields, 
+                description=f"Network security embeddings ({emb_dim}D, {self.config.model_name})"
+            )
             self.collection = Collection(collection_name, schema)
-            logger.info(f"Created collection '{collection_name}' with {emb_dim}-dimensional vectors")
+            
+            # Create optimized index using configured parameters
+            if self.config.model_size_optimized and emb_dim <= 512:
+                # Optimized settings for smaller models
+                index_params = {
+                    "index_type": self.config.index_type,
+                    "metric_type": self.config.metric_type,
+                    "params": {"nlist": 512}  # Smaller nlist for 384D vectors
+                }
+                logger.info(f"🎯 Using optimized index for small model ({emb_dim}D)")
+            else:
+                # Standard settings for larger models
+                index_params = {
+                    "index_type": self.config.index_type,
+                    "metric_type": "L2" if emb_dim > 512 else self.config.metric_type,
+                    "params": {"nlist": 1024 if emb_dim > 512 else 512}
+                }
+                logger.info(f"📊 Using standard index for large model ({emb_dim}D)")
+            
+            self.collection.create_index("vector", index_params)
+            
+            logger.info(f"✅ Created collection '{collection_name}' with {emb_dim}D vectors")
+            logger.info(f"📊 Index: {index_params['index_type']} | Metric: {index_params['metric_type']}")
+            logger.info(f"🤖 Model: {self.config.model_name}")
+            
         except Exception as e:
             logger.error(f"Failed to create collection: {e}")
             raise
     
     def get_files_to_process(self) -> List[str]:
-        """Get and validate files to process."""
-        if self.config.file_pattern:
-            file_pattern = self.config.file_pattern
-        else:
-            file_pattern = input("Enter filename or glob pattern (default: *.json): ").strip() or "*.json"
+        """Get and validate files to process with interactive selection."""
+        
+        # Show available options first
+        print("\n" + "="*60)
+        print("📁 AVAILABLE DATA FILES:")
+        print("="*60)
+        
+        print("\n🔄 Flow Data Files (Samples_flow/):")
+        flow_files = sorted(glob.glob("Samples_flow/*.json"))
+        for i, f in enumerate(flow_files, 1):
+            size = os.path.getsize(f) / (1024*1024)  # MB
+            print(f"  {i}. {f} ({size:.1f}MB)")
+        
+        print("\n🚨 Suspicious Data Files (Suspicious_DATA/):")
+        suspicious_files = sorted(glob.glob("Suspicious_DATA/**/*.json", recursive=True))
+        for i, f in enumerate(suspicious_files, 1):
+            size = os.path.getsize(f) / 1024  # KB
+            print(f"  {i}. {f} ({size:.1f}KB)")
+        
+        print("\n📊 Other JSON Files (current directory):")
+        other_files = [f for f in sorted(glob.glob("*.json")) if not f.startswith("Samples_flow") and not f.startswith("Suspicious_DATA")]
+        for i, f in enumerate(other_files, 1):
+            size = os.path.getsize(f) / 1024  # KB
+            print(f"  {i}. {f} ({size:.1f}KB)")
+        
+        print("\n" + "="*60)
+        print("📝 FILE SELECTION OPTIONS:")
+        print("  • Enter a specific file path (e.g., Samples_flow/flow.20240531080616.json)")
+        print("  • Enter a glob pattern (e.g., Samples_flow/*.json)")
+        print("  • Press Enter for default: *.json (all JSON files)")
+        print("="*60)
+        
+        file_pattern = input("\n🔍 Enter your choice: ").strip() or "*.json"
         
         files = sorted(glob.glob(file_pattern))
         
         if not files:
             raise ValueError(f"No files match pattern '{file_pattern}'")
+        
+        print(f"\n✅ Selected {len(files)} file(s) matching pattern '{file_pattern}'")
+        for f in files:
+            size = os.path.getsize(f) / (1024*1024)  # MB
+            print(f"  📄 {f} ({size:.1f}MB)")
         
         logger.info(f"Found {len(files)} file(s) matching pattern '{file_pattern}'")
         return files
@@ -345,12 +471,13 @@ class MilvusEmbedder:
         try:
             start_time = time.time()
             
-            # Generate embeddings
+            # Generate embeddings with optimization
             embeddings = self.model.encode(
                 texts,
                 batch_size=self.config.embedding_internal_batch,
                 show_progress_bar=False,
-                convert_to_numpy=True
+                convert_to_numpy=True,
+                normalize_embeddings=True  # Normalize for better similarity search
             )
             
             embedding_time = time.time() - start_time

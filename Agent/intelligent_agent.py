@@ -642,11 +642,22 @@ class IntelligentSecurityAgent:
         # Initialize query classifier
         self.classifier = QueryClassifier(self.llm)
         
-        # Initialize embeddings - using same model as init_milvus_and_embed.py
+        # Initialize embeddings with optimization - using same model as init_milvus_and_embed.py
         try:
-            model_name = os.getenv("EMB_MODEL", "BAAI/bge-large-en-v1.5")
-            self.embeddings = HuggingFaceEmbeddings(model_name=model_name)
-            logger.info(f"Embeddings model loaded: {model_name}")
+            model_name = os.getenv("EMB_MODEL", "all-MiniLM-L6-v2")
+            
+            # Configure model cache to use network storage if available
+            model_kwargs = {}
+            cache_dir = os.getenv("MODEL_CACHE_DIR", "/srv/homedir/mistral-app/model-cache")
+            if os.path.exists(cache_dir) and os.access(cache_dir, os.W_OK):
+                model_kwargs['cache_folder'] = f"{cache_dir}/sentence-transformers"
+                logger.info(f"Using network storage for model cache: {cache_dir}")
+            
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name=model_name,
+                model_kwargs=model_kwargs
+            )
+            logger.info(f"Optimized embeddings model loaded: {model_name}")
         except Exception as e:
             logger.error(f"Failed to load embeddings model: {e}")
             raise
