@@ -61,7 +61,12 @@ services:
         condition: service_started
     restart: unless-stopped
     healthcheck:
+      # Option 1: Node.js built-in + curl fallback (recommended)
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      # Option 2: Pure Node.js (no external dependencies) 
+      # test: ["CMD", "/usr/local/bin/healthcheck-node.sh"]
+      # Option 3: Simple port check (most reliable)
+      # test: ["CMD", "nc", "-z", "localhost", "3000"]
       interval: 30s
       timeout: 10s
       retries: 5
