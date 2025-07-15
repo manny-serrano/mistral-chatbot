@@ -33,7 +33,7 @@ services:
       - ./logs:/app/logs
       # Network storage bind mounts (conditional)
       - type: bind
-        source: ${NETWORK_STORAGE_PATH:-./network-storage}/mistral-app/model-cache
+        source: ${NETWORK_STORAGE_PATH:-./network-storage}/model-cache
         target: /srv/homedir/mistral-app/model-cache
         consistency: cached
       - type: bind

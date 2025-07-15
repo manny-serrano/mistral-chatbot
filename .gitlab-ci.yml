@@ -46,6 +46,7 @@ deploy:
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/minio"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/milvus"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/logs/neo4j"
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/model-cache"
     - echo "📦 Copying optimization scripts..."
     - scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/optimize-model-storage.sh $VM_USER@$VM_HOST:/tmp/

@@ -25,6 +25,7 @@ else
   echo "📁 Creating Docker volume mount directories..."
   mkdir -p "$APP_STORAGE/data"/{neo4j,etcd,minio,milvus}
   mkdir -p "$APP_STORAGE/logs"/{neo4j}
+  mkdir -p "$APP_STORAGE/model-cache"/{huggingface,sentence-transformers}
   
   chown -R ${VM_USER:-vcm}:${VM_USER:-vcm} "$APP_STORAGE" 2>/dev/null || true
 fi
