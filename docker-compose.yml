@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   mistral-app:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
       args:
@@ -36,14 +36,10 @@ services:
         source: ${NETWORK_STORAGE_PATH:-./network-storage}/model-cache
         target: /srv/homedir/mistral-app/model-cache
         consistency: cached
-        bind:
-          create_host_path: true
       - type: bind
         source: ${LOG_PATH:-./logs}
         target: /srv/homedir/mistral-app/logs
         consistency: cached
-        bind:
-          create_host_path: true
     depends_on:
       neo4j:
         condition: service_healthy
