@@ -60,6 +60,12 @@ services:
       mistral-app:
         condition: service_started
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
 
   neo4j:
     image: neo4j:5.15
