@@ -1,41 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // Basic health check
-    const healthStatus = {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      version: process.env.npm_package_version || '1.0.0',
-      environment: process.env.NODE_ENV || 'development',
-      pid: process.pid,
-      memory: process.memoryUsage(),
-    };
-
-    return NextResponse.json(healthStatus, { 
-      status: 200,
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      }
-    });
+    // Simple health check - could be expanded to check database connections, etc.
+    return NextResponse.json(
+      { 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        service: 'frontend'
+      },
+      { status: 200 }
+    );
   } catch (error) {
     return NextResponse.json(
       { 
-        status: 'unhealthy',
-        error: 'Health check failed',
+        status: 'error', 
         timestamp: new Date().toISOString(),
+        service: 'frontend',
+        error: error instanceof Error ? error.message : 'Unknown error'
       },
-      { 
-        status: 500,
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        }
-      }
+      { status: 500 }
     );
   }
 }
