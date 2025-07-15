@@ -41,15 +41,17 @@
     "@radix-ui/react-toggle": "1.1.1",
     "@radix-ui/react-toggle-group": "1.1.1",
     "@radix-ui/react-tooltip": "1.1.6",
+    "@swc/helpers": "^0.5.17",
     "@types/react-simple-maps": "^3.0.6",
     "ai": "latest",
+    "aria-hidden": "^1.2.6",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "d3": "^7.9.0",
     "d3-scale": "^4.0.2",
-    "date-fns": "4.1.0",
+    "date-fns": "^3.6.0",
     "embla-carousel-react": "8.5.1",
     "html2canvas": "^1.4.1",
     "input-otp": "1.4.1",
@@ -90,5 +92,19 @@
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
+  },
+  "overrides": {
+    "react-day-picker": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    },
+    "react-simple-maps": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    },
+    "vaul": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   }
 }
