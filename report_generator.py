@@ -17,6 +17,10 @@ import openai
 
 # --- Config ---
 OUTPUT_DIR = 'cybersecurity_reports'
+SHARED_REPORTS_DIR = os.path.join(OUTPUT_DIR, 'shared')
+USER_REPORTS_DIR = os.path.join(OUTPUT_DIR, 'users')
+ADMIN_REPORTS_DIR = os.path.join(OUTPUT_DIR, 'admin')
+
 REPORT_INTERVALS = [24]  # Generate 24-hour reports
 THREAT_INTELLIGENCE_SOURCES = [
     'https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt',
@@ -43,8 +47,35 @@ NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "password123")
 
-# --- Ensure output directory exists ---
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# --- Ensure ALL output directories exist ---
+def ensure_directories():
+    """Create all required directories for multi-user reports"""
+    directories = [OUTPUT_DIR, SHARED_REPORTS_DIR, USER_REPORTS_DIR, ADMIN_REPORTS_DIR]
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
+        print(f"✅ Directory ensured: {directory}")
+
+ensure_directories()
+
+def ensure_user_directory(netid: str) -> str:
+    """Ensure user-specific directory exists and return path"""
+    if not netid:
+        return SHARED_REPORTS_DIR
+    
+    user_dir = os.path.join(USER_REPORTS_DIR, netid)
+    os.makedirs(user_dir, exist_ok=True)
+    return user_dir
+
+def get_report_directory(report_type: str = 'shared', netid: Optional[str] = None) -> str:
+    """Get appropriate directory based on report type and user"""
+    if report_type == 'shared':
+        return SHARED_REPORTS_DIR
+    elif report_type == 'user' and netid:
+        return ensure_user_directory(netid)
+    elif report_type == 'admin':
+        return ADMIN_REPORTS_DIR
+    else:
+        return SHARED_REPORTS_DIR  # Default fallback
 
 # ---- Enhanced Neo4j Report Class ----
 class CybersecurityReportGenerator:
@@ -933,6 +964,76 @@ Return only a JSON list of findings. Focus on threat detection insights and secu
             }
         ]
 
+def generate_user_report(netid: str, query: Optional[str] = None, time_range_hours: int = 24, report_type: str = 'custom'):
+    """Generate a custom report for a specific user"""
+    generator = CybersecurityReportGenerator(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
+    
+    try:
+        # Get time range
+        end_time = generator.get_latest_time()
+        start_time = end_time - timedelta(hours=time_range_hours)
+        
+        print(f"🔍 Generating {report_type} report for user: {netid}")
+        print(f"📊 Time range: {start_time} to {end_time} ({time_range_hours} hours)")
+        
+        # Generate report data
+        traffic_data = generator.get_traffic_overview(start_time, end_time)
+        security_findings = generator.detect_security_anomalies(start_time, end_time)
+        executive_summary = generator.generate_executive_summary(traffic_data, security_findings)
+        recommendations = generator.generate_recommendations(security_findings)
+        
+        # Create user-specific report
+        user_report = {
+            "metadata": {
+                "report_title": f"Custom Network Analysis Report - {report_type.title()}",
+                "reporting_period": f"{start_time.isoformat()} to {end_time.isoformat()}",
+                "generated_by": "LEVANT AI Security Platform",
+                "generation_date": datetime.now(timezone.utc).isoformat(),
+                "report_version": "3.0",
+                "analysis_duration_hours": time_range_hours,
+                "user_netid": netid,
+                "custom_query": query,
+                "report_type": report_type,
+                "automation_info": {
+                    "is_automated": False,
+                    "generation_type": "user_requested",
+                    "requested_by": netid
+                }
+            },
+            "executive_summary": executive_summary,
+            "network_traffic_overview": traffic_data,
+            "security_findings": security_findings,
+            "recommendations_and_next_steps": {
+                "prioritized_recommendations": recommendations,
+                "user_notes": f"Custom analysis requested by {netid}"
+            }
+        }
+        
+        # Add AI analysis
+        user_report["ai_analysis"] = enhanced_llm_analysis(user_report)
+        
+        # Save to user directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{report_type}_report_{timestamp}.json"
+        user_dir = get_report_directory('user', netid)
+        filepath = os.path.join(user_dir, filename)
+        
+        with open(filepath, 'w') as f:
+            json.dump(user_report, f, indent=2, default=str)
+        
+        print(f"✅ User report saved: {filepath}")
+        print(f"   - Generated for: {netid}")
+        print(f"   - Analysis period: {time_range_hours} hours")
+        print(f"   - Flows analyzed: {traffic_data['basic_stats']['total_flows']:,}")
+        
+        return filepath
+        
+    except Exception as e:
+        print(f"❌ Error generating user report: {e}")
+        raise
+    finally:
+        generator.close()
+
 def main():
     """Main report generation function"""
     generator = CybersecurityReportGenerator(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
@@ -1047,10 +1148,11 @@ def main():
         print("5. Performing advanced AI analysis...")
         comprehensive_report["ai_analysis"] = enhanced_llm_analysis(comprehensive_report)
         
-        # Save report
+        # Save report to shared directory (available to all users)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"cybersecurity_report_{duration_hours:.1f}h_{timestamp}.json"
-        filepath = os.path.join(OUTPUT_DIR, filename)
+        report_dir = get_report_directory('shared')
+        filepath = os.path.join(report_dir, filename)
         
         with open(filepath, 'w') as f:
             json.dump(comprehensive_report, f, indent=2, default=str)
@@ -1070,4 +1172,37 @@ def main():
         generator.close()
 
 if __name__ == "__main__":
-    main()
+    import sys
+    
+    # Check for user-specific report generation
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--user' and len(sys.argv) > 2:
+            netid = sys.argv[2]
+            
+            # Parse additional arguments
+            time_range = 24  # default
+            report_type = 'custom'
+            query = None
+            
+            for i, arg in enumerate(sys.argv[3:], 3):
+                if arg == '--time-range' and i + 1 < len(sys.argv):
+                    time_range = int(sys.argv[i + 1])
+                elif arg == '--type' and i + 1 < len(sys.argv):
+                    report_type = sys.argv[i + 1]
+                elif arg == '--query' and i + 1 < len(sys.argv):
+                    query = sys.argv[i + 1]
+            
+            # Generate user report
+            try:
+                filepath = generate_user_report(netid, query, time_range, report_type)
+                print(f"🎉 User report generation completed successfully!")
+                print(f"📄 Report saved: {filepath}")
+            except Exception as e:
+                print(f"💥 User report generation failed: {e}")
+                sys.exit(1)
+        else:
+            print("Usage: python report_generator.py [--user <netid> [--time-range <hours>] [--type <type>] [--query <query>]]")
+            sys.exit(1)
+    else:
+        # Default: generate shared report
+        main()

@@ -53,7 +53,19 @@ function ThreatDashboard() {
     fetch("/api/reports")
       .then(res => res.json())
       .then(data => {
-        const count = Array.isArray(data.reports) ? data.reports.length : 0;
+        let count = 0;
+        if (data.reports) {
+          // Handle categorized reports structure
+          if (data.reports.shared && Array.isArray(data.reports.shared)) {
+            count += data.reports.shared.length;
+          }
+          if (data.reports.user && Array.isArray(data.reports.user)) {
+            count += data.reports.user.length;
+          }
+          if (data.reports.admin && Array.isArray(data.reports.admin)) {
+            count += data.reports.admin.length;
+          }
+        }
         setPrevReportCount(reportCount);
         setReportCount(count);
       })

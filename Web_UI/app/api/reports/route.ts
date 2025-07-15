@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-// Reports directory relative to the project root
+// Reports directory structure relative to the project root
 const REPORTS_DIR = path.join(process.cwd(), "../cybersecurity_reports");
+const SHARED_REPORTS_DIR = path.join(REPORTS_DIR, "shared");
+const USER_REPORTS_DIR = path.join(REPORTS_DIR, "users");
+const ADMIN_REPORTS_DIR = path.join(REPORTS_DIR, "admin");
 
 interface ReportMetadata {
   id: string;
   title: string;
   type: string;
+  category: "shared" | "user" | "admin";
   date: string;
   status: "completed" | "generating" | "failed";
   size: string;
@@ -17,6 +21,7 @@ interface ReportMetadata {
   risk_level: string;
   flows_analyzed: number;
   generated_by: string;
+  user_netid?: string;
 }
 
 function formatFileSize(bytes: number): string {
@@ -27,71 +32,111 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-function getReportMetadata(): ReportMetadata[] {
+function getUserFromSession(request: NextRequest): { netId: string; role: string } | null {
   try {
-    if (!fs.existsSync(REPORTS_DIR)) {
-      return [];
-    }
+    const sessionCookie = request.cookies.get('duke-sso-session');
+    if (!sessionCookie) return null;
+    
+    const sessionData = JSON.parse(Buffer.from(sessionCookie.value, 'base64').toString());
+    if (Date.now() > sessionData.expires) return null;
+    
+    const user = sessionData.user;
+    const netId = user.eppn ? user.eppn.split('@')[0] : 'unknown';
+    const role = user.affiliation ? (
+      user.affiliation.includes('faculty') ? 'faculty' :
+      user.affiliation.includes('staff') ? 'staff' : 'student'
+    ) : 'student';
+    
+    return { netId, role };
+  } catch {
+    return null;
+  }
+}
 
-    const files = fs.readdirSync(REPORTS_DIR)
-      .filter(file => file.endsWith('.json') && file.startsWith('cybersecurity_report_'))
+function getReportsFromDirectory(directory: string, category: string, userNetId?: string): ReportMetadata[] {
+  if (!fs.existsSync(directory)) {
+    return [];
+  }
+
+  const reports: ReportMetadata[] = [];
+  
+  if (category === 'user' && userNetId) {
+    // Get user-specific reports
+    const userDir = path.join(directory, userNetId);
+    if (fs.existsSync(userDir)) {
+      const files = fs.readdirSync(userDir).filter(file => file.endsWith('.json'));
+      
+      for (const filename of files) {
+        try {
+          const filePath = path.join(userDir, filename);
+          const fileStats = fs.statSync(filePath);
+          const reportContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+          
+          const metadata = reportContent.metadata || {};
+          const executiveSummary = reportContent.executive_summary || {};
+          const networkOverview = reportContent.network_traffic_overview?.basic_stats || {};
+
+          reports.push({
+            id: filename.replace('.json', ''),
+            title: metadata.report_title || 'Custom Report',
+            type: metadata.report_type || 'custom',
+            category: 'user',
+            date: new Date(fileStats.mtime).toISOString(),
+            status: 'completed',
+            size: formatFileSize(fileStats.size),
+            filename: filename,
+            duration_hours: metadata.analysis_duration_hours || 0,
+            risk_level: executiveSummary.overall_risk_level || 'UNKNOWN',
+            flows_analyzed: networkOverview.total_flows || 0,
+            generated_by: metadata.generated_by || 'LEVANT AI',
+            user_netid: metadata.user_netid || userNetId
+          });
+        } catch (error) {
+          console.error(`Error processing user report ${filename}:`, error);
+        }
+      }
+    }
+  } else {
+    // Get shared or admin reports
+    const files = fs.readdirSync(directory)
+      .filter(file => file.endsWith('.json'))
       .sort((a, b) => {
-        // Sort by creation time, newest first
-        const statA = fs.statSync(path.join(REPORTS_DIR, a));
-        const statB = fs.statSync(path.join(REPORTS_DIR, b));
+        const statA = fs.statSync(path.join(directory, a));
+        const statB = fs.statSync(path.join(directory, b));
         return statB.mtime.getTime() - statA.mtime.getTime();
       });
 
-    const reports: ReportMetadata[] = [];
-
     for (const filename of files) {
       try {
-        const filePath = path.join(REPORTS_DIR, filename);
+        const filePath = path.join(directory, filename);
         const fileStats = fs.statSync(filePath);
         const reportContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
         
-        // Extract metadata from the report
         const metadata = reportContent.metadata || {};
         const executiveSummary = reportContent.executive_summary || {};
         const networkOverview = reportContent.network_traffic_overview?.basic_stats || {};
 
         reports.push({
           id: filename.replace('.json', ''),
-          title: metadata.report_title || 'Cybersecurity Report',
-          type: 'Network Traffic Analysis',
+          title: metadata.report_title || 'Network Traffic Analysis Report',
+          type: category === 'shared' ? 'Network Traffic Analysis' : 'Admin Report',
+          category: category as "shared" | "user" | "admin",
           date: new Date(fileStats.mtime).toISOString(),
           status: 'completed',
           size: formatFileSize(fileStats.size),
           filename: filename,
-          duration_hours: metadata.analysis_duration_hours || 0,
+          duration_hours: metadata.analysis_duration_hours || 24,
           risk_level: executiveSummary.overall_risk_level || 'UNKNOWN',
           flows_analyzed: networkOverview.total_flows || 0,
           generated_by: metadata.generated_by || 'LEVANT AI'
         });
       } catch (error) {
-        console.error(`Error processing report ${filename}:`, error);
-        // Add failed report entry
-        reports.push({
-          id: filename.replace('.json', ''),
-          title: 'Failed Report',
-          type: 'Network Traffic Analysis',
-          date: new Date().toISOString(),
-          status: 'failed',
-          size: '0 B',
-          filename: filename,
-          duration_hours: 0,
-          risk_level: 'UNKNOWN',
-          flows_analyzed: 0,
-          generated_by: 'LEVANT AI'
-        });
+        console.error(`Error processing ${category} report ${filename}:`, error);
       }
     }
-
-    return reports;
-  } catch (error) {
-    console.error('Error reading reports directory:', error);
-    return [];
   }
+
+  return reports;
 }
 
 export async function GET(request: NextRequest) {
@@ -99,41 +144,72 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const reportId = url.searchParams.get('id');
 
-    // If requesting a specific report
-    if (reportId) {
-      const reportPath = path.join(REPORTS_DIR, `${reportId}.json`);
-      
-      if (!fs.existsSync(reportPath)) {
-        return NextResponse.json({ error: 'Report not found' }, { status: 404 });
-      }
-
-      try {
-        const reportContent = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
-        return NextResponse.json(reportContent);
-      } catch (error) {
-        return NextResponse.json({ error: 'Error reading report' }, { status: 500 });
-      }
+    // Get user from session
+    const user = getUserFromSession(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    // Return list of all reports
-    const reports = getReportMetadata();
+    // If requesting a specific report
+    if (reportId) {
+      // Try to find the report in all accessible directories
+      const possiblePaths = [
+        path.join(SHARED_REPORTS_DIR, `${reportId}.json`),
+        path.join(USER_REPORTS_DIR, user.netId, `${reportId}.json`),
+        ...(user.role === 'faculty' || user.role === 'staff' ? [path.join(ADMIN_REPORTS_DIR, `${reportId}.json`)] : [])
+      ];
+
+      for (const reportPath of possiblePaths) {
+        if (fs.existsSync(reportPath)) {
+          try {
+            const reportContent = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
+            return NextResponse.json(reportContent);
+          } catch (error) {
+            return NextResponse.json({ error: 'Error reading report' }, { status: 500 });
+          }
+        }
+      }
+
+      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+    }
+
+    // Return categorized reports based on user permissions
+    const sharedReports = getReportsFromDirectory(SHARED_REPORTS_DIR, 'shared');
+    const userReports = getReportsFromDirectory(USER_REPORTS_DIR, 'user', user.netId);
+    const adminReports = (user.role === 'faculty' || user.role === 'staff') 
+      ? getReportsFromDirectory(ADMIN_REPORTS_DIR, 'admin') 
+      : [];
+
+    const allReports = [...sharedReports, ...userReports, ...adminReports];
     
     // Calculate summary statistics
     const summary = {
-      total_reports: reports.length,
-      completed_reports: reports.filter(r => r.status === 'completed').length,
-      failed_reports: reports.filter(r => r.status === 'failed').length,
-      total_flows_analyzed: reports.reduce((sum, r) => sum + r.flows_analyzed, 0),
-      latest_report: reports.length > 0 ? reports[0] : null,
+      total_reports: allReports.length,
+      shared_reports: sharedReports.length,
+      user_reports: userReports.length,
+      admin_reports: adminReports.length,
+      completed_reports: allReports.filter(r => r.status === 'completed').length,
+      failed_reports: allReports.filter(r => r.status === 'failed').length,
+      total_flows_analyzed: allReports.reduce((sum, r) => sum + r.flows_analyzed, 0),
+      latest_report: allReports.length > 0 ? allReports[0] : null,
       risk_distribution: {
-        HIGH: reports.filter(r => r.risk_level === 'HIGH').length,
-        MEDIUM: reports.filter(r => r.risk_level === 'MEDIUM').length,
-        LOW: reports.filter(r => r.risk_level === 'LOW').length,
+        HIGH: allReports.filter(r => r.risk_level === 'HIGH').length,
+        MEDIUM: allReports.filter(r => r.risk_level === 'MEDIUM').length,
+        LOW: allReports.filter(r => r.risk_level === 'LOW').length,
+      },
+      user_info: {
+        netId: user.netId,
+        role: user.role,
+        canAccessAdmin: user.role === 'faculty' || user.role === 'staff'
       }
     };
 
     return NextResponse.json({
-      reports,
+      reports: {
+        shared: sharedReports,
+        user: userReports,
+        admin: adminReports
+      },
       summary
     });
   } catch (error) {
@@ -144,16 +220,59 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { action } = await request.json();
+    const user = getUserFromSession(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const { action, reportType = 'custom', timeRange = 24, query } = await request.json();
 
     if (action === 'generate') {
-      // Trigger report generation
-      // Note: In production, this would trigger the Python script
-      return NextResponse.json({ 
-        message: 'Report generation started',
-        status: 'generating',
-        estimated_time: '2-3 minutes'
-      });
+      // Trigger user-specific report generation
+      const { spawn } = require('child_process');
+      const PROJECT_ROOT = path.join(process.cwd(), "..");
+      const REPORT_GENERATOR_SCRIPT = path.join(PROJECT_ROOT, "report_generator.py");
+
+      if (!fs.existsSync(REPORT_GENERATOR_SCRIPT)) {
+        return NextResponse.json({ 
+          error: 'Report generator script not found'
+        }, { status: 500 });
+      }
+
+      try {
+        const args = [
+          REPORT_GENERATOR_SCRIPT,
+          '--user', user.netId,
+          '--time-range', timeRange.toString(),
+          '--type', reportType
+        ];
+
+        if (query) {
+          args.push('--query', query);
+        }
+
+        const reportProcess = spawn('python3', args, {
+          cwd: PROJECT_ROOT,
+          detached: true,
+          stdio: ['ignore', 'pipe', 'pipe']
+        });
+
+        reportProcess.unref();
+
+        return NextResponse.json({
+          message: 'Custom report generation started successfully',
+          reportType,
+          timeRange,
+          user: user.netId,
+          estimatedTime: '1-2 minutes'
+        });
+
+      } catch (error) {
+        console.error('Error starting report generation:', error);
+        return NextResponse.json({ 
+          error: 'Failed to start report generation'
+        }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

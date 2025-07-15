@@ -9,16 +9,17 @@ export const generatePDFFromHTML = async (htmlContent: string, filename: string 
     const container = document.createElement('div')
     container.innerHTML = htmlContent
     
-    // Enhanced container styling for better PDF capture
+    // Enhanced container styling for better PDF capture - positioned off-screen but still rendered
     container.style.cssText = `
       position: fixed;
-      top: 0;
-      left: 0;
+      top: -10000px;
+      left: -10000px;
       width: 900px;
+      height: auto;
       background: white;
       padding: 0;
       margin: 0;
-      z-index: 9999;
+      z-index: -1000;
       transform: scale(1);
       transform-origin: top left;
       box-sizing: border-box;
@@ -30,50 +31,70 @@ export const generatePDFFromHTML = async (htmlContent: string, filename: string 
       print-color-adjust: exact;
       visibility: visible;
       opacity: 1;
+      pointer-events: none;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
     `
     
     document.body.appendChild(container)
     console.log('Container added to DOM')
     
-    // Force layout recalculation
-    container.offsetHeight
+    let canvas: any = null
     
-    // Wait for fonts and layout to stabilize
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    // Enhanced html2canvas options for better quality
-    const canvas = await html2canvas(container, {
-      width: 900,
-      height: container.scrollHeight,
-      scale: 2, // Higher scale for better quality
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: true,
-      imageTimeout: 0,
-      removeContainer: false,
-      scrollX: 0,
-      scrollY: 0,
-      foreignObjectRendering: true,
-      onclone: (clonedDoc) => {
-        console.log('Document cloned for canvas rendering')
-        const clonedContainer = clonedDoc.body.querySelector('div')
-        if (clonedContainer) {
-          // Ensure proper visibility in cloned document
-          clonedContainer.style.visibility = 'visible'
-          clonedContainer.style.opacity = '1'
-          clonedContainer.style.position = 'static'
-          clonedContainer.style.transform = 'none'
-          console.log('Cloned container styled for rendering')
+    try {
+      // Force layout recalculation
+      container.offsetHeight
+      
+      // Wait for fonts and layout to stabilize
+      await new Promise(resolve => setTimeout(resolve, 800))
+      
+      // Enhanced html2canvas options for better quality
+      canvas = await html2canvas(container, {
+        width: 900,
+        height: container.scrollHeight,
+        scale: 2, // Higher scale for better quality
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: true,
+        imageTimeout: 0,
+        removeContainer: false,
+        scrollX: 0,
+        scrollY: 0,
+        foreignObjectRendering: true,
+        onclone: (clonedDoc) => {
+          console.log('Document cloned for canvas rendering')
+          const clonedContainer = clonedDoc.body.querySelector('div')
+          if (clonedContainer) {
+            // Ensure proper visibility in cloned document
+            clonedContainer.style.visibility = 'visible'
+            clonedContainer.style.opacity = '1'
+            clonedContainer.style.position = 'static'
+            clonedContainer.style.transform = 'none'
+            console.log('Cloned container styled for rendering')
+          }
         }
+      })
+      
+      console.log(`Canvas created: ${canvas.width}x${canvas.height}`)
+      
+    } finally {
+      // Always remove container, even if there's an error
+      try {
+        if (container && container.parentNode) {
+          document.body.removeChild(container)
+          console.log('Container removed from DOM')
+        }
+      } catch (e) {
+        // Container might already be removed or DOM might be unavailable
+        console.log('Container cleanup completed')
       }
-    })
+    }
     
-    console.log(`Canvas created: ${canvas.width}x${canvas.height}`)
-    
-    // Remove container after capture
-    document.body.removeChild(container)
-    console.log('Container removed from DOM')
+    // If canvas creation failed, throw error after cleanup
+    if (!canvas) {
+      throw new Error('Failed to create canvas from HTML content')
+    }
     
     // Create PDF with proper dimensions
     const imgData = canvas.toDataURL('image/png', 1.0)
