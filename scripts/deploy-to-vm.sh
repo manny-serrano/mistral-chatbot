@@ -33,6 +33,10 @@ fi
 echo "📥 Pulling latest changes..."
 git pull origin main
 
+echo "🗂️ Setting up required directories..."
+chmod +x scripts/setup-directories.sh
+./scripts/setup-directories.sh
+
 # Backup current deployment if network storage is available
 if [ "$USE_NETWORK_STORAGE" = true ]; then
   echo "💾 Creating deployment backup..."
@@ -187,6 +191,36 @@ sleep 45
 # Check if services are running
 echo "🔍 Checking service status..."
 $DOCKER_COMPOSE ps
+
+# Configure Apache HTTPS (if configuration exists)
+if [ -f "/tmp/apache-config/setup-apache-https.sh" ]; then
+  echo "🔧 Configuring Apache HTTPS..."
+  
+  # Check if Apache is already configured
+  if [ -f "/etc/apache2/sites-available/mistral-app.conf" ] || [ -f "/etc/httpd/conf.d/mistral-app.conf" ]; then
+    echo "📋 Apache already configured, updating configuration..."
+    # Copy updated configuration
+    if [ -f "/etc/apache2/sites-available/mistral-app.conf" ]; then
+      cp /tmp/apache-config/sites-available/mistral-app.conf /etc/apache2/sites-available/mistral-app.conf
+      systemctl reload apache2
+    elif [ -f "/etc/httpd/conf.d/mistral-app.conf" ]; then
+      cp /tmp/apache-config/sites-available/mistral-app.conf /etc/httpd/conf.d/mistral-app.conf
+      systemctl reload httpd
+    fi
+  else
+    echo "🔧 Setting up Apache HTTPS for the first time..."
+    chmod +x /tmp/apache-config/setup-apache-https.sh
+    
+    # Run Apache setup with domain
+    /tmp/apache-config/setup-apache-https.sh \
+      --domain levantai.colab.duke.edu \
+      --project-path "$(pwd)" \
+      --install-certbot \
+      --create-service || echo "⚠️  Apache setup failed, continuing..."
+  fi
+else
+  echo "📋 No Apache configuration found, skipping HTTPS setup..."
+fi
 
 # Health checks
 echo "🏥 Running health checks..."

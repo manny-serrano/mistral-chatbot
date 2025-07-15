@@ -52,6 +52,8 @@ deploy:
     - scp -o StrictHostKeyChecking=no scripts/optimize-model-storage.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/storage-troubleshoot.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/fix-docker-volumes.sh $VM_USER@$VM_HOST:/tmp/
+    - echo "🔧 Copying Apache configuration..."
+    - scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
     - echo "🔧 Running storage troubleshooting and optimization..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/storage-troubleshoot.sh"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/storage-troubleshoot.sh"
@@ -65,11 +67,12 @@ deploy:
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir | tail -1"
     - echo "Proceeding with optimized deployment..."
     - scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' bash /tmp/deploy-to-vm.sh"
     - echo "✅ Deployment completed successfully!"
   environment:
     name: production
-    url: http://$VM_HOST:3000
+    url: https://levantai.colab.duke.edu
   only:
     - main
   allow_failure: true 

@@ -4,23 +4,18 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-COPY pnpm-lock.yaml ./
 
-# Install pnpm
-RUN npm install -g pnpm
-
-# Install dependencies and approve build scripts
-RUN pnpm install --no-frozen-lockfile
-RUN pnpm approve-builds core-js core-js-pure sharp unrs-resolver
+# Install dependencies with npm (using force to handle peer dependency conflicts)
+RUN npm install --force
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN pnpm build
+RUN npm run build
 
 # Expose port
 EXPOSE 3000
 
 # Start the application
-CMD ["pnpm", "start"] 
+CMD ["npm", "start"] 
