@@ -55,7 +55,7 @@ if [ -d "/srv/homedir" ]; then
     
     # Create specific subdirectories for Docker volume mounts
     print_info "Creating Docker volume mount directories..."
-    mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio}
+    mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus}
     mkdir -p /srv/homedir/mistral-app/logs/{neo4j}
     
     chown -R vcm:vcm /srv/homedir/mistral-app 2>/dev/null || true
