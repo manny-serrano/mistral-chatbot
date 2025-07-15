@@ -249,10 +249,10 @@ du -sh /srv/homedir/mistral-app/* 2>/dev/null || echo "No application data yet"
 echo "Docker Volume Usage:"
 docker system df
 EOF
-  chmod +x "$APP_STORAGE/monitor-storage.sh"
+  # Note: CIFS doesn't support execute permissions, so we run with bash directly
   
   # Run initial storage report
-  "$APP_STORAGE/monitor-storage.sh" > "$APP_STORAGE/logs/storage-report-$(date +%Y%m%d_%H%M%S).log"
+  bash "$APP_STORAGE/monitor-storage.sh" > "$APP_STORAGE/logs/storage-report-$(date +%Y%m%d_%H%M%S).log"
   
   echo "📊 Network storage configured:"
   echo "  • Storage path: $APP_STORAGE"
