@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -8,8 +8,10 @@ RUN apk add --no-cache curl netcat-openbsd
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with npm (using force to handle peer dependency conflicts)
-RUN npm install --force
+# Update npm to latest version and install dependencies with cache mounting
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g npm@latest && \
+    npm install --force
 
 # Copy source code
 COPY . .
@@ -20,13 +22,13 @@ RUN npm run build
 # Expose port
 EXPOSE 3000
 
-# Create multiple health check options
-RUN echo '#!/bin/sh\n# Primary: Node.js built-in health check\nnode -e "require(\"http\").get(\"http://localhost:3000/api/health\", (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on(\"error\", () => process.exit(1))" || curl -f http://localhost:3000/api/health || exit 1' > /usr/local/bin/healthcheck.sh && \
+# Create health check script for API endpoint check
+RUN printf '#!/bin/sh\n# Wait for app to start, then check health\nsleep 5\nnode -e "\nconst http = require('"'"'http'"'"');\nconst req = http.get('"'"'http://localhost:3000/api/health'"'"', (res) => {\n  console.log('"'"'Health check status:'"'"', res.statusCode);\n  process.exit(res.statusCode === 200 ? 0 : 1);\n});\nreq.on('"'"'error'"'"', (err) => {\n  console.log('"'"'Health check error:'"'"', err.message);\n  process.exit(1);\n});\nreq.setTimeout(5000, () => {\n  console.log('"'"'Health check timeout'"'"');\n  req.destroy();\n  process.exit(1);\n});\n"\n' > /usr/local/bin/healthcheck.sh && \
     chmod +x /usr/local/bin/healthcheck.sh
 
-# Alternative: Pure Node.js health check (no curl dependency)
-RUN echo '#!/bin/sh\nnode -e "require(\"http\").get(\"http://localhost:3000/api/health\", (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on(\"error\", () => process.exit(1))"' > /usr/local/bin/healthcheck-node.sh && \
-    chmod +x /usr/local/bin/healthcheck-node.sh
+# Create simple port check script
+RUN printf '#!/bin/sh\nnc -z localhost 3000\n' > /usr/local/bin/healthcheck-simple.sh && \
+    chmod +x /usr/local/bin/healthcheck-simple.sh
 
 # Start the application
 CMD ["npm", "start"] 

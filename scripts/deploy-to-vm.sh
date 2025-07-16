@@ -140,43 +140,42 @@ echo "Using Docker Compose command: $DOCKER_COMPOSE"
 echo "🛑 Stopping existing services..."
 $DOCKER_COMPOSE down || true
 
-# Clean up old images
-echo "🧹 Cleaning up old Docker images..."
-docker system prune -f || true
+# Intelligent cache management instead of purging everything
+echo "🧹 Cleaning up only old/unused Docker artifacts..."
+# Only remove dangling images and containers, keep layers for caching
+docker image prune -f || true
+docker container prune -f || true
+# Only remove volumes older than 7 days to preserve recent cache
+docker volume prune -f --filter "until=168h" || true
 
-# Optimize Docker build for limited storage
-echo "🔨 Building and starting services with storage optimization..."
+# Enable BuildKit for better caching and performance
+echo "🔨 Enabling BuildKit for optimized builds with caching..."
+export DOCKER_BUILDKIT=1
+export BUILDKIT_PROGRESS=plain
 
-# Remove conflicting Docker volumes first
-echo "🧹 Removing conflicting Docker volumes..."
-docker volume rm mistral-enhancing-network-security-analysis_neo4j_data 2>/dev/null || true
-docker volume rm mistral-enhancing-network-security-analysis_neo4j_logs 2>/dev/null || true
-docker volume rm mistral-enhancing-network-security-analysis_milvus_data 2>/dev/null || true
-docker volume rm mistral-enhancing-network-security-analysis_etcd_data 2>/dev/null || true
-docker volume rm mistral-enhancing-network-security-analysis_minio_data 2>/dev/null || true
-
-# Set Docker build arguments for network storage
+# Configure Docker to use network storage for cache
 if [ "$USE_NETWORK_STORAGE" = true ]; then
-  echo "🗂️ Configuring Docker build to use network storage..."
-  # Disable BuildKit if buildx is not available
-  export DOCKER_BUILDKIT=0
+  echo "🗂️ Configuring Docker with network storage cache..."
   
-  # Ensure network storage mount is available for Docker
+  # Create cache directories
   mkdir -p "$APP_STORAGE/docker-build-cache" "$APP_STORAGE/pip-cache" "$APP_STORAGE/docker-tmp"
   
-  # Build with network storage optimization but without BuildKit
-  $DOCKER_COMPOSE build --no-cache \
-    --build-arg NETWORK_STORAGE="$NETWORK_STORAGE" \
-    mistral-app 2>&1 | tee "$APP_STORAGE/logs/docker-build.log"
+  # Set BuildKit cache export/import for persistent caching
+  export BUILDKIT_CACHE_MOUNT_NS=mistral-app
+  
+  # Build with cache mounting (BuildKit feature)
+  echo "🏗️ Building with persistent cache on network storage..."
+  $DOCKER_COMPOSE build \
+    --build-arg BUILDKIT_INLINE_CACHE=1 \
+    --build-arg NETWORK_STORAGE="$NETWORK_STORAGE" 2>&1 | tee "$APP_STORAGE/logs/docker-build.log"
 else
-  echo "⚠️ Building with local storage only - may run out of space"
-  # Build one service at a time to reduce memory usage
-  export DOCKER_BUILDKIT=0
-  $DOCKER_COMPOSE build --no-cache mistral-app
+  echo "🏗️ Building with local Docker layer cache..."
+  # Build with Docker layer caching (no --no-cache flag)
+  $DOCKER_COMPOSE build
 fi
 
 # Check available space after build
-echo "📊 Storage status after build:"
+echo "📊 Storage status after optimized build:"
 df -h / | tail -1
 if [ "$USE_NETWORK_STORAGE" = true ]; then
   df -h "$NETWORK_STORAGE" | tail -1

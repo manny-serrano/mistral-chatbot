@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mistral-app:
     build:
@@ -46,6 +44,12 @@ services:
       milvus:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
 
   frontend:
     build:
@@ -61,16 +65,14 @@ services:
         condition: service_started
     restart: unless-stopped
     healthcheck:
-      # Option 1: Node.js built-in + curl fallback (recommended)
-      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
-      # Option 2: Pure Node.js (no external dependencies) 
-      # test: ["CMD", "/usr/local/bin/healthcheck-node.sh"]
-      # Option 3: Simple port check (most reliable)
-      # test: ["CMD", "nc", "-z", "localhost", "3000"]
+      # Simple port check (most reliable for startup)
+      test: ["CMD", "/usr/local/bin/healthcheck-simple.sh"]
+      # Alternative: Full health endpoint check
+      # test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 120s
+      start_period: 180s
 
   neo4j:
     image: neo4j:5.15

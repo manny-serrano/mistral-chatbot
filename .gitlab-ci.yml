@@ -5,12 +5,15 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
+  DOCKER_BUILDKIT: 1
+  BUILDKIT_PROGRESS: plain
 
 build:
   stage: build
   image: alpine:latest
   script:
     - echo "✅ Build stage completed - ready for deployment"
+    - echo "🔧 Docker BuildKit enabled for optimized caching"
   only:
     - main
 
@@ -36,9 +39,10 @@ deploy:
     - echo "🔍 Checking storage before deployment..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir"
-    - echo "🗂️ Pre-deployment storage optimization..."
+    - echo "🗂️ Pre-deployment cache optimization..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/docker-build-cache"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/pip-cache"
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/npm-cache"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/docker-tmp"
     - echo "📁 Creating Docker volume mount directories..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/neo4j"
@@ -54,25 +58,23 @@ deploy:
     - scp -o StrictHostKeyChecking=no scripts/fix-docker-volumes.sh $VM_USER@$VM_HOST:/tmp/
     - echo "🔧 Copying Apache configuration..."
     - scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
-    - echo "🔧 Running storage troubleshooting and optimization..."
+    - echo "🔧 Running storage optimization (preserving cache)..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/storage-troubleshoot.sh"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/storage-troubleshoot.sh"
-    - echo "🧹 Running pre-deployment cleanup..."
+    - echo "🧹 Running selective cleanup (preserving Docker cache)..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/manage-storage.sh cleanup"
-    - echo "🔧 Fixing Docker volume conflicts..."
+    - echo "🔧 Optimizing Docker volumes..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/fix-docker-volumes.sh"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/fix-docker-volumes.sh"
-    - echo "📈 Post-cleanup storage status:"
+    - echo "📈 Post-optimization storage status:"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h / | tail -1"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir | tail -1"
-    - echo "Proceeding with optimized deployment..."
+    - echo "🚀 Proceeding with cache-optimized deployment..."
     - scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' bash /tmp/deploy-to-vm.sh"
-    - echo "✅ Deployment completed successfully!"
   environment:
     name: production
-    url: https://levantai.colab.duke.edu
+    url: http://$VM_HOST:3000
   only:
-    - main
-  allow_failure: true 
+    - main 

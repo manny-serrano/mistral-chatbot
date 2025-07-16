@@ -55,7 +55,7 @@
     "embla-carousel-react": "8.5.1",
     "html2canvas": "^1.4.1",
     "input-otp": "1.4.1",
-    "jspdf": "^2.5.2",
+    "jspdf": "^3.0.1",
     "lucide-react": "^0.454.0",
     "neo4j-driver": "^5.28.1",
     "neovis.js": "^2.1.0",
@@ -100,11 +100,22 @@
     },
     "react-simple-maps": {
       "react": "$react",
-      "react-dom": "$react-dom"
+      "react-dom": "$react-dom",
+      "d3-color": "^3.1.0",
+      "d3-interpolate": "^3.0.1",
+      "d3-transition": "^3.0.1",
+      "d3-zoom": "^3.0.0"
     },
     "vaul": {
       "react": "$react",
       "react-dom": "$react-dom"
-    }
+    },
+    "jspdf": {
+      "dompurify": "^3.2.4"
+    },
+    "dompurify": "^3.2.4",
+    "d3-color": "^3.1.0",
+    "glob": "^10.3.12",
+    "inflight": "^1.0.6"
   }
 }

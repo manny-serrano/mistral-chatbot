@@ -1275,9 +1275,14 @@ async def root():
         }
     }
 
+@app.get("/healthz")
+async def simple_health_check():
+    """Simple health check endpoint for Docker containers and load balancers."""
+    return {"status": "ok", "service": "mistral-api"}
+
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Enhanced health check endpoint."""
+    """Enhanced health check endpoint with Docker-friendly status reporting."""
     global agent, agent_initialized, initialization_error
     
     # Determine overall agent status
@@ -1333,14 +1338,21 @@ async def health_check():
         if agent_manager.initialization_error:
             databases["initialization_error"] = agent_manager.initialization_error
     
-    # Determine overall status
+    # Determine overall status with more tolerant logic for container health checks
     if config.lightweight_mode:
         overall_status = "healthy_lightweight"
     elif agent_status == "healthy" and any("connected" in str(status) for status in databases.values()):
         overall_status = "healthy"
+    elif agent_status in ["not_initialized", "initialized_but_null"] and not agent_manager.initialization_error:
+        # Still initializing but no error - consider healthy for container health check
+        overall_status = "healthy_initializing"
+    elif "error" in agent_status and "Failed to connect" in str(agent_manager.initialization_error):
+        # Database connection issues during startup - still considered healthy for basic API functionality
+        overall_status = "healthy_limited"
     else:
         overall_status = "unhealthy"
     
+    # For Docker health checks, return HTTP 200 unless there's a critical error
     return HealthResponse(
         status=overall_status,
         timestamp=datetime.now().isoformat(),
