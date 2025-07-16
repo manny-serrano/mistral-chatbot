@@ -8,9 +8,8 @@ RUN apk add --no-cache curl netcat-openbsd
 # Copy package files
 COPY package*.json ./
 
-# Update npm to latest version and install dependencies with cache mounting
-RUN --mount=type=cache,target=/root/.npm \
-    npm install -g npm@latest && \
+# Update npm to latest version and install dependencies
+RUN npm install -g npm@latest && \
     npm install --force
 
 # Copy source code

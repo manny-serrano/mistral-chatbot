@@ -5,15 +5,14 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
-  DOCKER_BUILDKIT: 1
-  BUILDKIT_PROGRESS: plain
+  # BuildKit disabled by default for compatibility - will be auto-detected in deployment
 
 build:
   stage: build
   image: alpine:latest
   script:
     - echo "✅ Build stage completed - ready for deployment"
-    - echo "🔧 Docker BuildKit enabled for optimized caching"
+    - echo "🔧 Docker build system will auto-detect BuildKit availability"
   only:
     - main
 

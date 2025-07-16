@@ -148,29 +148,31 @@ docker container prune -f || true
 # Only remove volumes older than 7 days to preserve recent cache
 docker volume prune -f --filter "until=168h" || true
 
-# Enable BuildKit for better caching and performance
-echo "🔨 Enabling BuildKit for optimized builds with caching..."
-export DOCKER_BUILDKIT=1
-export BUILDKIT_PROGRESS=plain
+# Check if BuildKit/buildx is available, otherwise use legacy Docker
+echo "🔨 Configuring Docker build system..."
+if docker buildx version >/dev/null 2>&1; then
+  echo "✅ BuildKit/buildx detected - enabling optimized builds"
+  export DOCKER_BUILDKIT=1
+  export BUILDKIT_PROGRESS=plain
+else
+  echo "⚠️ BuildKit/buildx not available - using legacy Docker builder"
+  export DOCKER_BUILDKIT=0
+fi
 
-# Configure Docker to use network storage for cache
+# Configure build process
 if [ "$USE_NETWORK_STORAGE" = true ]; then
-  echo "🗂️ Configuring Docker with network storage cache..."
+  echo "🗂️ Configuring build with network storage optimization..."
   
-  # Create cache directories
+  # Create cache directories for manual cache management
   mkdir -p "$APP_STORAGE/docker-build-cache" "$APP_STORAGE/pip-cache" "$APP_STORAGE/docker-tmp"
   
-  # Set BuildKit cache export/import for persistent caching
-  export BUILDKIT_CACHE_MOUNT_NS=mistral-app
-  
-  # Build with cache mounting (BuildKit feature)
-  echo "🏗️ Building with persistent cache on network storage..."
+  # Build with network storage environment variables
+  echo "🏗️ Building with network storage paths..."
   $DOCKER_COMPOSE build \
-    --build-arg BUILDKIT_INLINE_CACHE=1 \
     --build-arg NETWORK_STORAGE="$NETWORK_STORAGE" 2>&1 | tee "$APP_STORAGE/logs/docker-build.log"
 else
   echo "🏗️ Building with local Docker layer cache..."
-  # Build with Docker layer caching (no --no-cache flag)
+  # Build with standard Docker layer caching
   $DOCKER_COMPOSE build
 fi
 

@@ -40,10 +40,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy and install requirements with optimized caching
 COPY requirements.txt .
 
-# Install packages with BuildKit cache mounting for faster builds
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=cache,target=$PIP_CACHE_DIR \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
+# Install packages with caching (compatible with legacy Docker and BuildKit)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --cache-dir="$PIP_CACHE_DIR" \
     --find-links https://download.pytorch.org/whl/cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \

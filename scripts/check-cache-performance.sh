@@ -15,11 +15,16 @@ echo "🚀 Docker Cache Performance Report"
 echo "=================================="
 
 # Check BuildKit status
-if [ "$DOCKER_BUILDKIT" = "1" ]; then
-    print_status "BuildKit is enabled"
+if docker buildx version >/dev/null 2>&1; then
+    if [ "$DOCKER_BUILDKIT" = "1" ]; then
+        print_status "BuildKit is enabled and available"
+    else
+        print_info "BuildKit is available but not enabled"
+        echo "Run: export DOCKER_BUILDKIT=1"
+    fi
 else
-    print_warning "BuildKit is disabled - enable for better caching"
-    echo "Run: export DOCKER_BUILDKIT=1"
+    print_warning "BuildKit/buildx not available - using legacy Docker"
+    echo "Legacy Docker still provides good layer caching"
 fi
 
 echo ""
