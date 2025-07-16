@@ -991,8 +991,32 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan with proper resource handling."""
     # Startup
     logger.info("Starting up Mistral Security Analysis API")
+    
+    # Check if we're in health-check-friendly startup mode
+    startup_mode = os.getenv("STARTUP_MODE", "normal")
+    
     if config.lightweight_mode:
         logger.info("🚀 API server ready in lightweight mode (databases will connect on first query)")
+    elif startup_mode == "health_check_friendly":
+        logger.info("🚀 API server starting in health-check-friendly mode...")
+        # Start API server immediately for health checks
+        logger.info("✅ API server ready for health checks")
+        
+        # Initialize databases in background after a delay
+        async def background_init():
+            await asyncio.sleep(10)  # Give health checks time to pass
+            logger.info("🔄 Starting background database initialization...")
+            try:
+                agent = await agent_manager.initialize()
+                if agent:
+                    logger.info("✅ Background database initialization completed!")
+                else:
+                    logger.info("⚠️ Database connections pending - will retry on first query")
+            except Exception as e:
+                logger.warning(f"Background database initialization failed: {e}")
+        
+        # Start background task
+        asyncio.create_task(background_init())
     else:
         logger.info("🚀 Attempting full initialization with database connections...")
         try:
@@ -1002,32 +1026,16 @@ async def lifespan(app: FastAPI):
             else:
                 logger.info("⚠️ Database connections pending - will retry on first query")
         except Exception as e:
-            logger.warning(f"Startup initialization had issues: {e}")
-            logger.info("🔄 Server will continue and retry database connections as needed")
-        
-        # Initialize Neo4j helper for visualization (independent of agent)
-        try:
-            neo4j_helper.connect()
-            logger.info("✅ Neo4j visualization helper initialized successfully")
-        except Exception as e:
-            logger.warning(f"Neo4j visualization helper initialization failed: {e}")
-            logger.info("Will retry Neo4j connection when needed for visualization queries")
-            # Don't fail startup - visualization will be retried when needed
-            neo4j_helper.driver = None
+            logger.warning(f"Database initialization warning: {e}")
+            logger.info("⚠️ API server will start with degraded functionality")
     
     yield
     
     # Shutdown
     logger.info("Shutting down Mistral Security Analysis API")
-    if hasattr(agent_manager, 'close'):
-        agent_manager.close()
-    
-    # Close Neo4j helper
-    try:
-        neo4j_helper.close()
-        logger.info("Neo4j visualization helper closed successfully")
-    except Exception as e:
-        logger.error(f"Error closing Neo4j helper: {e}")
+    agent_manager.close()
+    neo4j_helper.close()
+    logger.info("Shutdown complete")
 
 # Pydantic models for API requests/responses with improved validation
 class SecurityQueryRequest(BaseModel):
