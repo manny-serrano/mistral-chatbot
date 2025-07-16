@@ -60,18 +60,40 @@ fi
 if [ ! -f .env ]; then
   echo "📝 Creating .env file..."
   cat > .env << EOL
+# Essential API Configuration
 OPENAI_API_KEY=$OPENAI_API_KEY
 OPENAI_API_BASE=https://litellm.oit.duke.edu
+
+# Enable lightweight mode for reliable startup (disable for full functionality)
+LIGHTWEIGHT_MODE=${LIGHTWEIGHT_MODE:-false}
+
+# API Server Configuration
+API_HOST=0.0.0.0
+API_PORT=8000
+ENVIRONMENT=production
+LOG_LEVEL=INFO
+
+# Database Configuration
 MILVUS_HOST=milvus
 MILVUS_PORT=19530
 NEO4J_URI=bolt://neo4j:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=password123
-API_HOST=0.0.0.0
-API_PORT=8000
+
+# Frontend Configuration
 NEXT_PUBLIC_API_URL=http://$VM_HOST:8000
 NEXT_PUBLIC_APP_URL=http://$VM_HOST:3000
+
+# Performance Optimization
+LOW_MEMORY_MODE=true
+USE_SMALLER_MODEL=true
 EOL
+else
+  echo "📝 Updating existing .env file..."
+  # Ensure LIGHTWEIGHT_MODE is set if not already present
+  if ! grep -q "LIGHTWEIGHT_MODE" .env; then
+    echo "LIGHTWEIGHT_MODE=${LIGHTWEIGHT_MODE:-false}" >> .env
+  fi
 fi
 
 # Add network storage paths to .env if available
