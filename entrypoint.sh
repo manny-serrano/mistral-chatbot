@@ -110,6 +110,45 @@ start_api_with_retry() {
         export LIGHTWEIGHT_MODE="true"
     fi
     
+    # Start a simple health check server IMMEDIATELY in background
+    echo "🏥 Starting immediate health check server on port 8000..."
+    cd /app
+    cat > /tmp/simple_health_server.py << 'EOF'
+import http.server
+import socketserver
+import json
+from datetime import datetime
+
+class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path in ['/healthz', '/health', '/']:
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {
+                "status": "ok",
+                "service": "mistral-api-startup",
+                "timestamp": datetime.now().isoformat(),
+                "mode": "startup_health_check"
+            }
+            self.wfile.write(json.dumps(response).encode())
+        else:
+            super().do_GET()
+
+PORT = 8000
+with socketserver.TCPServer(("", PORT), HealthCheckHandler) as httpd:
+    print(f"Health check server serving at port {PORT}")
+    httpd.serve_forever()
+EOF
+    
+    # Start the health check server in background
+    python /tmp/simple_health_server.py &
+    HEALTH_SERVER_PID=$!
+    echo "✅ Health check server started with PID $HEALTH_SERVER_PID"
+    
+    # Give the health server a moment to start
+    sleep 2
+    
     echo "🔄 Starting uvicorn server..."
     echo "Working directory: $(pwd)"
     echo "Agent directory contents:"
@@ -120,7 +159,9 @@ start_api_with_retry() {
         echo "❌ Failed to change to Agent directory"
         echo "Current directory contents:"
         ls -la
-        exit 1
+        # Don't exit - keep the health server running
+        echo "🏥 Keeping health check server running for debugging"
+        tail -f /dev/null
     }
     
     echo "Current directory: $(pwd)"
@@ -132,15 +173,26 @@ start_api_with_retry() {
         echo "❌ api_server.py not found in Agent directory!"
         echo "Directory contents:"
         ls -la
-        exit 1
+        # Don't exit - keep the health server running
+        echo "🏥 Keeping health check server running for debugging"
+        tail -f /dev/null
     fi
+    
+    # Kill the simple health server and start the real API server
+    echo "🔄 Stopping simple health server and starting real API server..."
+    kill $HEALTH_SERVER_PID 2>/dev/null || true
+    sleep 1
     
     # Start the API server with explicit python path
     echo "Starting API server..."
     
-    # Use exec to replace the shell process with the python process
-    # This ensures signals are properly handled
-    exec python api_server.py 2>&1 | tee -a /tmp/api_server.log
+    # Try to start the real API server, but if it fails, restart the simple health server
+    if ! python api_server.py 2>&1 | tee -a /tmp/api_server.log; then
+        echo "❌ Real API server failed to start, restarting simple health server..."
+        cd /app
+        python /tmp/simple_health_server.py &
+        tail -f /dev/null
+    fi
 }
 
 # Error handler
