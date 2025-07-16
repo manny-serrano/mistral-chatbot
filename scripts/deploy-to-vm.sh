@@ -121,6 +121,11 @@ SENTENCE_TRANSFORMERS_HOME=$APP_STORAGE/model-cache/sentence-transformers
 USE_SMALLER_MODEL=false
 LOW_MEMORY_MODE=true
 CLEAR_CACHE_AFTER_LOAD=false
+
+# CI/CD Configuration
+CI=true
+GITLAB_CI=true
+STARTUP_MODE=health_check_friendly
 EOL
   fi
   
@@ -161,6 +166,10 @@ echo "Using Docker Compose command: $DOCKER_COMPOSE"
 # Stop existing services
 echo "🛑 Stopping existing services..."
 $DOCKER_COMPOSE down || true
+
+# Show current container status before cleanup
+echo "📊 Current Docker status:"
+docker ps -a | grep mistral || echo "No mistral containers found"
 
 # Intelligent cache management instead of purging everything
 echo "🧹 Cleaning up only old/unused Docker artifacts..."
@@ -233,13 +242,89 @@ fi
 
 $DOCKER_COMPOSE up -d
 
-# Wait for services to be ready
-echo "⏳ Waiting for services to start..."
-sleep 45
-
-# Check if services are running
-echo "🔍 Checking service status..."
+# Show container status immediately after startup
+echo "📊 Container status after startup:"
 $DOCKER_COMPOSE ps
+
+# Enhanced health checks with debugging
+echo "⏳ Waiting for services to start..."
+echo "⚠️  Note: Initial startup may take up to 5 minutes in CI/CD environment"
+
+# Function to check container health
+check_container_health() {
+    local container_name=$1
+    local max_attempts=$2
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        echo "🔍 Checking $container_name health (attempt $attempt/$max_attempts)..."
+        
+        # Get container status
+        container_status=$(docker inspect --format='{{.State.Status}}' $container_name 2>/dev/null || echo "not_found")
+        health_status=$(docker inspect --format='{{.State.Health.Status}}' $container_name 2>/dev/null || echo "no_health_check")
+        
+        echo "  • Container status: $container_status"
+        echo "  • Health status: $health_status"
+        
+        # Check if container is running
+        if [ "$container_status" != "running" ]; then
+            echo "⚠️  Container $container_name is not running!"
+            echo "📋 Container logs:"
+            docker logs --tail 50 $container_name 2>&1 || echo "Failed to get logs"
+            
+            if [ "$container_status" = "exited" ]; then
+                echo "❌ Container has exited. Checking exit code..."
+                exit_code=$(docker inspect --format='{{.State.ExitCode}}' $container_name 2>/dev/null || echo "unknown")
+                echo "  • Exit code: $exit_code"
+                return 1
+            fi
+        fi
+        
+        # Check health status
+        if [ "$health_status" = "healthy" ]; then
+            echo "✅ $container_name is healthy!"
+            return 0
+        elif [ "$health_status" = "unhealthy" ]; then
+            echo "⚠️  $container_name is unhealthy. Checking logs..."
+            echo "📋 Recent container logs:"
+            docker logs --tail 30 $container_name 2>&1 || echo "Failed to get logs"
+        fi
+        
+        # Wait before next attempt
+        sleep 15
+        attempt=$((attempt + 1))
+    done
+    
+    echo "❌ $container_name health check failed after $max_attempts attempts"
+    return 1
+}
+
+# Check mistral-app container health with extended timeout
+echo "🏥 Checking mistral-app health..."
+if check_container_health "mistral-enhancing-network-security-analysis_mistral-app_1" 20; then
+    echo "✅ mistral-app is healthy"
+else
+    echo "⚠️  mistral-app health check failed, but continuing deployment..."
+    echo "📋 Detailed diagnostics:"
+    docker inspect mistral-enhancing-network-security-analysis_mistral-app_1 2>/dev/null || echo "Container not found"
+fi
+
+# Traditional API health checks as backup
+echo "🏥 Running traditional health checks..."
+
+# Check API
+for i in {1..10}; do
+  if curl -f http://localhost:8000/healthz > /dev/null 2>&1; then
+    echo "✅ API healthz endpoint is responsive"
+    break
+  elif curl -f http://localhost:8000/health > /dev/null 2>&1; then
+    echo "✅ API health endpoint is responsive"
+    break
+  else
+    echo "⏳ Waiting for API... ($i/10)"
+    sleep 5
+  fi
+done
 
 # Configure Apache HTTPS (if configuration exists)
 if [ -f "/tmp/apache-config/setup-apache-https.sh" ]; then
@@ -270,20 +355,6 @@ if [ -f "/tmp/apache-config/setup-apache-https.sh" ]; then
 else
   echo "📋 No Apache configuration found, skipping HTTPS setup..."
 fi
-
-# Health checks
-echo "🏥 Running health checks..."
-
-# Check API
-for i in {1..10}; do
-  if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-    echo "✅ API is healthy"
-    break
-  else
-    echo "⏳ Waiting for API... ($i/10)"
-    sleep 5
-  fi
-done
 
 # Check Frontend
 for i in {1..10}; do

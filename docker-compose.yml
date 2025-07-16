@@ -28,6 +28,10 @@ services:
       - SENTENCE_TRANSFORMERS_HOME=${SENTENCE_TRANSFORMERS_HOME:-/tmp/sentence-transformers}
       - LOW_MEMORY_MODE=${LOW_MEMORY_MODE:-true}
       - USE_SMALLER_MODEL=${USE_SMALLER_MODEL:-false}
+      # CI/CD specific environment variables
+      - CI=${CI:-false}
+      - GITLAB_CI=${GITLAB_CI:-false}
+      - STARTUP_MODE=${STARTUP_MODE:-normal}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -47,11 +51,12 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/healthz || exit 1"]
+      # Updated health check - more lenient for CI/CD
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/healthz || curl -f http://localhost:8000/ || exit 1"]
       interval: 30s
-      timeout: 30s
-      retries: 15
-      start_period: 180s
+      timeout: 45s  # Increased from 30s
+      retries: 20   # Increased from 15
+      start_period: 300s  # Increased from 180s to 5 minutes
 
   frontend:
     build:

@@ -58,6 +58,7 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y \
     curl \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -109,11 +110,11 @@ RUN chmod +x /app/entrypoint.sh
 # Create both network and fallback local directories
 RUN mkdir -p /app/data /app/logs /app/.cache/huggingface/transformers && \
     mkdir -p /tmp/model-cache/huggingface/transformers /tmp/model-cache/sentence-transformers && \
-    mkdir -p /tmp/huggingface /tmp/transformers && \
+    mkdir -p /tmp/huggingface /tmp/transformers /tmp/logs && \
     if [ -d "/srv/homedir" ] && [ -w "/srv/homedir" ]; then \
         mkdir -p /srv/homedir/mistral-app/model-cache/huggingface/transformers /srv/homedir/mistral-app/model-cache/sentence-transformers; \
     fi && \
-    chown -R appuser:appuser /app /tmp/model-cache /tmp/huggingface /tmp/transformers
+    chown -R appuser:appuser /app /tmp/model-cache /tmp/huggingface /tmp/transformers /tmp/logs
 
 # Switch to non-root user
 USER appuser

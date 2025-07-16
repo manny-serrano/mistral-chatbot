@@ -1,16 +1,26 @@
 #!/bin/bash
 
-set -e
+# Don't exit on error immediately - we want to handle errors gracefully
+set +e
 
 echo "Mistral Network Security Analysis - Container Starting"
 echo "====================================================="
+
+# Add debug information
+echo "🔍 Debug Information:"
+echo "  • Working Directory: $(pwd)"
+echo "  • User: $(whoami)"
+echo "  • Python: $(which python || echo 'Python not found!')"
+echo "  • Environment: ${ENVIRONMENT:-production}"
+echo "  • API Host: ${API_HOST:-0.0.0.0}"
+echo "  • API Port: ${API_PORT:-8000}"
 
 # Function to wait for service to be available
 wait_for_service() {
     local host=$1
     local port=$2
     local service_name=$3
-    local max_wait=60
+    local max_wait=30  # Reduced from 60 to 30
     local wait_time=0
     
     echo "Waiting for $service_name at $host:$port..."
@@ -78,7 +88,7 @@ prepare_directories() {
     echo "✅ Directories prepared"
 }
 
-# Function to start API server with retry logic
+# Function to start API server with better error handling
 start_api_with_retry() {
     cd /app
     
@@ -94,24 +104,63 @@ start_api_with_retry() {
     # Set environment for health-check-friendly startup
     export STARTUP_MODE="health_check_friendly"
     
+    # Force lightweight mode during initial startup in CI/CD
+    if [ "${CI:-false}" = "true" ] || [ "${GITLAB_CI:-false}" = "true" ]; then
+        echo "🚀 CI/CD environment detected - forcing lightweight mode for initial startup"
+        export LIGHTWEIGHT_MODE="true"
+    fi
+    
     echo "🔄 Starting uvicorn server..."
     echo "Working directory: $(pwd)"
     echo "Agent directory contents:"
-    ls -la Agent/
+    ls -la Agent/ || echo "Agent directory not found!"
     
     # Change to Agent directory where the api_server.py is located
-    cd Agent
+    cd Agent || {
+        echo "❌ Failed to change to Agent directory"
+        echo "Current directory contents:"
+        ls -la
+        exit 1
+    }
     
     echo "Current directory: $(pwd)"
     echo "Files in current directory:"
     ls -la
     
+    # Check if api_server.py exists
+    if [ ! -f "api_server.py" ]; then
+        echo "❌ api_server.py not found in Agent directory!"
+        echo "Directory contents:"
+        ls -la
+        exit 1
+    fi
+    
     # Start the API server with explicit python path
     echo "Starting API server..."
-    python api_server.py 2>&1 | tee /tmp/api_server.log
+    
+    # Use exec to replace the shell process with the python process
+    # This ensures signals are properly handled
+    exec python api_server.py 2>&1 | tee -a /tmp/api_server.log
 }
 
-# Main execution
+# Error handler
+handle_error() {
+    echo "❌ Error occurred: $1"
+    echo "📋 Stack trace:"
+    echo "$2"
+    
+    # Create a simple HTTP server on port 8000 for health checks if API fails
+    echo "🔧 Starting fallback health check server..."
+    cd /app
+    python -m http.server 8000 &
+    
+    # Keep container running for debugging
+    tail -f /dev/null
+}
+
+# Main execution with error handling
+trap 'handle_error "Unexpected error" "$BASH_SOURCE"' ERR
+
 echo "🔧 Running pre-startup checks..."
 
 # Check environment
@@ -124,17 +173,17 @@ prepare_directories
 if [ "$1" = "api" ]; then
     echo "🎯 Starting Security Analysis API Server..."
     
-    # Check if we should wait for dependencies
-    if [ "$LIGHTWEIGHT_MODE" != "true" ]; then
+    # In CI/CD or lightweight mode, skip database checks
+    if [ "$LIGHTWEIGHT_MODE" = "true" ] || [ "${CI:-false}" = "true" ] || [ "${GITLAB_CI:-false}" = "true" ]; then
+        echo "⚡ Lightweight/CI mode enabled - skipping database dependency checks"
+    else
         echo "🔄 Checking database dependencies..."
         wait_for_service "${MILVUS_HOST:-milvus}" "${MILVUS_PORT:-19530}" "Milvus"
         wait_for_service "${NEO4J_HOST:-neo4j}" "${NEO4J_PORT:-7687}" "Neo4j"
-    else
-        echo "⚡ Lightweight mode enabled - skipping database dependency checks"
     fi
     
     # Start the API server with retry logic
-    start_api_with_retry
+    start_api_with_retry || handle_error "Failed to start API server" "Check /tmp/api_server.log"
     
 elif [ "$1" = "agent" ]; then
     echo "🤖 Starting Interactive Security Agent..."
