@@ -40,13 +40,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy and install requirements with optimized caching
 COPY requirements.txt .
 
-# Install packages with caching (compatible with legacy Docker and BuildKit)
+# Install packages with optimized caching and space management
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --cache-dir="$PIP_CACHE_DIR" \
+    pip install --cache-dir=/tmp/pip-cache \
     --find-links https://download.pytorch.org/whl/cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     torch --no-deps && \
-    pip install --cache-dir="$PIP_CACHE_DIR" -r requirements.txt
+    pip install --cache-dir=/tmp/pip-cache -r requirements.txt && \
+    rm -rf /tmp/pip-cache/* /tmp/*.whl
 
 # Production stage
 FROM python:3.11-slim
@@ -91,12 +92,13 @@ ENV PYTHONUNBUFFERED=1 \
     MILVUS_INDEX_TYPE=IVF_FLAT \
     MILVUS_METRIC_TYPE=COSINE
 
-# Set cache paths with fallback to local if network storage not available
-ENV HUGGINGFACE_HUB_CACHE=/srv/homedir/mistral-app/model-cache/huggingface:/tmp/huggingface \
-    HF_HOME=/srv/homedir/mistral-app/model-cache/huggingface:/tmp/huggingface \
-    TRANSFORMERS_CACHE=/srv/homedir/mistral-app/model-cache/huggingface/transformers:/tmp/transformers \
-    SENTENCE_TRANSFORMERS_HOME=/srv/homedir/mistral-app/model-cache/sentence-transformers:/tmp/sentence-transformers \
-    MODEL_CACHE_DIR=/srv/homedir/mistral-app/model-cache:/tmp/model-cache
+# Set cache paths to use local temp during build (network storage mounted at runtime)
+ENV HUGGINGFACE_HUB_CACHE=/tmp/huggingface \
+    HF_HOME=/tmp/huggingface \
+    TRANSFORMERS_CACHE=/tmp/transformers \
+    SENTENCE_TRANSFORMERS_HOME=/tmp/sentence-transformers \
+    MODEL_CACHE_DIR=/tmp/model-cache \
+    PIP_CACHE_DIR=/tmp/pip-cache
 
 # Copy and set up entrypoint script
 COPY --chown=appuser:appuser entrypoint.sh /app/entrypoint.sh

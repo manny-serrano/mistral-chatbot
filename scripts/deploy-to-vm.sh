@@ -148,28 +148,54 @@ docker container prune -f || true
 # Only remove volumes older than 7 days to preserve recent cache
 docker volume prune -f --filter "until=168h" || true
 
-# Check if BuildKit/buildx is available, otherwise use legacy Docker
+# Ensure BuildKit/buildx is available and configured
 echo "🔨 Configuring Docker build system..."
-if docker buildx version >/dev/null 2>&1; then
-  echo "✅ BuildKit/buildx detected - enabling optimized builds"
-  export DOCKER_BUILDKIT=1
-  export BUILDKIT_PROGRESS=plain
-else
-  echo "⚠️ BuildKit/buildx not available - using legacy Docker builder"
-  export DOCKER_BUILDKIT=0
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "🔧 Installing Docker Buildx..."
+  # Create buildx builder instance if it doesn't exist
+  docker buildx create --driver docker-container --name mybuilder --use 2>/dev/null || docker buildx use mybuilder 2>/dev/null || true
+  # Install buildx if still not available
+  if ! docker buildx version >/dev/null 2>&1; then
+    echo "⚠️ BuildKit installation needed - attempting manual setup..."
+    # For older Docker versions, ensure buildx plugin is available
+    mkdir -p ~/.docker/cli-plugins
+    if [ ! -f ~/.docker/cli-plugins/docker-buildx ]; then
+      echo "Downloading docker-buildx plugin..."
+      BUILDX_VERSION=$(curl -s https://api.github.com/repos/docker/buildx/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)
+      curl -sSL "https://github.com/docker/buildx/releases/download/${BUILDX_VERSION}/buildx-${BUILDX_VERSION}.linux-amd64" -o ~/.docker/cli-plugins/docker-buildx
+      chmod +x ~/.docker/cli-plugins/docker-buildx
+    fi
+  fi
 fi
 
-# Configure build process
+# Always use BuildKit (default in modern Docker, avoids deprecation warnings)
+echo "✅ Using BuildKit for optimized builds"
+export DOCKER_BUILDKIT=1
+export BUILDKIT_PROGRESS=plain
+
+# Pre-build setup to prevent space issues
 if [ "$USE_NETWORK_STORAGE" = true ]; then
-  echo "🗂️ Configuring build with network storage optimization..."
+  echo "🗂️ Running pre-build setup for network storage optimization..."
   
-  # Create cache directories for manual cache management
+  # Create cache directories
   mkdir -p "$APP_STORAGE/docker-build-cache" "$APP_STORAGE/pip-cache" "$APP_STORAGE/docker-tmp"
   
-  # Build with network storage environment variables
-  echo "🏗️ Building with network storage paths..."
-  $DOCKER_COMPOSE build \
-    --build-arg NETWORK_STORAGE="$NETWORK_STORAGE" 2>&1 | tee "$APP_STORAGE/logs/docker-build.log"
+  # Run pre-build setup script
+  if [ -f "./scripts/pre-build-setup.sh" ]; then
+    echo "📦 Running pre-build package download..."
+    chmod +x ./scripts/pre-build-setup.sh
+    ./scripts/pre-build-setup.sh || print_warning "Pre-build setup completed with warnings"
+  fi
+  
+  # Build with optimized environment
+  echo "🏗️ Building with network storage optimization..."
+  $DOCKER_COMPOSE build 2>&1 | tee "$APP_STORAGE/logs/docker-build.log"
+  
+  # Post-build cleanup
+  if [ -f "$APP_STORAGE/post-build-cleanup.sh" ]; then
+    echo "🧹 Running post-build cleanup..."
+    bash "$APP_STORAGE/post-build-cleanup.sh"
+  fi
 else
   echo "🏗️ Building with local Docker layer cache..."
   # Build with standard Docker layer caching

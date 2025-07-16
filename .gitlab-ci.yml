@@ -5,14 +5,14 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
-  # BuildKit disabled by default for compatibility - will be auto-detected in deployment
+  # BuildKit will be automatically configured and used for optimized builds
 
 build:
   stage: build
   image: alpine:latest
   script:
     - echo "✅ Build stage completed - ready for deployment"
-    - echo "🔧 Docker build system will auto-detect BuildKit availability"
+    - echo "🔧 Docker build system will ensure BuildKit is available and configured"
   only:
     - main
 
@@ -60,8 +60,11 @@ deploy:
     - echo "🔧 Running storage optimization (preserving cache)..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/storage-troubleshoot.sh"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/storage-troubleshoot.sh"
-    - echo "🧹 Running selective cleanup (preserving Docker cache)..."
+    - echo "🧹 Running selective cleanup and pre-build setup..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/manage-storage.sh cleanup"
+    - scp -o StrictHostKeyChecking=no scripts/pre-build-setup.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no scripts/diagnose-space-usage.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no scripts/test-buildkit-config.sh $VM_USER@$VM_HOST:/tmp/
     - echo "🔧 Optimizing Docker volumes..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/fix-docker-volumes.sh"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/fix-docker-volumes.sh"
