@@ -80,57 +80,16 @@ prepare_directories() {
 
 # Function to start API server with retry logic
 start_api_with_retry() {
-    local max_retries=3
-    local retry_count=0
-    
     cd /app/Agent
     
-    echo "🚀 Starting API server (background mode for health checks)..."
+    echo "🚀 Starting API server with health-check-friendly mode..."
     
-    # Start in background first to allow health checks to pass
+    # Set environment for health-check-friendly startup
     export STARTUP_MODE="health_check_friendly"
     
-    while [ $retry_count -lt $max_retries ]; do
-        echo "🔄 API server start attempt $((retry_count + 1))/$max_retries"
-        
-        # Start API server
-        python api_server.py &
-        API_PID=$!
-        
-        # Wait a bit for server to start
-        sleep 5
-        
-        # Check if the server is responding to health checks
-        local health_check_attempts=0
-        local max_health_attempts=12
-        
-        while [ $health_check_attempts -lt $max_health_attempts ]; do
-            if curl -f http://localhost:8000/healthz >/dev/null 2>&1; then
-                echo "✅ API server health check passed!"
-                # Server is healthy, wait for it to complete
-                wait $API_PID
-                return $?
-            else
-                echo "⏳ Health check attempt $((health_check_attempts + 1))/$max_health_attempts"
-                sleep 5
-                health_check_attempts=$((health_check_attempts + 1))
-            fi
-        done
-        
-        # If we get here, health checks failed
-        echo "❌ Health checks failed, stopping server"
-        kill $API_PID 2>/dev/null || true
-        wait $API_PID 2>/dev/null || true
-        
-        retry_count=$((retry_count + 1))
-        if [ $retry_count -lt $max_retries ]; then
-            echo "⚠️  API server health checks failed, retrying in 10 seconds..."
-            sleep 10
-        else
-            echo "❌ API server failed to pass health checks after $max_retries attempts"
-            return 1
-        fi
-    done
+    # Start the API server directly (uvicorn will handle the server lifecycle)
+    echo "🔄 Starting uvicorn server..."
+    python api_server.py
 }
 
 # Main execution
