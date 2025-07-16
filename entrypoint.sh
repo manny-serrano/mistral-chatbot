@@ -80,16 +80,35 @@ prepare_directories() {
 
 # Function to start API server with retry logic
 start_api_with_retry() {
-    cd /app/Agent
+    cd /app
     
     echo "🚀 Starting API server with health-check-friendly mode..."
+    echo "Current directory: $(pwd)"
+    echo "Python path: $(which python)"
+    echo "Virtual environment: $PATH"
+    
+    # Ensure virtual environment is activated
+    export PATH="/opt/venv/bin:$PATH"
+    export VIRTUAL_ENV="/opt/venv"
     
     # Set environment for health-check-friendly startup
     export STARTUP_MODE="health_check_friendly"
     
-    # Start the API server directly (uvicorn will handle the server lifecycle)
     echo "🔄 Starting uvicorn server..."
-    python api_server.py
+    echo "Working directory: $(pwd)"
+    echo "Agent directory contents:"
+    ls -la Agent/
+    
+    # Change to Agent directory where the api_server.py is located
+    cd Agent
+    
+    echo "Current directory: $(pwd)"
+    echo "Files in current directory:"
+    ls -la
+    
+    # Start the API server with explicit python path
+    echo "Starting API server..."
+    python api_server.py 2>&1 | tee /tmp/api_server.log
 }
 
 # Main execution

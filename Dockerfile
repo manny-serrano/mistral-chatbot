@@ -71,8 +71,6 @@ RUN if [ -L /opt/venv ] && [ -d /srv/homedir/mistral-app/venv ]; then \
         echo "Virtual environment is on local storage"; \
     fi
 
-ENV PATH="/opt/venv/bin:$PATH"
-
 # Set working directory
 WORKDIR /app
 
@@ -90,7 +88,10 @@ ENV PYTHONUNBUFFERED=1 \
     VECTOR_DIMENSIONS=384 \
     MODEL_SIZE_OPTIMIZED=true \
     MILVUS_INDEX_TYPE=IVF_FLAT \
-    MILVUS_METRIC_TYPE=COSINE
+    MILVUS_METRIC_TYPE=COSINE \
+    PATH="/opt/venv/bin:$PATH" \
+    VIRTUAL_ENV="/opt/venv" \
+    PYTHONPATH="/app:/app/Agent"
 
 # Set cache paths to use local temp during build (network storage mounted at runtime)
 ENV HUGGINGFACE_HUB_CACHE=/tmp/huggingface \

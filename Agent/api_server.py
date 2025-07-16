@@ -8,30 +8,56 @@ import os
 import sys
 import warnings
 import logging
-import uvicorn
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
-import json
-from neo4j.time import DateTime as Neo4jDateTime
-from contextlib import asynccontextmanager
-import ipaddress  # Add this import for IP validation
-import asyncio
-import hashlib
-from functools import lru_cache
-import httpx  # Add to call external geolocation API
-import re     # Add for matching queries
-import time
 
-# Configure logging
+# Configure logging FIRST before any other imports
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Add startup logging
+logger.info("=== API SERVER STARTUP ===")
+logger.info(f"Python version: {sys.version}")
+logger.info(f"Working directory: {os.getcwd()}")
+logger.info(f"Python path: {sys.path[:3]}...")  # First 3 entries
+logger.info(f"Environment: {os.getenv('ENVIRONMENT', 'unknown')}")
+logger.info(f"Virtual env: {os.getenv('VIRTUAL_ENV', 'none')}")
+
+try:
+    import uvicorn
+    logger.info("Successfully imported uvicorn")
+except Exception as e:
+    logger.error(f"Failed to import uvicorn: {e}")
+    sys.exit(1)
+
+try:
+    from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
+    logger.info("Successfully imported FastAPI components")
+except Exception as e:
+    logger.error(f"Failed to import FastAPI: {e}")
+    sys.exit(1)
+
+try:
+    from pydantic import BaseModel, Field
+    from typing import Dict, Any, Optional, List
+    from datetime import datetime, timedelta
+    import json
+    from neo4j.time import DateTime as Neo4jDateTime
+    from contextlib import asynccontextmanager
+    import ipaddress  # Add this import for IP validation
+    import asyncio
+    import hashlib
+    from functools import lru_cache
+    import httpx  # Add to call external geolocation API
+    import re     # Add for matching queries
+    import time
+    logger.info("Successfully imported standard libraries")
+except Exception as e:
+    logger.error(f"Failed to import standard libraries: {e}")
+    sys.exit(1)
 
 # Suppress warnings before importing the agent
 os.environ['GRPC_VERBOSITY'] = 'ERROR'
