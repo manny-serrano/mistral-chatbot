@@ -229,12 +229,7 @@ if [ "$USE_NETWORK_STORAGE" = true ]; then
   # Create cache directories
   mkdir -p "$APP_STORAGE/docker-build-cache" "$APP_STORAGE/pip-cache" "$APP_STORAGE/docker-tmp"
   
-  # Run pre-build setup script
-  if [ -f "./scripts/pre-build-setup.sh" ]; then
-    echo "📦 Running pre-build package download..."
-    chmod +x ./scripts/pre-build-setup.sh
-    ./scripts/pre-build-setup.sh || print_warning "Pre-build setup completed with warnings"
-  fi
+  # Pre-build setup removed - functionality integrated into Docker build retry script
   
   # Build with optimized environment
   echo "🏗️ Building with network storage optimization..."
@@ -256,6 +251,58 @@ echo "📊 Storage status after optimized build:"
 df -h / | tail -1
 if [ "$USE_NETWORK_STORAGE" = true ]; then
   df -h "$NETWORK_STORAGE" | tail -1
+fi
+
+# Add network connectivity test before starting containers
+echo "🌐 Testing network connectivity..."
+if ! ping -c 3 8.8.8.8 >/dev/null 2>&1; then
+  echo "⚠️ Network connectivity issue detected"
+  echo "📋 Network diagnostics:"
+  ip route show || echo "Could not show routes"
+  echo "🔄 Waiting 30 seconds for network stability..."
+  sleep 30
+fi
+
+# Build with retry mechanism for network issues
+echo "🏗️ Building with network retry logic..."
+build_retry_count=0
+max_build_retries=3
+
+# Copy the Docker build retry script
+if [ -f "/tmp/docker-build-retry.sh" ]; then
+    echo "🔧 Using advanced Docker build retry script..."
+    chmod +x /tmp/docker-build-retry.sh
+    if /tmp/docker-build-retry.sh; then
+        echo "✅ Build completed successfully with retry script"
+    else
+        echo "❌ Build failed even with retry mechanism"
+        echo "📋 Checking network and Docker status..."
+        docker system info | grep -E "(CPUs|Total Memory|Kernel|Storage Driver)" || true
+        exit 1
+    fi
+else
+    echo "🔧 Using fallback build retry logic..."
+    while [ $build_retry_count -lt $max_build_retries ]; do
+      echo "🔄 Build attempt $((build_retry_count + 1))/$max_build_retries"
+      
+      if $DOCKER_COMPOSE build; then
+        echo "✅ Build completed successfully"
+        break
+      else
+        build_retry_count=$((build_retry_count + 1))
+        if [ $build_retry_count -lt $max_build_retries ]; then
+          echo "⚠️ Build failed, retrying in 30 seconds..."
+          # Clean up any partial images
+          docker image prune -f || true
+          sleep 30
+        else
+          echo "❌ Build failed after $max_build_retries attempts"
+          echo "📋 Checking network and Docker status..."
+          docker system info | grep -E "(CPUs|Total Memory|Kernel|Storage Driver)" || true
+          exit 1
+        fi
+      fi
+    done
 fi
 
 $DOCKER_COMPOSE up -d

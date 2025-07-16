@@ -41,12 +41,21 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 
 # Install packages with optimized caching and space management
+# Add retry mechanisms and connection stability
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --cache-dir=/tmp/pip-cache \
-    --find-links https://download.pytorch.org/whl/cpu \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    torch --no-deps && \
-    pip install --cache-dir=/tmp/pip-cache -r requirements.txt && \
+    # Install torch first with retries and connection stability
+    pip install --retries 10 --timeout 300 \
+        --cache-dir=/tmp/pip-cache \
+        --find-links https://download.pytorch.org/whl/cpu \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        torch --no-deps && \
+    # Install other requirements with retries and better error handling
+    pip install --retries 10 --timeout 300 \
+        --cache-dir=/tmp/pip-cache \
+        --trusted-host pypi.org \
+        --trusted-host pypi.python.org \
+        --trusted-host files.pythonhosted.org \
+        -r requirements.txt && \
     rm -rf /tmp/pip-cache/* /tmp/*.whl
 
 # Production stage

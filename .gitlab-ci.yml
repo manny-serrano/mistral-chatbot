@@ -34,10 +34,13 @@ deploy:
     - echo "Testing network connectivity to IP..."
     - ping -c 3 $VM_HOST || echo "⚠️  Ping failed but continuing (might be blocked)"
     - echo "Testing SSH connectivity..."
-    - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'"
+    - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'"
     - echo "✅ SSH connection successful"
-    - echo "🔍 Checking storage before deployment..."
+    - echo "🌐 Testing VM network connectivity..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "ping -c 3 8.8.8.8 || echo 'Network connectivity issue on VM'"
+    - echo "🔍 Checking storage and system resources before deployment..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /"
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "free -h"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir"
     - echo "🗂️ Pre-deployment cache optimization..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/docker-build-cache"
@@ -57,6 +60,10 @@ deploy:
     - scp -o StrictHostKeyChecking=no scripts/storage-troubleshoot.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/fix-docker-volumes.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/check-health.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no scripts/network-stability-check.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no docker-build-retry.sh $VM_USER@$VM_HOST:/tmp/
+    - echo "🌐 Running network stability check..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
     - echo "🔧 Copying Apache configuration..."
     - scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
     - echo "🔧 Running storage optimization (preserving cache)..."
@@ -64,23 +71,26 @@ deploy:
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/storage-troubleshoot.sh"
     - echo "🧹 Running selective cleanup and pre-build setup..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/manage-storage.sh cleanup"
-    - scp -o StrictHostKeyChecking=no scripts/pre-build-setup.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/diagnose-space-usage.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/test-buildkit-config.sh $VM_USER@$VM_HOST:/tmp/
     - echo "🔧 Optimizing Docker volumes..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/fix-docker-volumes.sh"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/fix-docker-volumes.sh"
     - echo "📈 Post-optimization storage status:"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h / | tail -1"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir | tail -1"
-    - echo "🚀 Proceeding with cache-optimized deployment..."
+    - echo "🚀 Proceeding with cache-optimized deployment with network retry logic..."
     - scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "CI='true' GITLAB_CI='true' LIGHTWEIGHT_MODE='true' OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' bash /tmp/deploy-to-vm.sh"
+    - ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 $VM_USER@$VM_HOST "CI='true' GITLAB_CI='true' LIGHTWEIGHT_MODE='true' OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' bash /tmp/deploy-to-vm.sh"
     - echo "🏥 Running comprehensive health check..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /tmp/check-health.sh && /tmp/check-health.sh"
   environment:
     name: production
     url: http://$VM_HOST:3000
+  timeout: 30m  # Increase timeout to 30 minutes for network issues
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
   only:
     - main 
