@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getUserFromSession } from "../../../lib/auth-utils";
 
 const REPORTS_DIR = path.join(process.cwd(), "../cybersecurity_reports");
 
 export async function GET(request: NextRequest) {
   try {
+    // Check authentication
+    const user = getUserFromSession(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const url = new URL(request.url);
     const reportId = url.searchParams.get('id');
     const format = url.searchParams.get('format') || 'json';

@@ -80,9 +80,11 @@ NEO4J_URI=bolt://neo4j:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=password123
 
-# Frontend Configuration
+# Frontend Configuration  
 NEXT_PUBLIC_API_URL=http://$VM_HOST:8000
 NEXT_PUBLIC_APP_URL=http://$VM_HOST:3000
+NEXT_PUBLIC_SITE_URL=https://levantai.colab.duke.edu
+NODE_ENV=production
 
 # Performance Optimization for CI/CD
 LOW_MEMORY_MODE=true

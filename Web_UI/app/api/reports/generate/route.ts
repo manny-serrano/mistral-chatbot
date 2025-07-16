@@ -36,6 +36,16 @@ const REPORT_GENERATOR_SCRIPT = path.join(PROJECT_ROOT, "report_generator.py");
  */
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const { getUserFromSession } = await import('../../../lib/auth-utils');
+    const user = getUserFromSession(request);
+    if (!user) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Authentication required' 
+      }, { status: 401 });
+    }
+
     const { type = 'standard', force = false } = await request.json();
 
     // Validate report generator script availability

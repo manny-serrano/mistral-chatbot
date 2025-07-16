@@ -54,10 +54,10 @@ export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('duke-sso-session')
   
   if (!sessionCookie) {
-    // No session cookie - redirect to login
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(loginUrl)
+    // No session cookie - redirect directly to SSO authentication
+    const ssoUrl = new URL('/api/auth/sso', request.url)
+    ssoUrl.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(ssoUrl)
   }
 
   try {
@@ -66,10 +66,10 @@ export function middleware(request: NextRequest) {
     
     // Check if session is expired
     if (Date.now() > sessionData.expires) {
-      // Session expired - redirect to login and clear cookie
-      const loginUrl = new URL('/login', request.url)
-      loginUrl.searchParams.set('redirect', pathname)
-      const response = NextResponse.redirect(loginUrl)
+      // Session expired - redirect to SSO and clear cookie
+      const ssoUrl = new URL('/api/auth/sso', request.url)
+      ssoUrl.searchParams.set('redirect', pathname)
+      const response = NextResponse.redirect(ssoUrl)
       response.cookies.delete('duke-sso-session')
       return response
     }
@@ -78,11 +78,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
     
   } catch (error) {
-    // Invalid session cookie - redirect to login and clear cookie
+    // Invalid session cookie - redirect to SSO and clear cookie
     console.error('Session validation error in middleware:', error)
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('redirect', pathname)
-    const response = NextResponse.redirect(loginUrl)
+    const ssoUrl = new URL('/api/auth/sso', request.url)
+    ssoUrl.searchParams.set('redirect', pathname)
+    const response = NextResponse.redirect(ssoUrl)
     response.cookies.delete('duke-sso-session')
     return response
   }

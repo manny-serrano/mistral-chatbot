@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     
     // Mock Duke user attributes (in production, these come from Shibboleth)
     const mockUser = {
-      eppn: 'testuser@duke.edu', // eduPersonPrincipalName
+      eppn: 'testuser', // eduPersonPrincipalName (just NetID, no @duke.edu)
       affiliation: 'faculty@duke.edu', // eduPersonScopedAffiliation
       displayName: 'Test User',
       givenName: 'Test',

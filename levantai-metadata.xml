@@ -1,0 +1,116 @@
+<!--
+This is example metadata only. Do *NOT* supply it as is without review,
+and do *NOT* provide it in real time to your partners.
+ -->
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" ID="_27a9bf8d26ca472183d10054ba225b2de6716ff9" entityID="https://levantai.colab.duke.edu">
+
+  <md:Extensions xmlns:alg="urn:oasis:names:tc:SAML:metadata:algsupport">
+    <alg:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha512"/>
+    <alg:DigestMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#sha384"/>
+    <alg:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+    <alg:DigestMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#sha224"/>
+    <alg:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha512"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha384"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha224"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha512"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha384"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2009/xmldsig11#dsa-sha256"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha1"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+    <alg:SigningMethod Algorithm="http://www.w3.org/2000/09/xmldsig#dsa-sha1"/>
+  </md:Extensions>
+
+  <md:SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <md:Extensions>
+      <init:RequestInitiator xmlns:init="urn:oasis:names:tc:SAML:profiles:SSO:request-init" Binding="urn:oasis:names:tc:SAML:profiles:SSO:request-init" Location="https://levantai.colab.duke.edu/Shibboleth.sso/Login"/>
+    </md:Extensions>
+    <md:KeyDescriptor use="signing">
+      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+        <ds:KeyName>https://levantai.colab.duke.edu</ds:KeyName>
+        <ds:KeyName>levantai.colab.duke.edu</ds:KeyName>
+        <ds:X509Data>
+          <ds:X509SubjectName>CN=levantai.colab.duke.edu</ds:X509SubjectName>
+          <ds:X509Certificate>MIIEODCCAqCgAwIBAgIUBJHM/cirVdRTd6Ng77HU+aAWD+wwDQYJKoZIhvcNAQEL
+BQAwIjEgMB4GA1UEAxMXbGV2YW50YWkuY29sYWIuZHVrZS5lZHUwHhcNMjUwNzE2
+MTczMDI3WhcNMzUwNzE0MTczMDI3WjAiMSAwHgYDVQQDExdsZXZhbnRhaS5jb2xh
+Yi5kdWtlLmVkdTCCAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAKlaTX2B
+IlW0x3ki24GFUs+2/oJPqHaRJKLchfrg9ADJb49o/fb5zIW8PQSuyKPYUoxOm25z
+0dvjB7tNpv3DrUP75icGWER1nurKxAsGyokhrNOjBJVcJQ69zMJac6sLgdJCodK9
+f9wJAMw2Cinq8gVuFugIYkLNqrto+uty7AyZ4LNOuy/YAEZDRIfD5TiTAghsmOlX
+jrtxITMXZoibmTIoAK7+/UrEtaYR+NNu70yEiSQXCDd9qdNSl2rQ+tJMRcOiw+/+
+VIuP7UE8CODAxYWARxHr1HPPyph/0DhJUA4pdu8fDkA9nKtddmlBYA8wKZKOWDPJ
+XSWRULqfNZ6YU8MXICsWAlcv6Zt63LSW2TVj0XRnlLGWeJYmt4SmAUajjnPVEHXf
+qxxcu2DDmyH5YUHlg8eawpFU0WkCK/fJE4/K/UtUjl7/V8zLQaw423Zc8W5niUqq
+4ymo1UyLvsMuFXUw5jRkLKCVdibc4wWZLLlBpTkuDOK8nElwyNLMFmd3sQIDAQAB
+o2YwZDBDBgNVHREEPDA6ghdsZXZhbnRhaS5jb2xhYi5kdWtlLmVkdYYfaHR0cHM6
+Ly9sZXZhbnRhaS5jb2xhYi5kdWtlLmVkdTAdBgNVHQ4EFgQUz6ihyiLQpU47WjTt
+NXTKF8irlXAwDQYJKoZIhvcNAQELBQADggGBAJKPRA/B86cehczQTjc6v3I1BMKW
+LtOKY3OzdC/VGvn0YPAXNaCMBW/9iL/guQyMu0CMX/GbmKO7qk4nLuBlW5E0S9kX
+wg9oln5z0EVcwkMKqP+8qrHbsdwTGkr9+pPCO0YCEtaq3nE0aH6t/DBMSjcRnnQD
+DcnZ+IsgXpX54+AMZEhfXT+VRs1ZbPrFpo8WIO5wkMkeVgoh2Kbq+Q6oXvik2eDN
+ys0liXEHJhOSbBrc5gJNMJFpMNLyctwStM65+WU3w5XSvPDAKa6OifTRQLB5Isfh
+CTVp6U7OmZTefX5C7olbleSdyJh7Mw7oeOmPFCaYnGvVZIiURd9DV/7fSL2KG1zT
+5t13l3SorqFmT6X1qodPC6IWJWm9cyAQU7kUwKoTNAQhFSzBjMaCy2k666fa+T1j
+6VMsmQia3lDpJ4pAugtry7n+j/tJY/pH6faelcVyRTmQ1a55s1eZe61/1+0Cjh+W
+sXIUwQRkis5XH5TY4xDxqEB16YrqdOSgvJBX+g==
+</ds:X509Certificate>
+        </ds:X509Data>
+      </ds:KeyInfo>
+    </md:KeyDescriptor>
+    <md:KeyDescriptor use="encryption">
+      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+        <ds:KeyName>https://levantai.colab.duke.edu</ds:KeyName>
+        <ds:KeyName>levantai.colab.duke.edu</ds:KeyName>
+        <ds:X509Data>
+          <ds:X509SubjectName>CN=levantai.colab.duke.edu</ds:X509SubjectName>
+          <ds:X509Certificate>MIIEODCCAqCgAwIBAgIUBJHM/cirVdRTd6Ng77HU+aAWD+wwDQYJKoZIhvcNAQEL
+BQAwIjEgMB4GA1UEAxMXbGV2YW50YWkuY29sYWIuZHVrZS5lZHUwHhcNMjUwNzE2
+MTczMDI3WhcNMzUwNzE0MTczMDI3WjAiMSAwHgYDVQQDExdsZXZhbnRhaS5jb2xh
+Yi5kdWtlLmVkdTCCAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAKlaTX2B
+IlW0x3ki24GFUs+2/oJPqHaRJKLchfrg9ADJb49o/fb5zIW8PQSuyKPYUoxOm25z
+0dvjB7tNpv3DrUP75icGWER1nurKxAsGyokhrNOjBJVcJQ69zMJac6sLgdJCodK9
+f9wJAMw2Cinq8gVuFugIYkLNqrto+uty7AyZ4LNOuy/YAEZDRIfD5TiTAghsmOlX
+jrtxITMXZoibmTIoAK7+/UrEtaYR+NNu70yEiSQXCDd9qdNSl2rQ+tJMRcOiw+/+
+VIuP7UE8CODAxYWARxHr1HPPyph/0DhJUA4pdu8fDkA9nKtddmlBYA8wKZKOWDPJ
+XSWRULqfNZ6YU8MXICsWAlcv6Zt63LSW2TVj0XRnlLGWeJYmt4SmAUajjnPVEHXf
+qxxcu2DDmyH5YUHlg8eawpFU0WkCK/fJE4/K/UtUjl7/V8zLQaw423Zc8W5niUqq
+4ymo1UyLvsMuFXUw5jRkLKCVdibc4wWZLLlBpTkuDOK8nElwyNLMFmd3sQIDAQAB
+o2YwZDBDBgNVHREEPDA6ghdsZXZhbnRhaS5jb2xhYi5kdWtlLmVkdYYfaHR0cHM6
+Ly9sZXZhbnRhaS5jb2xhYi5kdWtlLmVkdTAdBgNVHQ4EFgQUz6ihyiLQpU47WjTt
+NXTKF8irlXAwDQYJKoZIhvcNAQELBQADggGBAJKPRA/B86cehczQTjc6v3I1BMKW
+LtOKY3OzdC/VGvn0YPAXNaCMBW/9iL/guQyMu0CMX/GbmKO7qk4nLuBlW5E0S9kX
+wg9oln5z0EVcwkMKqP+8qrHbsdwTGkr9+pPCO0YCEtaq3nE0aH6t/DBMSjcRnnQD
+DcnZ+IsgXpX54+AMZEhfXT+VRs1ZbPrFpo8WIO5wkMkeVgoh2Kbq+Q6oXvik2eDN
+ys0liXEHJhOSbBrc5gJNMJFpMNLyctwStM65+WU3w5XSvPDAKa6OifTRQLB5Isfh
+CTVp6U7OmZTefX5C7olbleSdyJh7Mw7oeOmPFCaYnGvVZIiURd9DV/7fSL2KG1zT
+5t13l3SorqFmT6X1qodPC6IWJWm9cyAQU7kUwKoTNAQhFSzBjMaCy2k666fa+T1j
+6VMsmQia3lDpJ4pAugtry7n+j/tJY/pH6faelcVyRTmQ1a55s1eZe61/1+0Cjh+W
+sXIUwQRkis5XH5TY4xDxqEB16YrqdOSgvJBX+g==
+</ds:X509Certificate>
+        </ds:X509Data>
+      </ds:KeyInfo>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#aes128-gcm"/>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#aes192-gcm"/>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#aes256-gcm"/>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes192-cbc"/>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#tripledes-cbc"/>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#rsa-oaep"/>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"/>
+    </md:KeyDescriptor>
+    <md:ArtifactResolutionService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://levantai.colab.duke.edu/Shibboleth.sso/Artifact/SOAP" index="1"/>
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://levantai.colab.duke.edu/Shibboleth.sso/SLO/SOAP"/>
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://levantai.colab.duke.edu/Shibboleth.sso/SLO/Redirect"/>
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://levantai.colab.duke.edu/Shibboleth.sso/SLO/POST"/>
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact" Location="https://levantai.colab.duke.edu/Shibboleth.sso/SLO/Artifact"/>
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://levantai.colab.duke.edu/Shibboleth.sso/SAML2/POST" index="1"/>
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST-SimpleSign" Location="https://levantai.colab.duke.edu/Shibboleth.sso/SAML2/POST-SimpleSign" index="2"/>
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact" Location="https://levantai.colab.duke.edu/Shibboleth.sso/SAML2/Artifact" index="3"/>
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:PAOS" Location="https://levantai.colab.duke.edu/Shibboleth.sso/SAML2/ECP" index="4"/>
+  </md:SPSSODescriptor>
+
+</md:EntityDescriptor>

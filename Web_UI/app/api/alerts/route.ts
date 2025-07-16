@@ -1,12 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import neo4j from 'neo4j-driver';
+import { getUserFromSession } from '../../../lib/auth-utils';
 
 function logistic_regression(num_ports, pcr, por, coef_ports, coef_pcr, coef_por, intercept) {
   const z = (coef_ports * num_ports) + (coef_pcr * pcr) + (coef_por * por) + intercept;
   return 1 / (1 + Math.exp(-z));
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Check authentication
+  const user = getUserFromSession(request);
+  if (!user) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
   let driver, session;
   try {
     driver = neo4j.driver(

@@ -5,14 +5,14 @@
     clockSkew="180">
 
     <!-- The ApplicationDefaults element is where most of Shibboleth's SAML bits are defined. -->
-    <ApplicationDefaults entityID="https://localhost:3000"
+    <ApplicationDefaults entityID="https://levantai.colab.duke.edu"
                          REMOTE_USER="eppn persistent-id targeted-id">
 
         <!-- Controls session lifetimes, address checks, cookie handling, and the protocol handlers. -->
         <Sessions lifetime="28800" timeout="3600" checkAddress="false"
-                  handlerURL="/Shibboleth.sso" handlerSSL="false"
+                  handlerURL="/Shibboleth.sso" handlerSSL="true"
                   redirectLimit="host+whitelist" redirectWhitelist="https://shib.oit.duke.edu/"
-                  exportLocation="http://localhost/Shibboleth.sso/GetAssertion" exportACL="127.0.0.1"
+                  exportLocation="https://levantai.colab.duke.edu/Shibboleth.sso/GetAssertion" exportACL="127.0.0.1"
                   idpHistory="false" idpHistoryDays="7" cookieProps="https">
 
             <!-- Default SSO location -->
@@ -40,11 +40,11 @@
         <Errors supportContact="root@localhost" logoLocation="/shibboleth-sp/logo.jpg"
                 styleSheet="/shibboleth-sp/main.css"/>
 
-        <!-- Loads and trusts a metadata file that describes only the Duke IdP. -->
+        
         <MetadataProvider type="XML" validate="true"
                           url="https://shib.oit.duke.edu/duke-metadata-3-signed.xml"
                           backingFilePath="duke-metadata-3-signed.xml" reloadInterval="7200">
-            <MetadataFilter type="Signature" certificate="idp_signing.crt"/>
+            <MetadataFilter type="Signature" certificate="idp-signing.crt"/>
         </MetadataProvider>
 
         <!-- Map to extract attributes from SAML assertions. -->

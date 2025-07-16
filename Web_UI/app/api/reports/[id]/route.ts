@@ -2,26 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-function getUserFromSession(request: NextRequest): { netId: string; role: string } | null {
-  try {
-    const sessionCookie = request.cookies.get('duke-sso-session');
-    if (!sessionCookie) return null;
-    
-    const sessionData = JSON.parse(Buffer.from(sessionCookie.value, 'base64').toString());
-    if (Date.now() > sessionData.expires) return null;
-    
-    const user = sessionData.user;
-    const netId = user.eppn ? user.eppn.split('@')[0] : 'unknown';
-    const role = user.affiliation ? (
-      user.affiliation.includes('faculty') ? 'faculty' :
-      user.affiliation.includes('staff') ? 'staff' : 'student'
-    ) : 'student';
-    
-    return { netId, role };
-  } catch {
-    return null;
-  }
-}
+import { getUserFromSession } from '../../../../lib/auth-utils';
 
 export async function GET(
   request: NextRequest,
