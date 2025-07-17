@@ -142,6 +142,8 @@ deploy:
     - |
       echo "🏥 Running comprehensive health check..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /tmp/check-health.sh && timeout 300s /tmp/check-health.sh || echo 'Health check timed out, but deployment may still be successful'"
+      echo "🧪 Running Duke metadata diagnostic..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/test-duke-metadata.sh && /tmp/test-duke-metadata.sh || echo 'Metadata diagnostic failed'"
       echo "🧪 Running comprehensive SSO configuration test..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/test-sso-config.sh && /tmp/test-sso-config.sh || echo 'SSO test completed with some issues'"
   environment:

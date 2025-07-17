@@ -46,10 +46,10 @@ fi
 # Define paths
 SHIBBOLETH_DIR="/etc/shibboleth"
 APACHE_SITES_DIR="/etc/apache2/sites-available"
-APACHE_CONFIG_SOURCE="apache-config/sites-available"
-SHIBBOLETH_CONFIG_SOURCE="shibboleth-config"
+APACHE_CONFIG_SOURCE="/tmp/apache-config/sites-available"
+SHIBBOLETH_CONFIG_SOURCE="/tmp/shibboleth-config"
 WEB_ROOT="/var/www/html"
-DEBUG_FILES_SOURCE="debug-files"
+DEBUG_FILES_SOURCE="/tmp/debug-files"
 
 print_step "1. Backing up existing configurations..."
 
