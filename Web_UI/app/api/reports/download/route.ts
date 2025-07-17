@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { getUserFromSession } from "../../../lib/auth-utils";
+import { getUserFromSession } from "../../../../lib/auth-utils";
 
 const REPORTS_DIR = path.join(process.cwd(), "../cybersecurity_reports");
 

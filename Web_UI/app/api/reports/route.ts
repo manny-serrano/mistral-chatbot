@@ -32,7 +32,7 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-import { getUserFromSession } from "../../lib/auth-utils";
+import { getUserFromSession } from "../../../lib/auth-utils";
 
 function getReportsFromDirectory(directory: string, category: string, userNetId?: string): ReportMetadata[] {
   if (!fs.existsSync(directory)) {

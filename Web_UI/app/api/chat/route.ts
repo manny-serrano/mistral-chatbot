@@ -130,7 +130,7 @@ function prepareConversationHistory(messages: any[]): any[] {
 export async function POST(req: NextRequest) {
   try {
     // Check authentication first
-    const { getUserFromSession } = await import('../../lib/auth-utils');
+    const { getUserFromSession } = await import('../../../lib/auth-utils');
     const user = getUserFromSession(req);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
