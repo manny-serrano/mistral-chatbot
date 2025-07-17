@@ -85,8 +85,14 @@ cp "$SHIBBOLETH_CONFIG_SOURCE/attribute-policy.xml" "$SHIBBOLETH_DIR/"
 chmod 644 "$SHIBBOLETH_DIR/attribute-policy.xml"
 
 # Deploy the main shibboleth2.xml configuration
-print_status "Deploying shibboleth2.xml with full certificate validation"
-cp "$SHIBBOLETH_CONFIG_SOURCE/shibboleth2.xml" "$SHIBBOLETH_DIR/"
+print_status "Deploying shibboleth2.xml configuration"
+if [ -f "$SHIBBOLETH_CONFIG_SOURCE/shibboleth2-testing.xml" ]; then
+    print_status "Using testing shibboleth2.xml (without signature verification for troubleshooting)"
+    cp "$SHIBBOLETH_CONFIG_SOURCE/shibboleth2-testing.xml" "$SHIBBOLETH_DIR/shibboleth2.xml"
+else
+    print_status "Using production shibboleth2.xml with full certificate validation"
+    cp "$SHIBBOLETH_CONFIG_SOURCE/shibboleth2.xml" "$SHIBBOLETH_DIR/"
+fi
 chmod 644 "$SHIBBOLETH_DIR/shibboleth2.xml"
 
 # Deploy the Duke IdP signing certificate
@@ -143,7 +149,23 @@ if [ -d "$DEBUG_FILES_SOURCE" ]; then
     chmod 644 "$WEB_ROOT"/test.html
 fi
 
-print_step "5. Setting proper file ownership and permissions..."
+print_step "5. Testing metadata accessibility..."
+print_status "Testing Duke metadata download..."
+if curl -s -f -o "/tmp/test-metadata.xml" "https://shib.oit.duke.edu/duke-metadata-3-signed.xml"; then
+    print_status "✅ Metadata download successful"
+    if grep -q "https://shib.oit.duke.edu/shibboleth-idp" "/tmp/test-metadata.xml"; then
+        print_status "✅ Duke IdP found in metadata"
+    else
+        print_warning "⚠️ Duke IdP NOT found in metadata - this will cause login issues"
+        print_status "Available entities in metadata:"
+        grep -o 'entityID="[^"]*"' "/tmp/test-metadata.xml" | head -5
+    fi
+    rm -f "/tmp/test-metadata.xml"
+else
+    print_error "❌ Failed to download metadata from Duke"
+fi
+
+print_step "6. Setting proper file ownership and permissions..."
 
 # Set proper ownership for Shibboleth files
 chown -R _shibd:_shibd "$SHIBBOLETH_DIR" 2>/dev/null || chown -R shibd:shibd "$SHIBBOLETH_DIR" 2>/dev/null || print_warning "Could not set shibd ownership (shibd user may not exist yet)"

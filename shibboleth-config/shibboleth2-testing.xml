@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SPConfig xmlns="urn:mace:shibboleth:3.0:native:sp:config"
+    xmlns:conf="urn:mace:shibboleth:3.0:native:sp:config"
+    xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+    clockSkew="180">
+
+    <!-- The ApplicationDefaults element is where most of Shibboleth's SAML bits are defined. -->
+    <ApplicationDefaults entityID="https://levantai.colab.duke.edu"
+                         REMOTE_USER="eppn"
+                         encryption="false"
+                         signing="false">
+
+        <!-- Controls session lifetimes, address checks, cookie handling, and the protocol handlers. -->
+        <Sessions lifetime="28800" timeout="3600" relayState="ss:mem"
+                  checkAddress="false" handlerSSL="true" cookieProps="https"
+                  redirectLimit="exact" redirectWhitelist="https://shib.oit.duke.edu/">
+
+            <!-- Default SSO location -->
+            <SSO entityID="https://shib.oit.duke.edu/shibboleth-idp" discoveryProtocol="SAMLDS" discoveryURL="https://shib.oit.duke.edu/discovery">
+                SAML2 SAML1
+            </SSO>
+
+            <!-- SAML and local-only logout. -->
+            <Logout>SAML2 Local</Logout>
+
+            <!-- Administrative functions -->
+            <Handler type="MetadataGenerator" Location="/Metadata" signing="false"/>
+            <Handler type="Status" Location="/Status" acl="127.0.0.1 ::1"/>
+            <Handler type="Session" Location="/Session" showAttributeValues="true"/>
+
+            <!-- JSON feed of discovery information. -->
+            <Handler type="DiscoveryFeed" Location="/DiscoFeed"/>
+        </Sessions>
+
+        <!-- Allows overriding of error template information/filenames. -->
+        <Errors supportContact="support@levantai.colab.duke.edu"
+                helpLocation="/about.html"
+                styleSheet="/shibboleth-sp/main.css"/>
+
+        <!-- Duke University Metadata Provider (testing without signature verification) -->
+        <MetadataProvider type="XML" validate="true"
+                          url="https://shib.oit.duke.edu/duke-metadata-3-signed.xml"
+                          backingFilePath="duke-metadata-3-signed.xml" 
+                          reloadInterval="7200"
+                          maxRefreshDelay="14400">
+            
+            <!-- Whitelist filter for Duke entities only -->
+            <MetadataFilter type="Whitelist">
+                <Include>https://shib.oit.duke.edu/shibboleth-idp</Include>
+            </MetadataFilter>
+            
+            <!-- Require valid metadata -->
+            <MetadataFilter type="RequireValidUntil" maxValidityInterval="2419200"/>
+        </MetadataProvider>
+
+        <!-- Map to extract attributes from SAML assertions. -->
+        <AttributeExtractor type="XML" validate="true" reloadChanges="false" path="attribute-map.xml"/>
+
+        <!-- Default filtering policy for recognized attributes, lets other data pass. -->
+        <AttributeFilter type="XML" validate="true" path="attribute-policy.xml"/>
+
+        <!-- Simple file-based resolvers for separate signing/encryption keys. -->
+        <CredentialResolver type="File" use="signing" 
+                            key="sp-signing-key.pem" 
+                            certificate="sp-signing-cert.pem"/>
+        <CredentialResolver type="File" use="encryption" 
+                            key="sp-encrypt-key.pem" 
+                            certificate="sp-encrypt-cert.pem"/>
+
+    </ApplicationDefaults>
+
+    <!-- Policies that determine how to process and authenticate runtime requests. -->
+    <SecurityPolicyProvider type="XML" validate="true" path="security-policy.xml"/>
+
+    <!-- Low-level configuration about protocols and bindings available for use. -->
+    <ProtocolProvider type="XML" validate="true" path="protocols.xml"/>
+
+</SPConfig> 
