@@ -97,6 +97,20 @@ deploy:
     - |
       echo "🧹 Running selective cleanup and pre-build setup..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "timeout 180s bash /tmp/manage-storage.sh cleanup || echo 'Cleanup timed out, continuing...'"
+    - |
+      echo "🐳 Docker cleanup to prevent disk space issues..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        echo 'Stopping all containers...'
+        docker stop \$(docker ps -aq) 2>/dev/null || true
+        echo 'Removing all containers...'
+        docker rm \$(docker ps -aq) 2>/dev/null || true
+        echo 'Pruning system (images, networks, volumes)...'
+        docker system prune -af --volumes 2>/dev/null || true
+        echo 'Pruning build cache...'
+        docker builder prune -af 2>/dev/null || true
+        echo '✅ Docker cleanup completed'
+      " || echo "Docker cleanup failed, continuing..."
+    - |
       echo "📈 Post-optimization storage status:"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "df -h / | tail -1 && df -h /srv/homedir | tail -1"
     - |
