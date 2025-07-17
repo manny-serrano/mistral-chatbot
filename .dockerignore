@@ -15,6 +15,17 @@ env/
 .env.local
 .env.*.local
 
+# Node.js dependencies and build artifacts
+node_modules/
+Web_UI/node_modules/
+Web_UI/.next/
+Web_UI/out/
+Web_UI/dist/
+Web_UI/build/
+*.tsbuildinfo
+package-lock.json
+yarn.lock
+
 # IDE and editor files
 .vscode/
 .idea/
@@ -43,21 +54,31 @@ logs/
 *.tmp
 temp/
 
-# Data volumes (using Docker named volumes, not bind mounts)
+# Data volumes and large data directories (using Docker named volumes, not bind mounts)
 embedding_with_llm/volumes/
+embedding_with_llm/data/
 neo4j-graphdatabase/neo4j/
+neo4j-graphdatabase/data/
+network-storage/
+logs/
 
 # Build artifacts
 build/
 dist/
 *.egg-info/
 
-# Large data directories
+# Large data directories and sample data
 cybersecurity_reports/
 Samples_flow/
 Suspicious_DATA/
+data/
 .cache/
 .next/
+
+# Additional data and log directories
+neo4j-graphdatabase/logs-json/
+neo4j-graphdatabase/enrichment_data/
+embedding_with_llm/data/
 
 # Additional Python files
 *.pyc
