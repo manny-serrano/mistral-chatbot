@@ -50,12 +50,13 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus} /srv/homedir/mistral-app/logs/neo4j /srv/homedir/mistral-app/model-cache"
     - |
       echo "📦 Copying essential scripts..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /home/$VM_USER/scripts"
       scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/ || echo "manage-storage.sh not found"
       scp -o StrictHostKeyChecking=no scripts/storage-troubleshoot.sh $VM_USER@$VM_HOST:/tmp/ || echo "storage-troubleshoot.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/check-health.sh $VM_USER@$VM_HOST:/tmp/ || echo "check-health.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/check-health.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "check-health.sh not found"
       scp -o StrictHostKeyChecking=no scripts/network-stability-check.sh $VM_USER@$VM_HOST:/tmp/ || echo "network-stability-check.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/ || echo "deploy-to-vm.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/test-sso-config.sh $VM_USER@$VM_HOST:/tmp/ || echo "test-sso-config.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "deploy-to-vm.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/test-sso-config.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "test-sso-config.sh not found"
       scp -o StrictHostKeyChecking=no docker-build-retry.sh $VM_USER@$VM_HOST:/tmp/ || echo "docker-build-retry.sh not found"
     - |
       echo "🌐 Running network stability check..."
@@ -70,8 +71,8 @@ deploy:
       echo "📋 Copying Shibboleth configuration files..."
       scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
       scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/
-      echo "📋 Copying diagnostic scripts to root temp..."
-      scp -o StrictHostKeyChecking=no debug-files/test-duke-metadata.sh $VM_USER@$VM_HOST:/tmp/
+      echo "📋 Copying diagnostic scripts to persistent location..."
+      scp -o StrictHostKeyChecking=no debug-files/test-duke-metadata.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
       echo "📋 Verifying Duke IdP certificate was copied..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "ls -la /tmp/shibboleth-config/idp_signing.crt && echo 'Certificate file present' || echo 'Certificate file missing'"
       echo "📋 Copying SSO deployment script..."
@@ -104,7 +105,6 @@ deploy:
       echo "🔧 Copying essential deployment scripts..."
       scp -o StrictHostKeyChecking=no scripts/setup-sudo-permissions.sh $VM_USER@$VM_HOST:/tmp/ || echo "setup-sudo-permissions.sh not found"
       scp -o StrictHostKeyChecking=no scripts/auto-setup-permissions.sh $VM_USER@$VM_HOST:/tmp/ || echo "auto-setup-permissions.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/ || echo "deploy-to-vm.sh not found"
       scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/ || echo "setup-directories.sh not found"
     - |
       echo "🔑 Setting up permissions for automatic Apache configuration..."
@@ -140,14 +140,14 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "df -h / | tail -1 && df -h /srv/homedir | tail -1"
     - |
       echo "🚀 Proceeding with cache-optimized deployment with network retry logic..."
-      ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=15 $VM_USER@$VM_HOST "CI='true' GITLAB_CI='true' LIGHTWEIGHT_MODE='true' OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' timeout 1800s bash /tmp/deploy-to-vm.sh || echo 'Main deployment timed out after 30 minutes'"
+      ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=15 $VM_USER@$VM_HOST "CI='true' GITLAB_CI='true' LIGHTWEIGHT_MODE='true' OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' timeout 1800s bash /home/$VM_USER/scripts/deploy-to-vm.sh || echo 'Main deployment timed out after 30 minutes'"
     - |
       echo "🏥 Running comprehensive health check..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /tmp/check-health.sh && timeout 300s /tmp/check-health.sh || echo 'Health check timed out, but deployment may still be successful'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /home/$VM_USER/scripts/check-health.sh && timeout 300s /home/$VM_USER/scripts/check-health.sh || echo 'Health check timed out, but deployment may still be successful'"
       echo "🧪 Running Duke metadata diagnostic..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/test-duke-metadata.sh && /tmp/test-duke-metadata.sh || echo 'Metadata diagnostic failed'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-duke-metadata.sh && /home/$VM_USER/scripts/test-duke-metadata.sh || echo 'Metadata diagnostic failed'"
       echo "🧪 Running comprehensive SSO configuration test..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/test-sso-config.sh && /tmp/test-sso-config.sh || echo 'SSO test completed with some issues'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-sso-config.sh && /home/$VM_USER/scripts/test-sso-config.sh || echo 'SSO test completed with some issues'"
   environment:
     name: production
     url: http://$VM_HOST:3000
