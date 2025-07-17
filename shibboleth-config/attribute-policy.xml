@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <AttributeFilterPolicyGroup 
     xmlns="urn:mace:shibboleth:2.0:afp"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:afp="urn:mace:shibboleth:2.0:afp">
 
     <!-- Duke University Attribute Release Policy -->
     <!-- This policy allows all Duke University attributes to be released -->
     <!-- Reference: https://oit.duke.edu/help/articles/kb0010893 -->
 
     <!-- Shared rule for Duke University affiliation values - OFFICIAL DUKE FORMAT -->
-    <PermitValueRule id="eduPersonAffiliationValues" xsi:type="OR">
+    <afp:PermitValueRule id="eduPersonAffiliationValues" xsi:type="OR">
         <Rule xsi:type="AttributeValueString" value="faculty"/>
         <Rule xsi:type="AttributeValueString" value="student"/>
         <Rule xsi:type="AttributeValueString" value="staff"/>
@@ -19,7 +20,7 @@
         <Rule xsi:type="AttributeValueString" value="affiliate"/>
         <Rule xsi:type="AttributeValueString" value="employee"/>
         <Rule xsi:type="AttributeValueString" value="library-walk-in"/>
-    </PermitValueRule>
+    </afp:PermitValueRule>
 
     <!-- Scoping rule for Duke domain -->
     <PermitValueRule id="DukeScopingRule" xsi:type="ScopeMatchesShibMDScope"/>
