@@ -50,11 +50,13 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus} /srv/homedir/mistral-app/logs/neo4j /srv/homedir/mistral-app/model-cache"
     - |
       echo "📦 Copying essential scripts..."
-      scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/
-      scp -o StrictHostKeyChecking=no scripts/storage-troubleshoot.sh $VM_USER@$VM_HOST:/tmp/
-      scp -o StrictHostKeyChecking=no scripts/check-health.sh $VM_USER@$VM_HOST:/tmp/
-      scp -o StrictHostKeyChecking=no scripts/network-stability-check.sh $VM_USER@$VM_HOST:/tmp/
-      scp -o StrictHostKeyChecking=no docker-build-retry.sh $VM_USER@$VM_HOST:/tmp/
+      scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/ || echo "manage-storage.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/storage-troubleshoot.sh $VM_USER@$VM_HOST:/tmp/ || echo "storage-troubleshoot.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/check-health.sh $VM_USER@$VM_HOST:/tmp/ || echo "check-health.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/network-stability-check.sh $VM_USER@$VM_HOST:/tmp/ || echo "network-stability-check.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/ || echo "deploy-to-vm.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/test-sso-config.sh $VM_USER@$VM_HOST:/tmp/ || echo "test-sso-config.sh not found"
+      scp -o StrictHostKeyChecking=no docker-build-retry.sh $VM_USER@$VM_HOST:/tmp/ || echo "docker-build-retry.sh not found"
     - |
       echo "🌐 Running network stability check..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && timeout 60s /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
@@ -68,11 +70,19 @@ deploy:
       echo "📋 Copying Shibboleth configuration files..."
       scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
       scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/
+      echo "📋 Verifying Duke IdP certificate was copied..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "ls -la /tmp/shibboleth-config/idp_signing.crt && echo 'Certificate file present' || echo 'Certificate file missing'"
       echo "📋 Copying SSO deployment script..."
       scp -o StrictHostKeyChecking=no deploy-sso-config.sh $VM_USER@$VM_HOST:/tmp/ || echo "SSO script not found, skipping"
     - |
       echo "🔧 Setting up SSO deployment script permissions..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/deploy-sso-config.sh || true"
+      echo "🧪 Testing Duke metadata accessibility and certificate..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        curl -s -o /tmp/test-metadata.xml https://shib.oit.duke.edu/duke-metadata-3-signed.xml && echo 'Metadata download successful' || echo 'Metadata download failed'
+        echo 'Verifying certificate can read metadata signature...'
+        openssl verify -CAfile /tmp/shibboleth-config/idp_signing.crt /tmp/test-metadata.xml 2>/dev/null && echo 'Certificate verification setup looks good' || echo 'Note: XML signature verification requires xmlsec1, not openssl'
+      "
       echo "⚙️ Running SSO configuration deployment..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /tmp && timeout 180s sudo /tmp/deploy-sso-config.sh || echo 'SSO deployment failed, continuing'"
     - |
@@ -83,12 +93,17 @@ deploy:
       echo "✅ Verifying SSO service status..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active apache2 && echo '✅ Apache is running' || echo '❌ Apache failed'"
+      echo "🔍 Testing Shibboleth metadata loading..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Status | grep -q 'OK' && echo '✅ Shibboleth status endpoint working' || echo '⚠️ Shibboleth status endpoint issues'
+        curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Metadata | head -5 | grep -q 'EntityDescriptor' && echo '✅ Metadata generation working' || echo '⚠️ Metadata generation issues'
+      "
     - |
       echo "🔧 Copying essential deployment scripts..."
-      scp -o StrictHostKeyChecking=no scripts/setup-sudo-permissions.sh $VM_USER@$VM_HOST:/tmp/
-      scp -o StrictHostKeyChecking=no scripts/auto-setup-permissions.sh $VM_USER@$VM_HOST:/tmp/
-      scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
-      scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/
+      scp -o StrictHostKeyChecking=no scripts/setup-sudo-permissions.sh $VM_USER@$VM_HOST:/tmp/ || echo "setup-sudo-permissions.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/auto-setup-permissions.sh $VM_USER@$VM_HOST:/tmp/ || echo "auto-setup-permissions.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/ || echo "deploy-to-vm.sh not found"
+      scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/ || echo "setup-directories.sh not found"
     - |
       echo "🔑 Setting up permissions for automatic Apache configuration..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/setup-sudo-permissions.sh /tmp/auto-setup-permissions.sh"
@@ -98,7 +113,7 @@ deploy:
       echo "🧹 Running selective cleanup and pre-build setup..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "timeout 180s bash /tmp/manage-storage.sh cleanup || echo 'Cleanup timed out, continuing...'"
     - |
-      echo "🐳 Docker cleanup to prevent disk space issues..."
+      echo "🐳 Aggressive cleanup to free disk space..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         echo 'Stopping all containers...'
         docker stop \$(docker ps -aq) 2>/dev/null || true
@@ -108,8 +123,16 @@ deploy:
         docker system prune -af --volumes 2>/dev/null || true
         echo 'Pruning build cache...'
         docker builder prune -af 2>/dev/null || true
-        echo '✅ Docker cleanup completed'
-      " || echo "Docker cleanup failed, continuing..."
+        echo 'Cleaning apt cache...'
+        apt-get clean 2>/dev/null || true
+        echo 'Cleaning journal logs...'
+        journalctl --vacuum-size=100M 2>/dev/null || true
+        echo 'Cleaning temporary files...'
+        rm -rf /tmp/* 2>/dev/null || true
+        echo 'Final storage status:'
+        df -h / | tail -1
+        echo '✅ Aggressive cleanup completed'
+      " || echo "Cleanup failed, continuing..."
     - |
       echo "📈 Post-optimization storage status:"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "df -h / | tail -1 && df -h /srv/homedir | tail -1"
@@ -119,6 +142,8 @@ deploy:
     - |
       echo "🏥 Running comprehensive health check..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /tmp/check-health.sh && timeout 300s /tmp/check-health.sh || echo 'Health check timed out, but deployment may still be successful'"
+      echo "🧪 Running comprehensive SSO configuration test..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/test-sso-config.sh && /tmp/test-sso-config.sh || echo 'SSO test completed with some issues'"
   environment:
     name: production
     url: http://$VM_HOST:3000

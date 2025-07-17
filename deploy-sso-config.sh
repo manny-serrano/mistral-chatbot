@@ -85,9 +85,43 @@ cp "$SHIBBOLETH_CONFIG_SOURCE/attribute-policy.xml" "$SHIBBOLETH_DIR/"
 chmod 644 "$SHIBBOLETH_DIR/attribute-policy.xml"
 
 # Deploy the main shibboleth2.xml configuration
-print_status "Deploying shibboleth2.xml"
+print_status "Deploying shibboleth2.xml with full certificate validation"
 cp "$SHIBBOLETH_CONFIG_SOURCE/shibboleth2.xml" "$SHIBBOLETH_DIR/"
 chmod 644 "$SHIBBOLETH_DIR/shibboleth2.xml"
+
+# Deploy the Duke IdP signing certificate
+print_status "Deploying Duke IdP signing certificate"
+if [ -f "$SHIBBOLETH_CONFIG_SOURCE/idp_signing.crt" ]; then
+    cp "$SHIBBOLETH_CONFIG_SOURCE/idp_signing.crt" "$SHIBBOLETH_DIR/"
+    chmod 644 "$SHIBBOLETH_DIR/idp_signing.crt"
+    print_status "✅ Duke IdP signing certificate deployed"
+else
+    print_warning "⚠️ IdP signing certificate not found - signature verification will fail"
+fi
+
+# Generate SP certificates if they don't exist
+print_status "Checking/generating SP certificates..."
+cd "$SHIBBOLETH_DIR"
+
+if [ ! -f "sp-signing-key.pem" ] || [ ! -f "sp-signing-cert.pem" ]; then
+    print_status "Generating SP signing certificate..."
+    openssl req -new -x509 -days 3650 -nodes -newkey rsa:2048 \
+        -keyout sp-signing-key.pem -out sp-signing-cert.pem \
+        -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null
+    chmod 600 sp-signing-key.pem
+    chmod 644 sp-signing-cert.pem
+    print_status "✅ SP signing certificate generated"
+fi
+
+if [ ! -f "sp-encrypt-key.pem" ] || [ ! -f "sp-encrypt-cert.pem" ]; then
+    print_status "Generating SP encryption certificate..."
+    openssl req -new -x509 -days 3650 -nodes -newkey rsa:2048 \
+        -keyout sp-encrypt-key.pem -out sp-encrypt-cert.pem \
+        -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null
+    chmod 600 sp-encrypt-key.pem  
+    chmod 644 sp-encrypt-cert.pem
+    print_status "✅ SP encryption certificate generated"
+fi
 
 print_step "3. Deploying Apache configuration..."
 
