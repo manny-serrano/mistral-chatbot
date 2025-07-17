@@ -123,7 +123,10 @@ if [ ! -f "sp-signing-key.pem" ] || [ ! -f "sp-signing-cert.pem" ]; then
     print_status "Generating SP signing certificate..."
     openssl req -new -x509 -days 3650 -nodes -newkey rsa:2048 \
         -keyout sp-signing-key.pem -out sp-signing-cert.pem \
-        -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null
+        -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null || {
+        print_error "Failed to generate SP signing certificate"
+        exit 1
+    }
     chmod 600 sp-signing-key.pem
     chmod 644 sp-signing-cert.pem
     print_status "✅ SP signing certificate generated"
@@ -133,7 +136,10 @@ if [ ! -f "sp-encrypt-key.pem" ] || [ ! -f "sp-encrypt-cert.pem" ]; then
     print_status "Generating SP encryption certificate..."
     openssl req -new -x509 -days 3650 -nodes -newkey rsa:2048 \
         -keyout sp-encrypt-key.pem -out sp-encrypt-cert.pem \
-        -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null
+        -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null || {
+        print_error "Failed to generate SP encryption certificate"
+        exit 1
+    }
     chmod 600 sp-encrypt-key.pem  
     chmod 644 sp-encrypt-cert.pem
     print_status "✅ SP encryption certificate generated"

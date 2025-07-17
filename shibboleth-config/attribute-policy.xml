@@ -10,16 +10,16 @@
 
     <!-- Shared rule for Duke University affiliation values - OFFICIAL DUKE FORMAT -->
     <afp:PermitValueRule id="eduPersonAffiliationValues" xsi:type="OR">
-        <Rule xsi:type="AttributeValueString" value="faculty"/>
-        <Rule xsi:type="AttributeValueString" value="student"/>
-        <Rule xsi:type="AttributeValueString" value="staff"/>
-        <Rule xsi:type="AttributeValueString" value="emeritus"/>
-        <Rule xsi:type="AttributeValueString" value="alum"/>
-        <Rule xsi:type="AttributeValueString" value="alumni"/>
-        <Rule xsi:type="AttributeValueString" value="member"/>
-        <Rule xsi:type="AttributeValueString" value="affiliate"/>
-        <Rule xsi:type="AttributeValueString" value="employee"/>
-        <Rule xsi:type="AttributeValueString" value="library-walk-in"/>
+        <afp:Rule xsi:type="Value" value="faculty"/>
+        <afp:Rule xsi:type="Value" value="student"/>
+        <afp:Rule xsi:type="Value" value="staff"/>
+        <afp:Rule xsi:type="Value" value="emeritus"/>
+        <afp:Rule xsi:type="Value" value="alum"/>
+        <afp:Rule xsi:type="Value" value="alumni"/>
+        <afp:Rule xsi:type="Value" value="member"/>
+        <afp:Rule xsi:type="Value" value="affiliate"/>
+        <afp:Rule xsi:type="Value" value="employee"/>
+        <afp:Rule xsi:type="Value" value="library-walk-in"/>
     </afp:PermitValueRule>
 
     <!-- Scoping rule for Duke domain -->
