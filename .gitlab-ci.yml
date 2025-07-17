@@ -67,9 +67,6 @@ deploy:
     - scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
     - echo "🔧 Setting up Apache configuration scripts permissions..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
-    # =================================================================
-    # SSO CONFIGURATION DEPLOYMENT - NEW SECTION
-    # =================================================================
     - echo "🔐 Deploying SSO Configuration Fixes..."
     - echo "📋 Copying Shibboleth configuration files..."
     - scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
@@ -100,9 +97,6 @@ deploy:
     - echo "   - Shibboleth Status: https://levantai.colab.duke.edu/Shibboleth.sso/Status"
     - echo "   - Debug Page: https://levantai.colab.duke.edu/shib-debug.php"
     - echo "   - Application: https://levantai.colab.duke.edu/login"
-    # =================================================================
-    # END SSO CONFIGURATION DEPLOYMENT
-    # =================================================================
     - echo "🔧 Copying essential deployment scripts..."
     - scp -o StrictHostKeyChecking=no scripts/setup-sudo-permissions.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/auto-setup-permissions.sh $VM_USER@$VM_HOST:/tmp/
