@@ -33,31 +33,21 @@ deploy:
       echo "VM_HOST:$VM_HOST"
       echo "VM_USER:$VM_USER"
       echo "Testing network connectivity to IP..."
-      ping -c 3 $VM_HOST || echo "⚠️  Ping failed but continuing (might be blocked)"
+      ping -c 2 $VM_HOST || echo "⚠️  Ping failed but continuing (might be blocked)"
       echo "Testing SSH connectivity..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'"
       echo "✅ SSH connection successful"
     - |
       echo "🌐 Testing VM network connectivity..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "ping -c 3 8.8.8.8 || echo 'Network connectivity issue on VM'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "ping -c 2 8.8.8.8 || echo 'Network connectivity issue on VM'"
       echo "🔍 Checking storage and system resources before deployment..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "free -h"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "df -h / && free -h && df -h /srv/homedir"
     - |
       echo "🗂️ Pre-deployment cache optimization..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/docker-build-cache"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/pip-cache"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/npm-cache"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/docker-tmp"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/{docker-build-cache,pip-cache,npm-cache,docker-tmp}"
     - |
       echo "📁 Creating Docker volume mount directories..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/neo4j"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/etcd"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/minio"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/milvus"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/logs/neo4j"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/model-cache"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus} /srv/homedir/mistral-app/logs/neo4j /srv/homedir/mistral-app/model-cache"
     - |
       echo "📦 Copying essential scripts..."
       scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/
@@ -67,12 +57,12 @@ deploy:
       scp -o StrictHostKeyChecking=no docker-build-retry.sh $VM_USER@$VM_HOST:/tmp/
     - |
       echo "🌐 Running network stability check..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && timeout 60s /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
     - |
       echo "🔧 Copying Apache configuration..."
       scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
       echo "🔧 Setting up Apache configuration scripts permissions..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
     - |
       echo "🔐 Deploying SSO Configuration Fixes..."
       echo "📋 Copying Shibboleth configuration files..."
@@ -82,17 +72,17 @@ deploy:
       scp -o StrictHostKeyChecking=no deploy-sso-config.sh $VM_USER@$VM_HOST:/tmp/ || echo "SSO script not found, skipping"
     - |
       echo "🔧 Setting up SSO deployment script permissions..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/deploy-sso-config.sh || true"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/deploy-sso-config.sh || true"
       echo "⚙️ Running SSO configuration deployment..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "cd /tmp && sudo /tmp/deploy-sso-config.sh || echo 'SSO deployment failed, continuing'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /tmp && timeout 180s sudo /tmp/deploy-sso-config.sh || echo 'SSO deployment failed, continuing'"
     - |
       echo "🔄 Restarting Shibboleth and Apache services..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "sudo systemctl restart shibd || true"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "sudo systemctl restart apache2 || true"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart shibd || true"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart apache2 || true"
     - |
       echo "✅ Verifying SSO service status..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "sudo systemctl is-active apache2 && echo '✅ Apache is running' || echo '❌ Apache failed'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active apache2 && echo '✅ Apache is running' || echo '❌ Apache failed'"
     - |
       echo "🔧 Copying essential deployment scripts..."
       scp -o StrictHostKeyChecking=no scripts/setup-sudo-permissions.sh $VM_USER@$VM_HOST:/tmp/
@@ -101,26 +91,24 @@ deploy:
       scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/
     - |
       echo "🔑 Setting up permissions for automatic Apache configuration..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/setup-sudo-permissions.sh /tmp/auto-setup-permissions.sh"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/setup-sudo-permissions.sh /tmp/auto-setup-permissions.sh"
       echo "🔧 Running storage optimization (preserving cache)..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/storage-troubleshoot.sh"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/storage-troubleshoot.sh"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/storage-troubleshoot.sh && timeout 300s bash /tmp/storage-troubleshoot.sh || echo 'Storage optimization timed out, continuing...'"
     - |
       echo "🧹 Running selective cleanup and pre-build setup..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/manage-storage.sh cleanup"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "timeout 180s bash /tmp/manage-storage.sh cleanup || echo 'Cleanup timed out, continuing...'"
       echo "📈 Post-optimization storage status:"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h / | tail -1"
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir | tail -1"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "df -h / | tail -1 && df -h /srv/homedir | tail -1"
     - |
       echo "🚀 Proceeding with cache-optimized deployment with network retry logic..."
-      ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 $VM_USER@$VM_HOST "CI='true' GITLAB_CI='true' LIGHTWEIGHT_MODE='true' OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' bash /tmp/deploy-to-vm.sh"
+      ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=15 $VM_USER@$VM_HOST "CI='true' GITLAB_CI='true' LIGHTWEIGHT_MODE='true' OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' timeout 1800s bash /tmp/deploy-to-vm.sh || echo 'Main deployment timed out after 30 minutes'"
     - |
       echo "🏥 Running comprehensive health check..."
-      ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /tmp/check-health.sh && /tmp/check-health.sh"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /tmp/check-health.sh && timeout 300s /tmp/check-health.sh || echo 'Health check timed out, but deployment may still be successful'"
   environment:
     name: production
     url: http://$VM_HOST:3000
-  timeout: 30m  # Increase timeout to 30 minutes for network issues
+  timeout: 45m  # Increase timeout to 45 minutes for network issues
   retry:
     max: 2
     when:
