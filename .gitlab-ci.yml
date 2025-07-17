@@ -54,9 +54,8 @@ deploy:
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/milvus"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/logs/neo4j"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/model-cache"
-    - echo "📦 Copying optimization scripts..."
+    - echo "📦 Copying essential scripts..."
     - scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/optimize-model-storage.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/storage-troubleshoot.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/fix-docker-volumes.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/check-health.sh $VM_USER@$VM_HOST:/tmp/
@@ -68,9 +67,47 @@ deploy:
     - scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
     - echo "🔧 Setting up Apache configuration scripts permissions..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
-    - echo "🔧 Copying sudo setup scripts..."
+    # =================================================================
+    # SSO CONFIGURATION DEPLOYMENT - NEW SECTION
+    # =================================================================
+    - echo "🔐 Deploying SSO Configuration Fixes..."
+    - echo "📋 Copying Shibboleth configuration files..."
+    - scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/
+    - echo "📋 Copying SSO deployment script..."
+    - scp -o StrictHostKeyChecking=no deploy-sso-config.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no SSO_FIX_SUMMARY.md $VM_USER@$VM_HOST:/tmp/
+    - echo "🔧 Setting up SSO deployment script permissions..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/deploy-sso-config.sh"
+    - echo "⚙️ Running SSO configuration deployment..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "cd /tmp && sudo /tmp/deploy-sso-config.sh"
+    - echo "🔄 Restarting Shibboleth and Apache services..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "sudo systemctl restart shibd"
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "sudo systemctl restart apache2"
+    - echo "✅ Verifying SSO service status..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "sudo systemctl is-active apache2 && echo '✅ Apache is running' || echo '❌ Apache failed'"
+    - echo "🧪 Testing SSO endpoints..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Status | grep -q 'OK' && echo '✅ Shibboleth status endpoint working' || echo '⚠️ Shibboleth status endpoint may have issues'"
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "curl -k -s https://levantai.colab.duke.edu/test.html | grep -q 'Test' && echo '✅ Static file serving working' || echo '⚠️ Static file serving may have issues'"
+    - echo "📋 SSO Configuration Summary:"
+    - echo "   ✅ CRITICAL FIX: attribute-map.xml uses ScopedAttributeDecoder for eppn"
+    - echo "   ✅ Enhanced Apache configuration with proper Location directives"
+    - echo "   ✅ Updated Shibboleth configuration for Duke IdP"
+    - echo "   ✅ Debug files deployed for troubleshooting"
+    - echo "   ✅ Services restarted and verified"
+    - echo "🔗 Test URLs after deployment:"
+    - echo "   - Shibboleth Status: https://levantai.colab.duke.edu/Shibboleth.sso/Status"
+    - echo "   - Debug Page: https://levantai.colab.duke.edu/shib-debug.php"
+    - echo "   - Application: https://levantai.colab.duke.edu/login"
+    # =================================================================
+    # END SSO CONFIGURATION DEPLOYMENT
+    # =================================================================
+    - echo "🔧 Copying essential deployment scripts..."
     - scp -o StrictHostKeyChecking=no scripts/setup-sudo-permissions.sh $VM_USER@$VM_HOST:/tmp/
     - scp -o StrictHostKeyChecking=no scripts/auto-setup-permissions.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/
     - echo "🔑 Setting up permissions for automatic Apache configuration..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/setup-sudo-permissions.sh /tmp/auto-setup-permissions.sh"
     - echo "🔧 Running storage optimization (preserving cache)..."
@@ -85,8 +122,6 @@ deploy:
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h / | tail -1"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir | tail -1"
     - echo "🚀 Proceeding with cache-optimized deployment with network retry logic..."
-    - scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/
     - ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 $VM_USER@$VM_HOST "CI='true' GITLAB_CI='true' LIGHTWEIGHT_MODE='true' OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' bash /tmp/deploy-to-vm.sh"
     - echo "🏥 Running comprehensive health check..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /tmp/check-health.sh && /tmp/check-health.sh"

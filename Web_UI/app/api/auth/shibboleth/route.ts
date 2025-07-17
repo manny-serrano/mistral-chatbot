@@ -5,9 +5,10 @@ interface DukeUser {
   affiliation: string // Role (e.g., "faculty@duke.edu", "student@duke.edu")
   displayName: string
   givenName: string
-  surname: string
+  sn: string // surname (official Duke attribute name)
   mail: string
-  dukeID: string
+  duDukeID: string // Official Duke unique ID attribute name
+  uid: string // unscoped NetID
 }
 
 export async function GET(req: NextRequest) {
@@ -37,66 +38,47 @@ export async function GET(req: NextRequest) {
                    headers.get('HTTP_DISPLAYNAME') ||
                    headers.get('displayname') || 
                    headers.get('shib-displayname') || 
-                   headers.get('cn') || 
-                   '',
+                   headers.get('cn') ||
+                   headers.get('HTTP_CN') ||
+                   '', 
       givenName: headers.get('http_givenname') ||
                  headers.get('HTTP_GIVENNAME') ||
                  headers.get('givenname') || 
                  headers.get('shib-givenname') || 
                  '',
-      surname: headers.get('http_surname') ||
-               headers.get('HTTP_SURNAME') ||
-               headers.get('surname') || 
-               headers.get('shib-surname') || 
-               headers.get('sn') || 
-               '',
+      sn: headers.get('http_sn') ||
+          headers.get('HTTP_SN') ||
+          headers.get('sn') || 
+          headers.get('shib-sn') ||
+          headers.get('http_surname') ||
+          headers.get('HTTP_SURNAME') ||
+          headers.get('surname') || 
+          headers.get('shib-surname') || 
+          '',
       mail: headers.get('http_mail') ||
             headers.get('HTTP_MAIL') ||
             headers.get('mail') || 
             headers.get('shib-mail') || 
             headers.get('email') || 
             '',
-      dukeID: headers.get('http_dukeid') ||
-              headers.get('HTTP_DUKEID') ||
-              headers.get('dukeid') || 
-              headers.get('shib-dukeid') || 
-              ''
+      duDukeID: headers.get('http_dudukeid') ||
+                headers.get('HTTP_DUDUKEID') ||
+                headers.get('dudukeid') || 
+                headers.get('shib-dudukeid') ||
+                headers.get('http_dukeid') ||
+                headers.get('HTTP_DUKEID') ||
+                headers.get('dukeid') || 
+                headers.get('shib-dukeid') || 
+                '',
+      uid: headers.get('http_uid') ||
+           headers.get('HTTP_UID') ||
+           headers.get('uid') || 
+           headers.get('shib-uid') || 
+           ''
     }
-    
-    // Debug log all headers to see what we're receiving
-    console.log('=== SHIBBOLETH DEBUG ===')
-    console.log('Request URL:', req.url)
-    console.log('Raw extracted data:', extractedData)
-    console.log('All headers:')
-    req.headers.forEach((value, key) => {
-      console.log(`  ${key}: ${value}`)
-    })
-    console.log('======================')
-    
-    // If debug parameter is present, return debug info instead of processing
+
+    // Get the redirect parameter
     const { searchParams } = new URL(req.url)
-    if (searchParams.get('debug') === 'true') {
-      const allHeaders: Record<string, string> = {}
-      req.headers.forEach((value, key) => {
-        allHeaders[key] = value
-      })
-      
-      return NextResponse.json({
-        message: 'Shibboleth Debug Information',
-        timestamp: new Date().toISOString(),
-        extractedUser: extractedData,
-        allHeaders: allHeaders,
-        specificHeaders: {
-          eppn: headers.get('eppn'),
-          http_eppn: headers.get('http_eppn'),
-          HTTP_EPPN: headers.get('HTTP_EPPN'),
-          remote_user: headers.get('remote_user'),
-          HTTP_REMOTE_USER: headers.get('HTTP_REMOTE_USER'),
-          REMOTE_USER: headers.get('REMOTE_USER'),
-          'shib-eppn': headers.get('shib-eppn')
-        }
-      })
-    }
     
     // Handle the case where we don't have proper eppn
     if (!extractedData.eppn) {
@@ -129,7 +111,7 @@ export async function GET(req: NextRequest) {
             "1. Verify that your Service Provider is registered with Duke IdP",
             "2. Check that eduPersonPrincipalName attribute is requested in SP registration",
             "3. Ensure Apache Location directives require authentication",
-            "4. Verify attribute-map.xml correctly maps eppn attribute",
+            "4. Verify attribute-map.xml correctly maps eppn attribute with ScopedAttributeDecoder",
             "5. Check Shibboleth logs: /var/log/shibboleth/shibd.log",
             "6. Check Apache headers with 'RequestHeader set' directives"
           ]
@@ -157,9 +139,11 @@ export async function GET(req: NextRequest) {
       netId,
       email: extractedData.mail || `${netId}@duke.edu`,
       firstName: extractedData.givenName || 'Unknown',
-      lastName: extractedData.surname || 'User',
-      displayName: extractedData.displayName || `${extractedData.givenName || 'Unknown'} ${extractedData.surname || 'User'}`,
+      lastName: extractedData.sn || 'User',
+      displayName: extractedData.displayName || `${extractedData.givenName || 'Unknown'} ${extractedData.sn || 'User'}`,
       role,
+      dukeID: extractedData.duDukeID,
+      uid: extractedData.uid || netId,
       lastLogin: new Date().toISOString(),
       createdAt: new Date().toISOString()
     }
@@ -170,7 +154,7 @@ export async function GET(req: NextRequest) {
       permissions.push('admin_access', 'view_reports')
     }
     
-    console.log('User profile created:', userProfile)
+    console.log('Duke SSO User profile created:', userProfile)
     
     // Create session token with user profile data
     const sessionToken = Buffer.from(JSON.stringify({
@@ -186,21 +170,17 @@ export async function GET(req: NextRequest) {
     // Set secure session cookie and redirect
     const response = NextResponse.redirect(new URL(target, req.url))
     
-    // Fix: Don't specify domain, let it default to current domain
     response.cookies.set('duke-sso-session', sessionToken, {
       httpOnly: true,
-      secure: true, // Always secure in production
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 8 * 60 * 60, // 8 hours
-      path: '/' // Ensure cookie is available for entire site
-      // Removed domain specification to use current domain
+      maxAge: 8 * 60 * 60 // 8 hours in seconds
     })
     
-    console.log('Session cookie set, redirecting to:', target)
     return response
     
   } catch (error) {
-    console.error('Shibboleth authentication error:', error)
-    return NextResponse.redirect(new URL('/login?error=shibboleth_failed', req.url))
+    console.error('Shibboleth SSO error:', error)
+    return NextResponse.redirect(new URL('/login?error=sso_failed', req.url).toString())
   }
 } 
