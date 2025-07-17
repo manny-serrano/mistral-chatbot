@@ -70,6 +70,8 @@ deploy:
       echo "📋 Copying Shibboleth configuration files..."
       scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
       scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/
+      echo "📋 Copying diagnostic scripts to root temp..."
+      scp -o StrictHostKeyChecking=no debug-files/test-duke-metadata.sh $VM_USER@$VM_HOST:/tmp/
       echo "📋 Verifying Duke IdP certificate was copied..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "ls -la /tmp/shibboleth-config/idp_signing.crt && echo 'Certificate file present' || echo 'Certificate file missing'"
       echo "📋 Copying SSO deployment script..."

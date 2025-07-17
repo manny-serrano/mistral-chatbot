@@ -105,6 +105,16 @@ else
     print_warning "⚠️ IdP signing certificate not found - signature verification will fail"
 fi
 
+# Deploy the Duke metadata file (local copy to avoid network issues)
+print_status "Deploying Duke metadata file"
+if [ -f "$SHIBBOLETH_CONFIG_SOURCE/duke-metadata-3-signed.xml" ]; then
+    cp "$SHIBBOLETH_CONFIG_SOURCE/duke-metadata-3-signed.xml" "$SHIBBOLETH_DIR/"
+    chmod 644 "$SHIBBOLETH_DIR/duke-metadata-3-signed.xml"
+    print_status "✅ Duke metadata file deployed locally"
+else
+    print_warning "⚠️ Duke metadata file not found - will try to download during runtime"
+fi
+
 # Generate SP certificates if they don't exist
 print_status "Checking/generating SP certificates..."
 cd "$SHIBBOLETH_DIR"

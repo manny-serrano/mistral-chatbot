@@ -37,12 +37,10 @@
                 helpLocation="/about.html"
                 styleSheet="/shibboleth-sp/main.css"/>
 
-        <!-- Duke University Metadata Provider (testing without signature verification) -->
+        <!-- Duke University Metadata Provider (using local file for network issues) -->
         <MetadataProvider type="XML" validate="true"
-                          url="https://shib.oit.duke.edu/duke-metadata-3-signed.xml"
-                          backingFilePath="duke-metadata-3-signed.xml" 
-                          reloadInterval="7200"
-                          maxRefreshDelay="14400">
+                          path="duke-metadata-3-signed.xml"
+                          reloadInterval="7200">
             
             <!-- Whitelist filter for Duke entities only -->
             <MetadataFilter type="Whitelist">
