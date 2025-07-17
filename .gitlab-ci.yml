@@ -66,6 +66,13 @@ deploy:
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
     - echo "🔧 Copying Apache configuration..."
     - scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
+    - echo "🔧 Setting up Apache configuration scripts permissions..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
+    - echo "🔧 Copying sudo setup scripts..."
+    - scp -o StrictHostKeyChecking=no scripts/setup-sudo-permissions.sh $VM_USER@$VM_HOST:/tmp/
+    - scp -o StrictHostKeyChecking=no scripts/auto-setup-permissions.sh $VM_USER@$VM_HOST:/tmp/
+    - echo "🔑 Setting up permissions for automatic Apache configuration..."
+    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/setup-sudo-permissions.sh /tmp/auto-setup-permissions.sh"
     - echo "🔧 Running storage optimization (preserving cache)..."
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/storage-troubleshoot.sh"
     - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/storage-troubleshoot.sh"

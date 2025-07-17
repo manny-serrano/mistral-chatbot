@@ -434,34 +434,59 @@ for i in {1..10}; do
   fi
 done
 
-# Configure Apache HTTPS (if configuration exists)
-if [ -f "/tmp/apache-config/setup-apache-https.sh" ]; then
-  echo "🔧 Configuring Apache HTTPS..."
+# Configure Apache HTTPS with automatic permission setup
+if [ -f "/tmp/apache-config/setup-apache-https.sh" ] || [ -f "/tmp/apache-config/prepare-config.sh" ]; then
+  echo "🔧 Configuring Apache HTTPS with automatic permission setup..."
   
-  # Check if Apache is already configured
-  if [ -f "/etc/apache2/sites-available/mistral-app.conf" ] || [ -f "/etc/httpd/conf.d/mistral-app.conf" ]; then
-    echo "📋 Apache already configured, updating configuration..."
-    # Copy updated configuration
-    if [ -f "/etc/apache2/sites-available/mistral-app.conf" ]; then
-      cp /tmp/apache-config/sites-available/mistral-app.conf /etc/apache2/sites-available/mistral-app.conf
-      systemctl reload apache2
-    elif [ -f "/etc/httpd/conf.d/mistral-app.conf" ]; then
-      cp /tmp/apache-config/sites-available/mistral-app.conf /etc/httpd/conf.d/mistral-app.conf
-      systemctl reload httpd
-    fi
-  else
-    echo "🔧 Setting up Apache HTTPS for the first time..."
-    chmod +x /tmp/apache-config/setup-apache-https.sh
+  # First, prepare configuration files (non-root operation)
+  if [ -f "/tmp/apache-config/prepare-config.sh" ]; then
+    echo "📋 Preparing Apache configuration..."
+    chmod +x /tmp/apache-config/prepare-config.sh
     
-    # Run Apache setup with domain
-    /tmp/apache-config/setup-apache-https.sh \
+    /tmp/apache-config/prepare-config.sh \
       --domain levantai.colab.duke.edu \
-      --project-path "$(pwd)" \
-      --install-certbot \
-      --create-service || echo "⚠️  Apache setup failed, continuing..."
+      --output /tmp/apache-config-prepared || echo "⚠️  Config preparation failed"
+  fi
+  
+  # Use the automatic permission setup script
+  if [ -f "/tmp/auto-setup-permissions.sh" ]; then
+    echo "🔑 Running automatic permission setup for Apache configuration..."
+    chmod +x /tmp/auto-setup-permissions.sh
+    
+    # Run the automatic setup (this handles all permission scenarios)
+    /tmp/auto-setup-permissions.sh "$(whoami)" || echo "⚠️  Automatic Apache setup completed with warnings"
+  else
+    echo "⚠️  Automatic setup script not found, falling back to manual approach..."
+    
+    # Fallback to the previous manual approach
+    if sudo -n true 2>/dev/null; then
+      echo "✅ Sudo privileges available - installing Apache configuration"
+      
+      if [ -f "/tmp/apache-config-prepared/install-apache-config.sh" ]; then
+        sudo /tmp/apache-config-prepared/install-apache-config.sh || echo "⚠️  Apache installation failed, continuing..."
+      elif [ -f "/tmp/apache-config/setup-apache-https.sh" ]; then
+        chmod +x /tmp/apache-config/setup-apache-https.sh
+        sudo /tmp/apache-config/setup-apache-https.sh \
+          --domain levantai.colab.duke.edu \
+          --project-path "$(pwd)" \
+          --install-certbot \
+          --create-service || echo "⚠️  Apache setup failed, continuing..."
+      fi
+    else
+      echo "⚠️  No sudo privileges available for Apache installation"
+      echo "📋 Apache configuration prepared but not installed"
+      echo "📝 To install Apache configuration manually, run:"
+      if [ -f "/tmp/apache-config-prepared/install-apache-config.sh" ]; then
+        echo "    sudo /tmp/apache-config-prepared/install-apache-config.sh"
+      fi
+      if [ -f "/tmp/setup-sudo-permissions.sh" ]; then
+        echo "📝 To enable automatic Apache configuration for future deployments:"
+        echo "    sudo /tmp/setup-sudo-permissions.sh -u $(whoami)"
+      fi
+    fi
   fi
 else
-  echo "📋 No Apache configuration found, skipping HTTPS setup..."
+  echo "📋 No Apache configuration scripts found, skipping HTTPS setup..."
 fi
 
 # Check Frontend
