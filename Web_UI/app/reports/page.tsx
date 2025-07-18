@@ -16,7 +16,6 @@ import {
   FileText,
   Download,
   Calendar,
-  TrendingUp,
   AlertTriangle,
   Shield,
   Activity,
@@ -27,20 +26,22 @@ import {
   FileBarChart,
   Settings,
   Eye,
-  Share,
   RefreshCw,
   CheckCircle,
-  Users,
-  Globe,
   Database,
-  Zap,
   ChevronLeft,
   ChevronRight,
+  MoreVertical,
+  Archive,
+  Trash2,
+  RotateCcw,
 } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 import { downloadReportAsPDF } from "@/lib/pdf-utils"
 import { useRouter } from "next/navigation"
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/components/ui/use-toast"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
+import { DeleteConfirmationDialog, ArchiveConfirmationDialog, RestoreConfirmationDialog } from "@/components/ui/confirmation-dialog"
 
 interface ReportData {
   id: string
@@ -87,7 +88,7 @@ interface ReportSummary {
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<ReportData[]>([])
-  const [categorizedReports, setCategorizedReports] = useState<CategorizedReports | null>(null)
+  const [, setCategorizedReports] = useState<CategorizedReports | null>(null)
   const [summary, setSummary] = useState<ReportSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -124,6 +125,26 @@ export default function ReportsPage() {
   // Replace report type filter with date filter
   const [dateFilter, setDateFilter] = useState<'all' | 'last24h' | 'last7d' | 'last30d' | 'custom'>('all');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
+  
+  // Confirmation dialog states
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; reportId: string; reportName: string; isLoading: boolean }>({
+    open: false,
+    reportId: '',
+    reportName: '',
+    isLoading: false
+  });
+  const [archiveDialog, setArchiveDialog] = useState<{ open: boolean; reportId: string; reportName: string; isLoading: boolean }>({
+    open: false,
+    reportId: '',
+    reportName: '',
+    isLoading: false
+  });
+  const [restoreDialog, setRestoreDialog] = useState<{ open: boolean; reportId: string; reportName: string; isLoading: boolean }>({
+    open: false,
+    reportId: '',
+    reportName: '',
+    isLoading: false
+  });
 
   // Helper function to filter reports by date
   const filterReportsByDate = (reports: ReportData[]) => {
@@ -162,7 +183,21 @@ export default function ReportsPage() {
 
   // Filtered and paginated reports
   const allReports = generatingPlaceholder ? [generatingPlaceholder, ...reports] : reports;
-  const filteredReports = filterReportsByDate(allReports);
+  
+  // Deduplicate reports by ID to prevent React key conflicts
+  const deduplicatedReports = allReports.reduce((unique: ReportData[], report: ReportData) => {
+    if (!unique.some(r => r.id === report.id)) {
+      unique.push(report);
+    } else {
+      // Log duplicate report IDs for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Duplicate report ID detected: ${report.id}`);
+      }
+    }
+    return unique;
+  }, []);
+  
+  const filteredReports = filterReportsByDate(deduplicatedReports);
   const totalPages = Math.ceil(filteredReports.length / reportsPerPage);
   const paginatedReports = filteredReports.slice((currentPage - 1) * reportsPerPage, currentPage * reportsPerPage);
   
@@ -188,8 +223,25 @@ export default function ReportsPage() {
       allReports.push(...categorizedReports.admin)
     }
     
+    // Log potential duplicates before deduplication
+    if (process.env.NODE_ENV === 'development') {
+      const reportIds = allReports.map(r => r.id);
+      const duplicateIds = reportIds.filter((id, index) => reportIds.indexOf(id) !== index);
+      if (duplicateIds.length > 0) {
+        console.warn('Duplicate report IDs found in API response:', duplicateIds);
+      }
+    }
+    
+    // Deduplicate by ID to prevent React key conflicts
+    const uniqueReports = allReports.reduce((unique: ReportData[], report: ReportData) => {
+      if (!unique.some(r => r.id === report.id)) {
+        unique.push(report);
+      }
+      return unique;
+    }, []);
+    
     // Sort by date (newest first)
-    return allReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return uniqueReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }
 
   const fetchReports = async () => {
@@ -515,13 +567,7 @@ export default function ReportsPage() {
     })
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
+
 
   const handleViewReport = (reportId: string) => {
     router.push(`/reports/${reportId}`)
@@ -543,6 +589,108 @@ export default function ReportsPage() {
   const refreshAndResetPage = async () => {
     await fetchReports();
     setCurrentPage(1);
+  };
+
+  // Delete/Archive/Restore handlers
+  const handleDeleteReport = async () => {
+    setDeleteDialog(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      const response = await fetch(`/api/reports/${deleteDialog.reportId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete report');
+      }
+
+      toast({
+        title: "Report Deleted",
+        description: `"${deleteDialog.reportName}" has been permanently deleted.`,
+      });
+
+      // Refresh reports list
+      await refreshAndResetPage();
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteDialog({ open: false, reportId: '', reportName: '', isLoading: false });
+    }
+  };
+
+  const handleArchiveReport = async () => {
+    setArchiveDialog(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      const response = await fetch(`/api/reports/${archiveDialog.reportId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'archive' }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to archive report');
+      }
+
+      toast({
+        title: "Report Archived",
+        description: `"${archiveDialog.reportName}" has been archived.`,
+      });
+
+      // Refresh reports list
+      await refreshAndResetPage();
+    } catch (error) {
+      console.error('Error archiving report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to archive report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setArchiveDialog({ open: false, reportId: '', reportName: '', isLoading: false });
+    }
+  };
+
+  const handleRestoreReport = async () => {
+    setRestoreDialog(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      const response = await fetch(`/api/reports/${restoreDialog.reportId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'restore' }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to restore report');
+      }
+
+      toast({
+        title: "Report Restored",
+        description: `"${restoreDialog.reportName}" has been restored.`,
+      });
+
+      // Refresh reports list
+      await refreshAndResetPage();
+    } catch (error) {
+      console.error('Error restoring report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to restore report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRestoreDialog({ open: false, reportId: '', reportName: '', isLoading: false });
+    }
   };
 
   return (
@@ -954,6 +1102,60 @@ export default function ReportsPage() {
                                 >
                                   <Eye className="h-3 w-3" />
                                 </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 text-zinc-400 hover:text-white hover:bg-purple-900/40"
+                                      disabled={report.status === 'generating'}
+                                    >
+                                      <MoreVertical className="h-3 w-3" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent className="bg-gray-800 border-purple-400/30" align="end">
+                                    {report.status === 'archived' ? (
+                                      <DropdownMenuItem 
+                                        className="text-zinc-200 hover:bg-purple-900/40 text-xs cursor-pointer"
+                                        onClick={() => setRestoreDialog({
+                                          open: true,
+                                          reportId: report.id,
+                                          reportName: report.title,
+                                          isLoading: false
+                                        })}
+                                      >
+                                        <RotateCcw className="h-3 w-3 mr-2" />
+                                        Restore
+                                      </DropdownMenuItem>
+                                    ) : (
+                                      <DropdownMenuItem 
+                                        className="text-zinc-200 hover:bg-purple-900/40 text-xs cursor-pointer"
+                                        onClick={() => setArchiveDialog({
+                                          open: true,
+                                          reportId: report.id,
+                                          reportName: report.title,
+                                          isLoading: false
+                                        })}
+                                      >
+                                        <Archive className="h-3 w-3 mr-2" />
+                                        Archive
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuSeparator className="bg-purple-500/20" />
+                                    <DropdownMenuItem 
+                                      className="text-red-400 hover:bg-red-900/40 text-xs cursor-pointer"
+                                      onClick={() => setDeleteDialog({
+                                        open: true,
+                                        reportId: report.id,
+                                        reportName: report.title,
+                                        isLoading: false
+                                      })}
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             </div>
                           </div>
@@ -1402,6 +1604,31 @@ export default function ReportsPage() {
           </div>
         </div>
       </footer>
+      
+      {/* Confirmation Dialogs */}
+      <DeleteConfirmationDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        onConfirm={handleDeleteReport}
+        itemName={deleteDialog.reportName}
+        isLoading={deleteDialog.isLoading}
+      />
+      
+      <ArchiveConfirmationDialog
+        open={archiveDialog.open}
+        onOpenChange={(open) => setArchiveDialog(prev => ({ ...prev, open }))}
+        onConfirm={handleArchiveReport}
+        itemName={archiveDialog.reportName}
+        isLoading={archiveDialog.isLoading}
+      />
+      
+      <RestoreConfirmationDialog
+        open={restoreDialog.open}
+        onOpenChange={(open) => setRestoreDialog(prev => ({ ...prev, open }))}
+        onConfirm={handleRestoreReport}
+        itemName={restoreDialog.reportName}
+        isLoading={restoreDialog.isLoading}
+      />
     </div>
   )
 }

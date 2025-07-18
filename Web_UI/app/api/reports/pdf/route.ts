@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { extractReportData, isValidReportData } from '@/lib/report-types'
+import { REPORT_STYLES, REPORT_ICONS, getSeverityBadgeClasses, getPriorityBadgeClasses } from '@/lib/report-styles'
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,25 +10,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Report data is required' }, { status: 400 })
     }
 
-    console.log('Received report data keys:', Object.keys(reportData))
-    console.log('Report metadata:', reportData.metadata)
-
-    // Handle wrapped response structure - extract actual report data
-    const actualReportData = reportData?.report || reportData || {}
+    console.log('=== PDF GENERATION WITH COMPREHENSIVE ERROR HANDLING ===')
     
-    console.log('Actual report data keys:', Object.keys(actualReportData))
-    console.log('Actual report metadata:', actualReportData.metadata)
-
-    // Extract data with safe defaults from the actual report structure
-    const metadata = actualReportData?.metadata || {}
-    const executiveSummary = actualReportData?.executive_summary || {}
-    const networkTraffic = actualReportData?.network_traffic_overview || {}
-    const securityFindings = actualReportData?.security_findings || {}
-    const recommendations = actualReportData?.recommendations_and_next_steps?.prioritized_recommendations || []
-    const aiAnalysis = actualReportData?.ai_analysis || []
+    // Extract and validate report data using our type system
+    const extractedData = extractReportData(reportData)
     
-    // Use protocol_breakdown as in the viewer
-    const protocolBreakdown = networkTraffic?.protocol_breakdown || {}
+    if (!extractedData) {
+      return NextResponse.json({ error: 'Failed to extract report data' }, { status: 400 })
+    }
+    
+    if (!isValidReportData(extractedData)) {
+      console.warn('Report validation failed - using extracted data anyway')
+    }
+
+    // Helper functions for safe data operations
+    const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr : []
+    const safeObject = (obj: any): Record<string, any> => (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj : {}
+    const safeString = (str: any): string => (typeof str === 'string') ? str : ''
+    const safeNumber = (num: any): number => (typeof num === 'number') ? num : 0
+
+    const formatDate = (dateString: string) => {
+      try {
+        const date = new Date(dateString)
+        return date.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      } catch {
+        return dateString || 'Unknown date'
+      }
+    }
 
     const formatBytes = (bytes: number) => {
       if (bytes === 0) return '0 Bytes'
@@ -36,889 +53,897 @@ export async function POST(request: NextRequest) {
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
     }
 
-    const formatDate = (dateString: string) => {
-      const date = new Date(dateString)
-      return date.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    }
-
-    const getBadgeClass = (level: string) => {
-      switch (level?.toUpperCase()) {
-        case 'HIGH':
-          return 'badge-high'
-        case 'IMMEDIATE':
-          return 'badge-immediate'
-        case 'MEDIUM':
-          return 'badge-medium'
-        case 'SCHEDULED':
-          return 'badge-scheduled'
-        case 'LOW':
-        case 'PLANNED':
-          return 'badge-low'
-        default:
-          return 'badge-medium'
-      }
-    }
-
-    // Enhanced SVG Icons matching Lucide React icons exactly
-    const icons = {
-      shield: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`,
-      alertTriangle: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
-      trendingUp: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;"><polyline points="22,7 13.5,15.5 8.5,10.5 2,17"></polyline><polyline points="16,7 22,7 22,13"></polyline></svg>`,
-      calendar: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`,
-      clock: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;"><circle cx="12" cy="12" r="10"></circle><polyline points="12,6 12,12 16,14"></polyline></svg>`,
-      fileText: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2Z"></path><polyline points="14,2 14,8 20,8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>`
-    }
-
-    // Protocol number to name map
+    // Protocol mapping
     const PROTOCOL_MAP: Record<number, string> = {
-      1: 'ICMP', 2: 'IGMP', 6: 'TCP', 17: 'UDP', 41: 'IPv6', 47: 'GRE',
-      50: 'ESP', 51: 'AH', 58: 'ICMPv6', 89: 'OSPF', 112: 'VRRP'
+      1: 'ICMP', 2: 'IGMP', 6: 'TCP', 17: 'UDP', 41: 'IPv6',
+      47: 'GRE', 50: 'ESP', 51: 'AH', 58: 'ICMPv6', 89: 'OSPF', 112: 'VRRP'
     }
 
-    const getProtocolName = (key: string, proto: any) => {
-      if (proto && typeof proto.protocol_id === 'number') {
-        return PROTOCOL_MAP[proto.protocol_id] || `Protocol ${proto.protocol_id}`
+    const getProtocolName = (protoKey: string, protoData: any): string => {
+      if (protoData && typeof protoData.protocol_id === 'number') {
+        const name = PROTOCOL_MAP[protoData.protocol_id]
+        if (name) return name
       }
-      const m = key.match(/(?:protocol_)?(\d+)/i)
-      if (m) {
-        const id = Number(m[1])
+      const match = protoKey.match(/(?:protocol_)?(\d+)/i)
+      if (match) {
+        const id = Number(match[1])
         return PROTOCOL_MAP[id] || `Protocol ${id}`
       }
-      return key.toUpperCase()
+      return protoKey.toUpperCase()
     }
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>${metadata.report_title || 'Security Report'}</title>
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.5;
-            color: #111827;
-            background-color: #ffffff;
-            font-size: 16px;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          
-          .container {
-            max-width: 896px;
-            margin: 0 auto;
-            padding: 32px 24px;
-          }
-          
-          /* Header Styles - matching viewer exactly */
-          .header {
-            text-align: center;
-            margin-bottom: 32px;
-            page-break-inside: avoid;
-          }
-          
-          .title {
-            font-size: 30px;
-            font-weight: 700;
-            color: #111827;
-            margin-bottom: 16px;
-            line-height: 1.2;
-          }
-          
-          .subtitle {
-            font-size: 18px;
-            color: #6B7280;
-            margin-bottom: 16px;
-          }
-          
-          .meta-info {
-            display: flex;
-            justify-content: center;
-            gap: 24px;
-            font-size: 14px;
-            color: #6B7280;
-            flex-wrap: wrap;
-          }
-          
-          .meta-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-          }
-          
-          .meta-item svg {
-            color: #6B7280;
-            flex-shrink: 0;
-          }
-          
-          /* Section Styles */
-          .section {
-            margin-bottom: 32px;
-            page-break-inside: auto;
-          }
-          
-          .section-title {
-            font-size: 24px;
-            font-weight: 700;
-            color: #111827;
-            margin-bottom: 16px;
-          }
-          
-          .subsection-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #111827;
-            margin-bottom: 12px;
-          }
-          
-          .separator {
-            border: none;
-            border-top: 1px solid #E5E7EB;
-            margin: 32px 0;
-          }
-          
-          /* Card Grid Styles */
-          .card-grid {
-            display: grid;
-            gap: 16px;
-            margin-bottom: 24px;
-          }
-          
-          .card-grid-3 {
-            grid-template-columns: repeat(3, 1fr);
-          }
-          
-          .card-grid-4 {
-            grid-template-columns: repeat(4, 1fr);
-          }
-          
-          .card-grid-2 {
-            grid-template-columns: repeat(2, 1fr);
-          }
-          
-          /* Executive Summary Cards */
-          .executive-card {
-            background-color: #F9FAFB;
-            border: 1px solid #F3F4F6;
-            border-radius: 8px;
-            padding: 16px;
-            page-break-inside: avoid;
-          }
-          
-          .card-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-          }
-          
-          .card-header svg {
-            color: #6B7280;
-          }
-          
-          .card-label {
-            font-size: 14px;
-            font-weight: 500;
-            color: #6B7280;
-          }
-          
-          .card-value {
-            font-size: 20px;
-            font-weight: 700;
-            color: #111827;
-          }
-          
-          /* Traffic Cards */
-          .traffic-card {
-            background-color: #F9FAFB;
-            border: 1px solid #F3F4F6;
-            border-radius: 8px;
-            padding: 16px;
-            page-break-inside: avoid;
-          }
-          
-          .traffic-card-label {
-            font-size: 14px;
-            font-weight: 500;
-            color: #6B7280;
-            margin-bottom: 8px;
-          }
-          
-          .traffic-card-value {
-            font-size: 20px;
-            font-weight: 700;
-            color: #111827;
-          }
-          
-          /* Badge Styles - matching viewer exactly */
-          .badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            border: 1px solid;
-            text-transform: uppercase;
-            letter-spacing: 0.025em;
-          }
-          
-          .badge-high {
-            background-color: #FEF2F2;
-            color: #B91C1C;
-            border-color: #FECACA;
-          }
-          
-          .badge-immediate {
-            background-color: #FEF2F2;
-            color: #B91C1C;
-            border-color: #FECACA;
-          }
-          
-          .badge-medium {
-            background-color: #FFFBEB;
-            color: #D97706;
-            border-color: #FDE68A;
-          }
-          
-          .badge-scheduled {
-            background-color: #FFFBEB;
-            color: #D97706;
-            border-color: #FDE68A;
-          }
-          
-          .badge-low {
-            background-color: #F0FDF4;
-            color: #16A34A;
-            border-color: #BBF7D0;
-          }
-          
-          .badge-planned {
-            background-color: #EFF6FF;
-            color: #2563EB;
-            border-color: #BFDBFE;
-          }
-          
-          /* List Styles */
-          .findings-list {
-            margin: 0;
-            padding: 0;
-            list-style: none;
-          }
-          
-          .findings-item {
-            display: flex;
-            align-items: flex-start;
-            margin-bottom: 12px;
-            line-height: 1.5;
-          }
-          
-          .findings-bullet {
-            width: 6px;
-            height: 6px;
-            background-color: #9CA3AF;
-            border-radius: 50%;
-            margin-right: 12px;
-            margin-top: 9px;
-            flex-shrink: 0;
-          }
-          
-          .findings-text {
-            flex: 1;
-            font-size: 16px;
-            color: #374151;
-          }
-          
-          /* Traffic Source/Destination Items */
-          .traffic-section {
-            page-break-inside: auto;
-          }
-          
-          .traffic-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px;
-            margin-bottom: 8px;
-            background-color: #F9FAFB;
-            border: 1px solid #F3F4F6;
-            border-radius: 6px;
-            page-break-inside: avoid;
-          }
-          
-          .traffic-ip {
-            font-family: Monaco, Menlo, 'Ubuntu Mono', monospace;
-            font-size: 14px;
-            font-weight: 500;
-            color: #374151;
-          }
-          
-          .traffic-info {
-            text-align: right;
-          }
-          
-          .traffic-bytes {
-            font-size: 14px;
-            font-weight: 600;
-            color: #111827;
-          }
-          
-          .traffic-flows {
-            font-size: 12px;
-            color: #6B7280;
-          }
-          
-          /* Protocol Distribution */
-          .protocol-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            page-break-inside: auto;
-          }
-          
-          .protocol-card {
-            padding: 12px;
-            background-color: #F9FAFB;
-            border: 1px solid #F3F4F6;
-            border-radius: 6px;
-            page-break-inside: avoid;
-          }
-          
-          .protocol-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 4px;
-          }
-          
-          .protocol-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #111827;
-          }
-          
-          .protocol-stats {
-            font-size: 12px;
-            color: #6B7280;
-          }
-          
-          .protocol-suspicious {
-            background-color: #FFFBEB;
-            color: #D97706;
-            border-color: #FDE68A;
-            font-size: 12px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            border: 1px solid;
-          }
-          
-          /* Security Analysis */
-          .security-section {
-            page-break-inside: auto;
-          }
-          
-          .security-category {
-            margin-bottom: 24px;
-            page-break-inside: auto;
-          }
-          
-          .security-card {
-            background-color: #F9FAFB;
-            padding: 16px;
-            border-radius: 8px;
-            border: 1px solid #F3F4F6;
-          }
-          
-          .security-header {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 16px;
-            align-items: center;
-          }
-          
-          .security-label {
-            font-size: 14px;
-            color: #6B7280;
-          }
-          
-          .security-value {
-            font-weight: 600;
-          }
-          
-          .scanner-section {
-            margin-bottom: 16px;
-          }
-          
-          .scanner-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #111827;
-            margin-bottom: 8px;
-          }
-          
-          .scanner-item {
-            font-size: 14px;
-            color: #374151;
-            margin-bottom: 4px;
-          }
-          
-          .scanner-ip {
-            font-family: Monaco, Menlo, 'Ubuntu Mono', monospace;
-            font-weight: 500;
-          }
-          
-          /* Recommendations */
-          .recommendations-section {
-            page-break-inside: auto;
-          }
-          
-          .recommendation-card {
-            border: 1px solid #E5E7EB;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 16px;
-            page-break-inside: avoid;
-          }
-          
-          .recommendation-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            margin-bottom: 12px;
-          }
-          
-          .recommendation-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #111827;
-          }
-          
-          .recommendation-content {
-            font-size: 14px;
-            color: #374151;
-            margin-bottom: 8px;
-            line-height: 1.5;
-          }
-          
-          .recommendation-meta {
-            display: flex;
-            gap: 16px;
-            font-size: 12px;
-            color: #6B7280;
-          }
-          
-          /* AI Analysis */
-          .ai-analysis-section {
-            page-break-inside: auto;
-          }
-          
-          .ai-analysis-card {
-            border: 1px solid #E5E7EB;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 16px;
-            page-break-inside: avoid;
-          }
-          
-          .ai-analysis-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            margin-bottom: 12px;
-          }
-          
-          .ai-analysis-meta {
-            font-size: 12px;
-            color: #6B7280;
-          }
-          
-          .ai-analysis-content {
-            font-size: 14px;
-            color: #374151;
-            margin-bottom: 8px;
-            line-height: 1.5;
-          }
-          
-          /* Footer */
-          .footer {
-            margin-top: 48px;
-            padding-top: 24px;
-            border-top: 1px solid #E5E7EB;
-            text-align: center;
-            font-size: 14px;
-            color: #6B7280;
-          }
-          
-          .footer p {
-            margin-bottom: 4px;
-          }
-          
-          /* Print optimizations */
-          @media print {
-            body {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            
-            .section {
-              page-break-inside: auto;
-            }
-            
-            .executive-card,
-            .traffic-card,
-            .protocol-card,
-            .traffic-item,
-            .recommendation-card,
-            .ai-analysis-card {
-              page-break-inside: avoid;
-              break-inside: avoid;
-            }
-            
-            .security-category,
-            .traffic-section,
-            .protocol-grid,
-            .security-section,
-            .recommendations-section,
-            .ai-analysis-section {
-              page-break-inside: auto;
-              break-inside: auto;
-            }
-            
-            h1, h2, h3 {
-              page-break-after: avoid;
-              break-after: avoid;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <!-- Header -->
-          <div class="header">
-            <h1 class="title">${metadata.report_title || 'Security Report'}</h1>
-            <p class="subtitle">Generated by ${metadata.generated_by || 'LEVANT AI Security Platform'}</p>
-            <div class="meta-info">
-              <div class="meta-item">
-                ${icons.calendar}
-                <span>${formatDate(metadata.generation_date) || 'Unknown Date'}</span>
+    // Render functions with comprehensive error handling
+    const renderReportHeader = () => {
+      const metadata = safeObject(extractedData.metadata)
+      return `
+        <div class="text-center mb-8 print:mb-6">
+          <h1 class="text-3xl font-bold text-gray-900 mb-2 print:text-2xl">
+            ${safeString(metadata.report_title) || 'Security Report'}
+          </h1>
+          <p class="text-lg text-gray-600 mb-4 print:text-base">
+            Generated by ${safeString(metadata.generated_by) || 'LEVANT AI'}
+          </p>
+          <div class="flex items-center justify-center gap-6 text-sm text-gray-500 print:gap-4">
+            <div class="flex items-center">
+              ${REPORT_ICONS.calendar}
+              ${formatDate(safeString(metadata.generation_date) || new Date().toISOString())}
+            </div>
+            <div class="flex items-center">
+              ${REPORT_ICONS.clock}
+              ${safeNumber(metadata.analysis_duration_hours)} hour analysis
+            </div>
+            <div class="flex items-center">
+              ${REPORT_ICONS.fileText}
+              Version ${safeString(metadata.report_version) || '1.0'}
+            </div>
+          </div>
+          <div class="border-t border-gray-200 mt-8 mb-0 print:mt-6"></div>
+        </div>
+      `
+    }
+
+    const renderExecutiveSummary = () => {
+      const summary = safeObject(extractedData.executive_summary)
+      const keyFindings = safeArray(summary.key_findings)
+      
+      return `
+        <section class="mb-8 print:mb-6">
+          <h2 class="text-2xl font-bold text-gray-900 mb-4 print:text-xl">Executive Summary</h2>
+          
+          <div class="${REPORT_STYLES.grids.executive}">
+            <div class="${REPORT_STYLES.cards.executive}">
+              <div class="flex items-center mb-2">
+                ${REPORT_ICONS.shield}
+                <span class="text-sm font-medium text-gray-600">Risk Level</span>
               </div>
-              <div class="meta-item">
-                ${icons.clock}
-                <span>${metadata.analysis_duration_hours || 'N/A'} hour analysis</span>
+              <span class="${getSeverityBadgeClasses(safeString(summary.overall_risk_level) || 'UNKNOWN')}">
+                ${safeString(summary.overall_risk_level) || 'UNKNOWN'}
+              </span>
+            </div>
+            
+            <div class="${REPORT_STYLES.cards.executive}">
+              <div class="flex items-center mb-2">
+                ${REPORT_ICONS.alertTriangle}
+                <span class="text-sm font-medium text-gray-600">Critical Issues</span>
               </div>
-              <div class="meta-item">
-                ${icons.fileText}
-                <span>Version ${metadata.report_version || 'N/A'}</span>
+              <span class="text-2xl font-bold text-gray-900">
+                ${safeNumber(summary.critical_issues_count)}
+              </span>
+            </div>
+            
+            <div class="${REPORT_STYLES.cards.executive}">
+              <div class="flex items-center mb-2">
+                ${REPORT_ICONS.trendingUp}
+                <span class="text-sm font-medium text-gray-600">Priority</span>
+              </div>
+              <span class="${REPORT_STYLES.badges.base} ${REPORT_STYLES.badges.outline}">
+                ${safeString(summary.recommendations_priority) || 'LOW'}
+              </span>
+            </div>
+          </div>
+
+          <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Key Findings</h3>
+          <ul class="space-y-2">
+            ${keyFindings.length > 0 
+              ? keyFindings.map(finding => `
+                <li class="flex items-start">
+                  <span class="w-2 h-2 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  <span class="text-gray-700">${safeString(finding) || 'No finding details'}</span>
+                </li>
+              `).join('')
+              : '<li class="text-gray-500">No key findings available</li>'
+            }
+          </ul>
+        </section>
+      `
+    }
+
+    const renderNetworkAnalysis = () => {
+      const networkData = safeObject(extractedData.network_traffic_overview)
+      const basicStats = safeObject(networkData.basic_stats)
+      const topSources = safeArray(networkData.top_sources)
+      const topDestinations = safeArray(networkData.top_destinations)
+      const protocolBreakdown = safeObject(networkData.protocol_breakdown)
+      const bandwidthStats = safeObject(networkData.bandwidth_stats)
+      
+              return `
+          <section class="mb-8 print:mb-6">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4 print:text-xl">Network Traffic Analysis</h2>
+          
+          <div class="${REPORT_STYLES.grids.networkStats}">
+            <div class="${REPORT_STYLES.cards.stats}">
+              <h4 class="${REPORT_STYLES.typography.cardTitle}">Total Flows</h4>
+              <p class="text-xl font-bold text-gray-900">
+                ${safeNumber(basicStats.total_flows).toLocaleString()}
+              </p>
+            </div>
+            
+            <div class="${REPORT_STYLES.cards.stats}">
+              <h4 class="${REPORT_STYLES.typography.cardTitle}">Total Data</h4>
+              <p class="text-xl font-bold text-gray-900">
+                ${formatBytes(safeNumber(basicStats.total_bytes))}
+              </p>
+            </div>
+            
+            <div class="${REPORT_STYLES.cards.stats}">
+              <h4 class="${REPORT_STYLES.typography.cardTitle}">Total Packets</h4>
+              <p class="text-xl font-bold text-gray-900">
+                ${safeNumber(basicStats.total_packets).toLocaleString()}
+              </p>
+            </div>
+            
+            <div class="${REPORT_STYLES.cards.stats}">
+              <h4 class="${REPORT_STYLES.typography.cardTitle}">Avg Bandwidth</h4>
+              <p class="text-xl font-bold text-gray-900">
+                ${safeNumber(bandwidthStats.average_mbps)} Mbps
+              </p>
+            </div>
+          </div>
+
+          <div class="${REPORT_STYLES.grids.traffic}">
+            <div>
+              <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Top Traffic Sources</h3>
+              <div class="space-y-2">
+                ${topSources.length > 0
+                  ? topSources.slice(0, 5).map(source => `
+                    <div class="flex items-center justify-between p-3 ${REPORT_STYLES.cards.traffic}">
+                      <span class="${REPORT_STYLES.typography.monoText}">${safeString(source.ip) || 'Unknown'}</span>
+                      <div class="text-right">
+                        <div class="text-sm font-medium text-gray-900">${formatBytes(safeNumber(source.bytes))}</div>
+                        <div class="${REPORT_STYLES.typography.captionText}">${safeNumber(source.flow_count)} flows</div>
+                      </div>
+                    </div>
+                  `).join('')
+                  : '<div class="text-gray-500 p-3">No traffic sources available</div>'
+                }
+              </div>
+            </div>
+
+            <div>
+              <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Top Traffic Destinations</h3>
+              <div class="space-y-2">
+                ${topDestinations.length > 0
+                  ? topDestinations.slice(0, 5).map(dest => `
+                    <div class="flex items-center justify-between p-3 ${REPORT_STYLES.cards.traffic}">
+                      <span class="${REPORT_STYLES.typography.monoText}">${safeString(dest.ip) || 'Unknown'}</span>
+                      <div class="text-right">
+                        <div class="text-sm font-medium text-gray-900">${formatBytes(safeNumber(dest.bytes))}</div>
+                        <div class="${REPORT_STYLES.typography.captionText}">${safeNumber(dest.flow_count)} flows</div>
+                      </div>
+                    </div>
+                  `).join('')
+                  : '<div class="text-gray-500 p-3">No traffic destinations available</div>'
+                }
               </div>
             </div>
           </div>
 
-          <hr class="separator">
-
-          <!-- Executive Summary -->
-          <section class="section">
-            <h2 class="section-title">Executive Summary</h2>
-            
-            <div class="card-grid card-grid-3">
-              <div class="executive-card">
-                <div class="card-header">
-                  ${icons.shield}
-                  <span class="card-label">Risk Level</span>
-                </div>
-                <span class="badge ${getBadgeClass(executiveSummary.overall_risk_level)}">
-                  ${executiveSummary.overall_risk_level || 'UNKNOWN'}
-                </span>
-              </div>
-              
-              <div class="executive-card">
-                <div class="card-header">
-                  ${icons.alertTriangle}
-                  <span class="card-label">Critical Issues</span>
-                </div>
-                <div class="card-value">
-                  ${executiveSummary.critical_issues_count || 0}
-                </div>
-              </div>
-              
-              <div class="executive-card">
-                <div class="card-header">
-                  ${icons.trendingUp}
-                  <span class="card-label">Priority</span>
-                </div>
-                <span class="badge ${getBadgeClass(executiveSummary.recommendations_priority)}">
-                  ${executiveSummary.recommendations_priority || 'MEDIUM'}
-                </span>
-              </div>
+          <div>
+            <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Protocol Distribution</h3>
+            <div class="${REPORT_STYLES.grids.protocols}">
+              ${Object.keys(protocolBreakdown).length > 0
+                ? Object.entries(protocolBreakdown).slice(0, 6).map(([protocol, data]) => {
+                  const protocolData = safeObject(data)
+                  return `
+                    <div class="p-3 ${REPORT_STYLES.cards.protocol}">
+                      <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium text-gray-900">${getProtocolName(protocol, protocolData)}</span>
+                        ${protocolData.is_suspicious ? `
+                          <span class="${getSeverityBadgeClasses('MEDIUM')}">
+                            Suspicious
+                          </span>
+                        ` : ''}
+                      </div>
+                      <div class="${REPORT_STYLES.typography.captionText}">
+                        ${safeNumber(protocolData.flow_count).toLocaleString()} flows • ${formatBytes(safeNumber(protocolData.total_bytes))}
+                      </div>
+                    </div>
+                  `
+                }).join('')
+                : '<div class="text-gray-500 p-4">No protocol data available</div>'
+              }
             </div>
+          </div>
+        </section>
+      `
+    }
 
-            <h3 class="subsection-title">Key Findings</h3>
-            <ul class="findings-list">
-              ${(executiveSummary.key_findings || []).map((finding: string) => `
-                <li class="findings-item">
-                  <span class="findings-bullet"></span>
-                  <span class="findings-text">${finding}</span>
-                </li>
-              `).join('')}
-            </ul>
+    const renderSecurityFindings = () => {
+      const securityFindings = safeObject(extractedData.security_findings)
+      
+      if (Object.keys(securityFindings).length === 0) {
+        return `
+          <section class="${REPORT_STYLES.layout.sectionContainer}">
+            <h2 class="${REPORT_STYLES.typography.sectionTitle}">Security Analysis</h2>
+            <div class="text-gray-500 p-4">No security findings available</div>
           </section>
-
-          <hr class="separator">
-
-          <!-- Network Traffic Analysis -->
-          <section class="section">
-            <h2 class="section-title">Network Traffic Analysis</h2>
+        `
+      }
+      
+      return `
+        <section class="${REPORT_STYLES.layout.sectionContainer}">
+          <h2 class="${REPORT_STYLES.typography.sectionTitle}">Security Analysis</h2>
+          
+          ${Object.entries(securityFindings).map(([category, data]) => {
+            const findingData = safeObject(data)
+            const potentialScanners = safeArray(findingData.potential_scanners)
+            const highVolumeSources = safeArray(findingData.high_volume_sources)
             
-            <div class="card-grid card-grid-4">
-              <div class="traffic-card">
-                <div class="traffic-card-label">Total Flows</div>
-                <div class="traffic-card-value">
-                  ${(networkTraffic.basic_stats?.total_flows || 0).toLocaleString()}
-                </div>
-              </div>
-              
-              <div class="traffic-card">
-                <div class="traffic-card-label">Total Data</div>
-                <div class="traffic-card-value">
-                  ${formatBytes(networkTraffic.basic_stats?.total_bytes || 0)}
-                </div>
-              </div>
-              
-              <div class="traffic-card">
-                <div class="traffic-card-label">Total Packets</div>
-                <div class="traffic-card-value">
-                  ${(networkTraffic.basic_stats?.total_packets || 0).toLocaleString()}
-                </div>
-              </div>
-              
-              <div class="traffic-card">
-                <div class="traffic-card-label">Avg Bandwidth</div>
-                <div class="traffic-card-value">
-                  ${networkTraffic.bandwidth_stats?.average_mbps || 0} Mbps
-                </div>
-              </div>
-            </div>
-
-            <div class="card-grid card-grid-2">
-              <div class="traffic-section">
-                <h3 class="subsection-title">Top Traffic Sources</h3>
-                <div>
-                  ${(networkTraffic.top_sources || []).slice(0, 5).map((source: any) => `
-                    <div class="traffic-item">
-                      <span class="traffic-ip">${source.ip}</span>
-                      <div class="traffic-info">
-                        <div class="traffic-bytes">${formatBytes(source.bytes)}</div>
-                        <div class="traffic-flows">${source.flow_count} flows</div>
+            return `
+              <div class="mb-6">
+                <h3 class="${REPORT_STYLES.typography.subsectionTitle}">
+                  ${safeString(category).replace(/_/g, ' ').toUpperCase()}
+                </h3>
+                
+                <div class="${REPORT_STYLES.cards.security}">
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <span class="text-sm text-gray-600">Severity</span>
+                      <span class="${getSeverityBadgeClasses(safeString(findingData.severity) || 'UNKNOWN')} ml-2">
+                        ${safeString(findingData.severity) || 'UNKNOWN'}
+                      </span>
+                    </div>
+                    ${findingData.count !== undefined ? `
+                      <div>
+                        <span class="text-sm text-gray-600">Count: </span>
+                        <span class="font-medium">${safeNumber(findingData.count)}</span>
+                      </div>
+                    ` : ''}
+                    ${findingData.matching_flows !== undefined ? `
+                      <div>
+                        <span class="text-sm text-gray-600">Matching Flows: </span>
+                        <span class="font-medium">${safeNumber(findingData.matching_flows)}</span>
+                      </div>
+                    ` : ''}
+                  </div>
+                  
+                  ${potentialScanners.length > 0 ? `
+                    <div>
+                      <h4 class="text-sm font-medium text-gray-900 mb-2">Potential Scanners Detected</h4>
+                      <div class="space-y-1">
+                        ${potentialScanners.slice(0, 5).map(scanner => {
+                          const scannerData = safeObject(scanner)
+                          return `
+                            <div class="text-sm text-gray-700">
+                              <span class="font-mono">${safeString(scannerData.source_ip) || safeString(scannerData.ip) || 'Unknown'}</span> - ${safeNumber(scannerData.ports_scanned) || safeNumber(scannerData.port_count)} ports scanned
+                            </div>
+                          `
+                        }).join('')}
                       </div>
                     </div>
-                  `).join('')}
-                </div>
-              </div>
-
-              <div class="traffic-section">
-                <h3 class="subsection-title">Top Traffic Destinations</h3>
-                <div>
-                  ${(networkTraffic.top_destinations || []).slice(0, 5).map((dest: any) => `
-                    <div class="traffic-item">
-                      <span class="traffic-ip">${dest.ip}</span>
-                      <div class="traffic-info">
-                        <div class="traffic-bytes">${formatBytes(dest.bytes)}</div>
-                        <div class="traffic-flows">${dest.flow_count} flows</div>
+                  ` : ''}
+                  
+                  ${highVolumeSources.length > 0 ? `
+                    <div>
+                      <h4 class="text-sm font-medium text-gray-900 mb-2">High Volume Sources</h4>
+                      <div class="space-y-1">
+                        ${highVolumeSources.slice(0, 5).map(source => {
+                          const sourceData = safeObject(source)
+                          return `
+                            <div class="text-sm text-gray-700">
+                              <span class="font-mono">${safeString(sourceData.source_ip) || safeString(sourceData.ip) || 'Unknown'}</span> - ${safeNumber(sourceData.gb_sent) || safeNumber(sourceData.data_transferred)} GB transferred
+                            </div>
+                          `
+                        }).join('')}
                       </div>
                     </div>
-                  `).join('')}
+                  ` : ''}
                 </div>
+              </div>
+            `
+          }).join('')}
+        </section>
+      `
+    }
+
+    const renderDataSourcesConfiguration = () => {
+      const dataConfig = safeObject(extractedData.data_sources_and_configuration)
+      
+      if (Object.keys(dataConfig).length === 0) return ''
+      
+      const yafSensors = safeArray(dataConfig.yaf_ipfix_sensors)
+      const threatSources = safeArray(dataConfig.threat_intelligence_sources)
+      const analysisMethodology = safeObject(dataConfig.analysis_methodology)
+      const configDetails = safeObject(dataConfig.configuration_details)
+      const ipfixElements = safeArray(dataConfig.ipfix_information_elements)
+      
+      return `
+        <section class="${REPORT_STYLES.layout.sectionContainer}">
+          <h2 class="${REPORT_STYLES.typography.sectionTitle}">Data Sources & Configuration</h2>
+          
+          <div class="${REPORT_STYLES.grids.cols2}">
+            <div>
+              <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Data Sources</h3>
+              <div class="space-y-3">
+                <div class="${REPORT_STYLES.cards.content}">
+                  <div class="flex items-center mb-2">
+                    <svg class="h-4 w-4 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
+                    </svg>
+                    <span class="font-medium text-gray-900">Primary Data Source</span>
+                  </div>
+                  <p class="text-sm text-gray-700 mb-1">
+                    <strong>Source:</strong> ${safeString(dataConfig.primary_data_source) || 'Not specified'}
+                  </p>
+                </div>
+                
+                ${yafSensors.length > 0 ? `
+                  <div class="${REPORT_STYLES.cards.content}">
+                    <div class="flex items-center mb-2">
+                      <svg class="h-4 w-4 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
+                      </svg>
+                      <span class="font-medium text-gray-900">YAF IPFIX Sensors</span>
+                    </div>
+                    <ul class="text-sm text-gray-700">
+                      ${yafSensors.map(sensor => `
+                        <li class="list-disc ml-4">${safeString(sensor) || 'Unknown sensor'}</li>
+                      `).join('')}
+                    </ul>
+                  </div>
+                ` : ''}
+                
+                ${threatSources.length > 0 ? `
+                  <div class="${REPORT_STYLES.cards.content}">
+                    <div class="flex items-center mb-2">
+                      <svg class="h-4 w-4 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
+                      </svg>
+                      <span class="font-medium text-gray-900">Threat Intelligence Sources</span>
+                    </div>
+                    <ul class="text-sm text-gray-700">
+                      ${threatSources.map(source => `
+                        <li class="list-disc ml-4">${safeString(source) || 'Unknown source'}</li>
+                      `).join('')}
+                    </ul>
+                  </div>
+                ` : ''}
               </div>
             </div>
 
             <div>
-              <h3 class="subsection-title">Protocol Distribution</h3>
-              <div class="protocol-grid">
-                ${Object.entries(protocolBreakdown).slice(0, 6).map(([protocol, data]: [string, any]) => `
-                  <div class="protocol-card">
-                    <div class="protocol-header">
-                      <span class="protocol-name">${getProtocolName(protocol, data)}</span>
-                      ${data.is_suspicious ? `<span class="protocol-suspicious">Suspicious</span>` : ''}
+              <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Analysis Configuration</h3>
+              <div class="${REPORT_STYLES.cards.content}">
+                <div class="space-y-3">
+                  ${Object.keys(analysisMethodology).length > 0 ? `
+                    <div>
+                      <span class="text-sm font-medium text-gray-600">Normal Traffic Analysis:</span>
+                      <p class="text-sm text-gray-900">${safeString(analysisMethodology.normal_traffic_analysis) || 'Not specified'}</p>
                     </div>
-                    <div class="protocol-stats">
-                      ${data.flow_count?.toLocaleString() || 0} flows • ${formatBytes(data.total_bytes || 0)}
+                    <div>
+                      <span class="text-sm font-medium text-gray-600">Threat Detection:</span>
+                      <p class="text-sm text-gray-900">${safeString(analysisMethodology.threat_detection) || 'Not specified'}</p>
                     </div>
-                  </div>
-                `).join('')}
+                    <div>
+                      <span class="text-sm font-medium text-gray-600">Comparison Scope:</span>
+                      <p class="text-sm text-gray-900">${safeString(analysisMethodology.comparison_scope) || 'Not specified'}</p>
+                    </div>
+                  ` : ''}
+                  
+                  ${Object.keys(configDetails).length > 0 ? `
+                    <div>
+                      <span class="text-sm font-medium text-gray-600">Sampling Rate:</span>
+                      <p class="text-sm text-gray-900">${safeString(configDetails.sampling_rate) || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <span class="text-sm font-medium text-gray-600">Flow Timeout:</span>
+                      <p class="text-sm text-gray-900">${safeString(configDetails.flow_timeout) || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <span class="text-sm font-medium text-gray-600">Collection Method:</span>
+                      <p class="text-sm text-gray-900">${safeString(configDetails.collection_method) || 'Not specified'}</p>
+                    </div>
+                  ` : ''}
+                  
+                  ${ipfixElements.length > 0 ? `
+                    <div>
+                      <span class="text-sm font-medium text-gray-600">IPFIX Elements:</span>
+                      <p class="text-sm text-gray-900">
+                        ${ipfixElements.length} information elements configured
+                      </p>
+                    </div>
+                  ` : ''}
+                </div>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
+      `
+    }
 
-          <hr class="separator">
+    const renderComplianceGovernance = () => {
+      const complianceData = safeObject(extractedData.compliance_and_governance)
+      
+      if (Object.keys(complianceData).length === 0) return ''
+      
+      const complianceStatus = safeArray(complianceData.compliance_status)
+      const governancePolicies = safeObject(complianceData.governance_policies)
+      const accessControls = safeArray(governancePolicies.access_controls)
+      const riskAssessments = safeArray(complianceData.risk_assessments)
+      
+      const getComplianceClass = (status: string) => {
+        switch (status.toLowerCase()) {
+          case 'compliant':
+            return REPORT_STYLES.badges.getSeverityClass('LOW')
+          case 'non-compliant':
+            return REPORT_STYLES.badges.getSeverityClass('HIGH')
+          case 'partial':
+            return REPORT_STYLES.badges.getSeverityClass('MEDIUM')
+          default:
+            return 'border-gray-200 text-gray-700 bg-gray-50'
+        }
+      }
 
-          <!-- Security Analysis -->
-          <section class="section security-section">
-            <h2 class="section-title">Security Analysis</h2>
-            
-            ${Object.entries(securityFindings || {}).map(([category, findings]: [string, any]) => {
-              if (typeof findings !== 'object' || !findings) return ''
-              
-              return `
-                <div class="security-category">
-                  <h3 class="subsection-title">${category.replace(/_/g, ' ').toUpperCase()}</h3>
-                  
-                  <div class="security-card">
-                    <div class="security-header">
-                      <div>
-                        <span class="security-label">Severity</span>
-                        <span class="badge ${getBadgeClass(findings.severity)}">
-                          ${findings.severity || 'UNKNOWN'}
-                        </span>
+      return `
+        <section class="${REPORT_STYLES.layout.sectionContainer}">
+          <h2 class="${REPORT_STYLES.typography.sectionTitle}">Compliance & Governance</h2>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Compliance Status</h3>
+              <div class="space-y-3">
+                ${complianceStatus.length > 0 
+                  ? complianceStatus.map(item => {
+                    const complianceItem = safeObject(item)
+                    const gaps = safeArray(complianceItem.gaps)
+                    
+                    return `
+                      <div class="${REPORT_STYLES.cards.content}">
+                        <div class="flex items-center justify-between mb-2">
+                          <div class="flex items-center">
+                            ${complianceItem.status && complianceItem.status.toLowerCase() === 'compliant' ? REPORT_ICONS.checkCircle : 
+                              complianceItem.status && complianceItem.status.toLowerCase() === 'non-compliant' ? REPORT_ICONS.xCircle : REPORT_ICONS.alertCircle}
+                            <span class="font-medium text-gray-900 ml-2">${safeString(complianceItem.framework) || 'Unknown Framework'}</span>
+                          </div>
+                          <span class="${getComplianceClass(safeString(complianceItem.status))} text-xs inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold">
+                            ${safeString(complianceItem.status) || 'Unknown'}
+                          </span>
+                        </div>
+                        <p class="text-sm text-gray-700 mb-1">
+                          <strong>Score:</strong> ${safeNumber(complianceItem.score)}%
+                        </p>
+                        <p class="text-sm text-gray-700">
+                          <strong>Last Assessment:</strong> ${complianceItem.last_assessment ? formatDate(complianceItem.last_assessment) : 'Unknown'}
+                        </p>
+                        ${gaps.length > 0 ? `
+                          <div class="mt-2">
+                            <span class="text-xs font-medium text-gray-600">Key Gaps:</span>
+                            <ul class="text-xs text-gray-700 ml-4 mt-1">
+                              ${gaps.slice(0, 3).map(gap => `<li class="list-disc">${safeString(gap) || 'Unknown gap'}</li>`).join('')}
+                            </ul>
+                          </div>
+                        ` : ''}
                       </div>
-                      ${findings.count !== undefined ? `
-                        <div>
-                          <span class="security-label">Count: </span>
-                          <span class="security-value">${findings.count}</span>
+                    `
+                  }).join('')
+                  : '<div class="text-gray-500 p-3">No compliance status available</div>'
+                }
+              </div>
+            </div>
+
+            <div>
+              <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Governance Policies</h3>
+              <div class="${REPORT_STYLES.cards.content}">
+                <div class="space-y-3">
+                  <div>
+                    <span class="text-sm font-medium text-gray-600">Data Retention:</span>
+                    <p class="text-sm text-gray-900">${safeString(governancePolicies.data_retention) || 'Not specified'}</p>
+                  </div>
+                  ${accessControls.length > 0 ? `
+                    <div>
+                      <span class="text-sm font-medium text-gray-600">Access Controls:</span>
+                      <ul class="text-sm text-gray-900 ml-4">
+                        ${accessControls.map(control => `
+                          <li class="list-disc">${safeString(control) || 'Unknown control'}</li>
+                        `).join('')}
+                      </ul>
+                    </div>
+                  ` : ''}
+                  <div>
+                    <span class="text-sm font-medium text-gray-600">Review Schedule:</span>
+                    <p class="text-sm text-gray-900">${safeString(governancePolicies.review_schedule) || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <span class="text-sm font-medium text-gray-600">Approval Authority:</span>
+                    <p class="text-sm text-gray-900">${safeString(governancePolicies.approval_authority) || 'Not specified'}</p>
+                  </div>
+                </div>
+              </div>
+
+              ${riskAssessments.length > 0 ? `
+                <div class="mt-4">
+                  <h4 class="text-sm font-medium text-gray-900 mb-2">Recent Risk Assessments</h4>
+                  <div class="space-y-2">
+                    ${riskAssessments.slice(0, 3).map(assessment => {
+                      const assessmentData = safeObject(assessment)
+                      return `
+                        <div class="text-sm border-l-2 border-gray-200 pl-3">
+                          <div class="flex items-center justify-between">
+                            <span class="font-medium text-gray-900">${safeString(assessmentData.type) || 'Unknown Assessment'}</span>
+                            <span class="${REPORT_STYLES.badges.getSeverityClass(safeString(assessmentData.risk_level) || 'UNKNOWN')} text-xs inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold">
+                              ${safeString(assessmentData.risk_level) || 'UNKNOWN'}
+                            </span>
+                          </div>
+                          <p class="text-xs text-gray-600">${assessmentData.date ? formatDate(assessmentData.date) : 'Unknown date'}</p>
                         </div>
-                      ` : ''}
-                      ${findings.matching_flows !== undefined ? `
-                        <div>
-                          <span class="security-label">Matching Flows: </span>
-                          <span class="security-value">${findings.matching_flows}</span>
-                        </div>
-                      ` : ''}
+                      `
+                    }).join('')}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </section>
+      `
+    }
+
+    const renderAIAnalysis = () => {
+      const aiAnalysis = safeArray(extractedData.ai_analysis)
+      
+      if (aiAnalysis.length === 0) return ''
+      
+      return `
+        <section class="${REPORT_STYLES.layout.sectionContainer}">
+          <h2 class="${REPORT_STYLES.typography.sectionTitle}">AI Security Analysis</h2>
+          
+          <div class="space-y-4">
+            ${aiAnalysis.map(item => {
+              const analysisItem = safeObject(item)
+              return `
+                <div class="border border-gray-200 rounded-lg p-4 print:break-inside-avoid">
+                  <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center">
+                      ${REPORT_ICONS.brain}
+                      <span class="text-xs text-gray-500">MITRE ATT&CK: ${safeString(analysisItem.attack_technique) || 'Unknown'}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="${getSeverityBadgeClasses(safeString(analysisItem.confidence_score) || 'UNKNOWN')} text-xs inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold">
+                        ${Math.round((safeNumber(analysisItem.confidence_score) || 0) * 100)}% Confidence
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div class="space-y-3">
+                    <div>
+                      <h4 class="text-sm font-medium text-gray-900 mb-1 flex items-center">
+                        ${REPORT_ICONS.target}
+                        Finding
+                      </h4>
+                      <p class="text-sm text-gray-700 ml-5">${safeString(analysisItem.finding) || 'No finding details'}</p>
                     </div>
                     
-                    ${findings.potential_scanners ? `
-                      <div class="scanner-section">
-                        <div class="scanner-title">Potential Scanners Detected</div>
-                        <div>
-                          ${findings.potential_scanners.slice(0, 5).map((scanner: any) => `
-                            <div class="scanner-item">
-                              <span class="scanner-ip">${scanner.source_ip}</span> - ${scanner.ports_scanned} ports scanned
-                            </div>
-                          `).join('')}
-                        </div>
-                      </div>
-                    ` : ''}
+                    <div>
+                      <h4 class="text-sm font-medium text-gray-900 mb-1">Business Impact</h4>
+                      <p class="text-sm text-gray-700">${safeString(analysisItem.business_impact) || 'No impact details'}</p>
+                    </div>
                     
-                    ${findings.high_volume_sources ? `
-                      <div class="scanner-section">
-                        <div class="scanner-title">High Volume Sources</div>
-                        <div>
-                          ${findings.high_volume_sources.slice(0, 5).map((source: any) => `
-                            <div class="scanner-item">
-                              <span class="scanner-ip">${source.source_ip}</span> - ${source.gb_sent} GB transferred
-                            </div>
-                          `).join('')}
-                        </div>
-                      </div>
-                    ` : ''}
+                    <div>
+                      <h4 class="text-sm font-medium text-gray-900 mb-1">Recommended Action</h4>
+                      <p class="text-sm text-gray-700">${safeString(analysisItem.recommended_action) || 'No action details'}</p>
+                    </div>
+                    
+                    <div class="flex items-center text-xs text-gray-500 pt-2 border-t border-gray-100">
+                      ${REPORT_ICONS.clock}
+                      <strong>Timeline:</strong> 
+                      <span class="ml-1">${safeString(analysisItem.timeline) || 'Unknown'}</span>
+                    </div>
                   </div>
                 </div>
               `
             }).join('')}
-          </section>
+          </div>
+        </section>
+      `
+    }
 
-          <hr class="separator">
-
-          <!-- Recommendations -->
-          <section class="section recommendations-section">
-            <h2 class="section-title">Recommendations</h2>
-            
-            <div>
-              ${recommendations.map((rec: any) => `
-                <div class="recommendation-card">
-                  <div class="recommendation-header">
-                    <h3 class="recommendation-title">${(rec.category || 'General').toUpperCase()}</h3>
-                    <span class="badge ${getBadgeClass(rec.priority)}">
-                      ${rec.priority || 'MEDIUM'}
-                    </span>
-                  </div>
-                  
-                  <div class="recommendation-content">
-                    <strong>Finding:</strong> ${rec.finding || 'N/A'}
-                  </div>
-                  
-                  <div class="recommendation-content">
-                    <strong>Recommendation:</strong> ${rec.recommendation || 'N/A'}
-                  </div>
-                  
-                  <div class="recommendation-meta">
-                    <span><strong>Effort:</strong> ${rec.estimated_effort || 'N/A'}</span>
-                    <span><strong>Timeline:</strong> ${rec.timeline || 'N/A'}</span>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </section>
-
-          ${aiAnalysis.length > 0 ? `
-            <hr class="separator">
-            
-            <section class="section ai-analysis-section">
-              <h2 class="section-title">AI Security Analysis</h2>
-              
-              <div>
-                ${aiAnalysis.map((analysis: any) => `
-                  <div class="ai-analysis-card">
-                    <div class="ai-analysis-header">
-                      <span class="ai-analysis-meta">MITRE ATT&CK: ${analysis.attack_technique || 'N/A'}</span>
-                      <span class="ai-analysis-meta">
-                        Confidence: ${Math.round((analysis.confidence_score || 0) * 100)}%
+    const renderRecommendations = () => {
+      const recommendations = safeObject(extractedData.recommendations_and_next_steps)
+      const prioritizedRecs = safeArray(recommendations.prioritized_recommendations)
+      
+      return `
+        <section class="${REPORT_STYLES.layout.sectionContainer}">
+          <h2 class="${REPORT_STYLES.typography.sectionTitle}">Recommendations</h2>
+          
+          <div class="space-y-4">
+            ${prioritizedRecs.length > 0
+              ? prioritizedRecs.map(rec => {
+                const recData = safeObject(rec)
+                return `
+                  <div class="${REPORT_STYLES.cards.recommendation}">
+                    <div class="flex items-start justify-between mb-2">
+                      <h3 class="text-base font-semibold text-gray-900">${safeString(recData.category) || 'General'}</h3>
+                      <span class="${getPriorityBadgeClasses(safeString(recData.priority) || 'LOW')}">
+                        ${safeString(recData.priority) || 'LOW'}
                       </span>
                     </div>
                     
-                    <div class="ai-analysis-content">
-                      <strong>Finding:</strong> ${analysis.finding || 'N/A'}
-                    </div>
+                    <p class="text-sm text-gray-700 mb-2">
+                      <strong>Finding:</strong> ${safeString(recData.finding) || 'No finding details'}
+                    </p>
                     
-                    <div class="ai-analysis-content">
-                      <strong>Business Impact:</strong> ${analysis.business_impact || 'N/A'}
-                    </div>
+                    <p class="text-sm text-gray-700 mb-2">
+                      <strong>Recommendation:</strong> ${safeString(recData.recommendation) || 'No recommendation details'}
+                    </p>
                     
-                    <div class="ai-analysis-content">
-                      <strong>Recommended Action:</strong> ${analysis.recommended_action || 'N/A'}
-                    </div>
-                    
-                    <div class="ai-analysis-meta">
-                      <strong>Timeline:</strong> ${analysis.timeline || 'N/A'}
+                    <div class="flex items-center gap-4 text-xs text-gray-500">
+                      <span><strong>Effort:</strong> ${safeString(recData.estimated_effort) || 'Not specified'}</span>
+                      <span><strong>Timeline:</strong> ${safeString(recData.timeline) || 'Not specified'}</span>
                     </div>
                   </div>
-                `).join('')}
-              </div>
-            </section>
-          ` : ''}
+                `
+              }).join('')
+              : '<div class="text-gray-500 p-4">No recommendations available</div>'
+            }
+          </div>
+        </section>
+      `
+    }
 
-          <!-- Footer -->
-          <div class="footer">
+    // Generate complete CSS for PDF (same as before but ensuring it's complete)
+    const generatePDFCSS = () => `
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+      
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      
+      /* Base Tailwind-like utilities */
+      .min-h-screen { min-height: 100vh; }
+      .bg-white { background-color: #ffffff; }
+      .max-w-4xl { max-width: 56rem; }
+      .mx-auto { margin-left: auto; margin-right: auto; }
+      .p-8 { padding: 2rem; }
+      .p-6 { padding: 1.5rem; }
+      .p-4 { padding: 1rem; }
+      .p-3 { padding: 0.75rem; }
+      .mb-8 { margin-bottom: 2rem; }
+      .mb-6 { margin-bottom: 1.5rem; }
+      .mb-4 { margin-bottom: 1rem; }
+      .mb-3 { margin-bottom: 0.75rem; }
+      .mb-2 { margin-bottom: 0.5rem; }
+      .mb-1 { margin-bottom: 0.25rem; }
+      .mt-8 { margin-top: 2rem; }
+      .mt-6 { margin-top: 1.5rem; }
+      .mr-2 { margin-right: 0.5rem; }
+      .mr-3 { margin-right: 0.75rem; }
+      .ml-2 { margin-left: 0.5rem; }
+      .ml-4 { margin-left: 1rem; }
+      
+      /* Typography */
+      .text-3xl { font-size: 1.875rem; }
+      .text-2xl { font-size: 1.5rem; }
+      .text-xl { font-size: 1.25rem; }
+      .text-lg { font-size: 1.125rem; }
+      .text-base { font-size: 1rem; }
+      .text-sm { font-size: 0.875rem; }
+      .text-xs { font-size: 0.75rem; }
+      .font-bold { font-weight: 700; }
+      .font-semibold { font-weight: 600; }
+      .font-medium { font-weight: 500; }
+      .font-mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      
+      /* Colors */
+      .text-gray-900 { color: #111827; }
+      .text-gray-700 { color: #374151; }
+      .text-gray-600 { color: #4b5563; }
+      .text-gray-500 { color: #6b7280; }
+      .bg-gray-50 { background-color: #f9fafb; }
+      .border-gray-200 { border-color: #e5e7eb; }
+      .border-t { border-top-width: 1px; }
+      .border { border-width: 1px; }
+      .rounded-lg { border-radius: 0.5rem; }
+      .rounded { border-radius: 0.25rem; }
+      .rounded-full { border-radius: 9999px; }
+      
+      /* Layout */
+      .text-center { text-align: center; }
+      .text-left { text-align: left; }
+      .text-right { text-align: right; }
+      .flex { display: flex; }
+      .items-center { align-items: center; }
+      .items-start { align-items: flex-start; }
+      .justify-center { justify-content: center; }
+      .justify-between { justify-content: space-between; }
+      .gap-6 { gap: 1.5rem; }
+      .gap-4 { gap: 1rem; }
+      .gap-2 { gap: 0.5rem; }
+      .space-y-2 > * + * { margin-top: 0.5rem; }
+      .space-y-3 > * + * { margin-top: 0.75rem; }
+      .space-y-4 > * + * { margin-top: 1rem; }
+      
+      /* Grid */
+      .grid { display: grid; }
+      .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+      .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      
+      /* Badges */
+      .inline-flex { display: inline-flex; }
+      .px-2-5 { padding-left: 0.625rem; padding-right: 0.625rem; }
+      .py-0-5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+      
+      /* Severity colors */
+      .border-green-200 { border-color: #bbf7d0; }
+      .text-green-700 { color: #15803d; }
+      .bg-green-50 { background-color: #f0fdf4; }
+      .border-yellow-200 { border-color: #fde68a; }
+      .text-yellow-700 { color: #b45309; }
+      .bg-yellow-50 { background-color: #fffbeb; }
+      .border-red-200 { border-color: #fecaca; }
+      .text-red-700 { color: #b91c1c; }
+      .bg-red-50 { background-color: #fef2f2; }
+      .border-blue-200 { border-color: #bfdbfe; }
+      .text-blue-700 { color: #1d4ed8; }
+      .bg-blue-50 { background-color: #eff6ff; }
+      
+      /* Utility */
+      .w-2 { width: 0.5rem; }
+      .h-2 { height: 0.5rem; }
+      .h-4 { width: 1rem; }
+      .w-4 { height: 1rem; }
+      .h-5 { width: 1.25rem; }
+      .w-5 { height: 1.25rem; }
+      .flex-shrink-0 { flex-shrink: 0; }
+      .list-disc { list-style-type: disc; }
+      
+      /* Print styles */
+      @media print {
+        .print\\:p-6 { padding: 1.5rem !important; }
+        .print\\:mb-6 { margin-bottom: 1.5rem !important; }
+        .print\\:mt-6 { margin-top: 1.5rem !important; }
+        .print\\:text-2xl { font-size: 1.5rem !important; }
+        .print\\:text-xl { font-size: 1.25rem !important; }
+        .print\\:text-base { font-size: 1rem !important; }
+        .print\\:gap-4 { gap: 1rem !important; }
+        .print\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+        .print\\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+        .print\\:border { border: 1px solid #e5e7eb !important; }
+        .print\\:bg-white { background-color: white !important; }
+        .print\\:break-inside-avoid { page-break-inside: avoid !important; }
+      }
+    `
+
+    // Generate complete HTML with comprehensive error handling
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${safeString(extractedData.metadata?.report_title) || 'Security Report'} - PDF Export</title>
+        <style>
+          ${generatePDFCSS()}
+        </style>
+      </head>
+      <body class="min-h-screen bg-white">
+        <div class="max-w-4xl mx-auto p-8 print:p-6">
+          ${renderReportHeader()}
+          ${renderExecutiveSummary()}
+          <div class="border-t border-gray-200 mb-8 print:mb-6"></div>
+          ${renderNetworkAnalysis()}
+          <div class="border-t border-gray-200 mb-8 print:mb-6"></div>
+          ${renderSecurityFindings()}
+          <div class="border-t border-gray-200 mb-8 print:mb-6"></div>
+          ${renderDataSourcesConfiguration()}
+          ${extractedData.data_sources_and_configuration ? '<div class="border-t border-gray-200 mb-8 print:mb-6"></div>' : ''}
+          ${renderComplianceGovernance()}
+          ${extractedData.compliance_and_governance ? '<div class="border-t border-gray-200 mb-8 print:mb-6"></div>' : ''}
+          ${renderAIAnalysis()}
+          ${extractedData.ai_analysis && extractedData.ai_analysis.length > 0 ? '<div class="border-t border-gray-200 mb-8 print:mb-6"></div>' : ''}
+          ${renderRecommendations()}
+          
+          <div class="mt-12 pt-6 border-t border-gray-200 text-center text-sm text-gray-500 print:mt-8">
             <p>This report was automatically generated by LEVANT AI Security Platform</p>
-            <p>Report ID: ${reportId || 'N/A'}</p>
+            <p class="mt-1">Report ID: ${safeString(reportId) || 'Unknown'}</p>
           </div>
         </div>
       </body>
       </html>
     `
 
-    return NextResponse.json({ 
-      html,
-      success: true,
-      message: 'PDF HTML generated successfully' 
-    })
+    // Generate PDF using Puppeteer with comprehensive error handling
+    try {
+      let puppeteer
+      try {
+        puppeteer = require('puppeteer')
+      } catch (error) {
+        console.error('Puppeteer not available, returning HTML content')
+        return new NextResponse(htmlContent, {
+          headers: {
+            'Content-Type': 'text/html',
+          }
+        })
+      }
+
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+          '--no-first-run',
+          '--no-default-browser-check'
+        ]
+      })
+
+      const page = await browser.newPage()
+      
+      await page.setContent(htmlContent, {
+        waitUntil: ['domcontentloaded', 'networkidle0'],
+        timeout: 30000
+      })
+
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '0.5in',
+          right: '0.5in',
+          bottom: '0.5in',
+          left: '0.5in'
+        },
+        preferCSSPageSize: true
+      })
+
+      await browser.close()
+
+      console.log('PDF generated successfully with comprehensive error handling')
+
+      return new NextResponse(pdfBuffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="security-report-${safeString(reportId) || 'unknown'}.pdf"`
+        }
+      })
+
+    } catch (puppeteerError) {
+      console.error('Puppeteer PDF Generation Error:', puppeteerError)
+      
+      // Fallback: Return HTML content if PDF generation fails
+      console.log('Falling back to HTML content due to PDF generation failure')
+      return new NextResponse(htmlContent, {
+        headers: {
+          'Content-Type': 'text/html',
+          'Content-Disposition': `attachment; filename="security-report-${safeString(reportId) || 'unknown'}.html"`
+        }
+      })
+    }
 
   } catch (error) {
-    console.error('Error generating PDF:', error)
-    return NextResponse.json({ 
-      error: 'Failed to generate PDF',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    console.error('PDF Generation Error:', error)
+    return NextResponse.json(
+      { 
+        error: 'Failed to generate PDF', 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        fallback: 'Try downloading as JSON instead'
+      },
+      { status: 500 }
+    )
   }
 } 

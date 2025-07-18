@@ -3,7 +3,7 @@
     "report_title": "Network Traffic Analysis Report with Threat Detection (YAF/IPFIX Data)",
     "reporting_period": "2024-05-31T07:36:19.896000+00:00 to 2024-05-31T11:06:19.029000+00:00",
     "generated_by": "LEVANT AI Security Platform",
-    "generation_date": "2025-07-03T17:20:45.309109+00:00",
+    "generation_date": "2025-07-16T19:34:00.082246+00:00",
     "report_version": "3.0",
     "analysis_duration_hours": 3.5,
     "analysis_scope": "Normal network flows (excluding known malicious/honeypot traffic)",
@@ -40,7 +40,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -51,7 +51,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -62,7 +62,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -73,7 +73,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -84,7 +84,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -95,7 +95,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -106,7 +106,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -117,7 +117,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -128,7 +128,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -139,7 +139,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       }
@@ -152,7 +152,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -163,7 +163,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -174,7 +174,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -185,7 +185,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -196,7 +196,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -207,7 +207,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -218,7 +218,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -229,7 +229,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -240,7 +240,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       },
@@ -251,7 +251,7 @@
         "threat_intel": {
           "is_malicious": false,
           "threat_type": null,
-          "confidence": 0,
+          "confidence": 0.0,
           "sources": []
         }
       }

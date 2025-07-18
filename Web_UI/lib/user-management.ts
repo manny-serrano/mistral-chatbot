@@ -1,80 +1,67 @@
-interface DukeUser {
-  eppn: string // NetID (e.g., "jsmith@duke.edu")
-  affiliation: string // Role (e.g., "faculty@duke.edu", "student@duke.edu")
-  displayName: string
-  givenName: string
-  surname: string
-  mail: string
-  dukeID: string
-}
-
-interface UserProfile {
-  id: string
-  netId: string
-  email: string
-  firstName: string
-  lastName: string
-  displayName: string
-  role: 'faculty' | 'staff' | 'student' | 'other'
-  department?: string
-  lastLogin: Date
-  createdAt: Date
-  updatedAt: Date
-}
+// Import Neo4j service for database operations
+import neo4jService, { type DukeUser, type UserProfile } from './neo4j-service'
 
 export class UserManager {
   /**
    * Create or update user profile from Duke SSO attributes
    */
   static async createOrUpdateUser(dukeUser: DukeUser): Promise<UserProfile> {
-    const netId = dukeUser.eppn.split('@')[0] // Extract NetID from eppn
-    const role = this.parseRole(dukeUser.affiliation)
-    
-    const userProfile: UserProfile = {
-      id: `duke_${netId}`,
-      netId,
-      email: dukeUser.mail,
-      firstName: dukeUser.givenName,
-      lastName: dukeUser.surname,
-      displayName: dukeUser.displayName || `${dukeUser.givenName} ${dukeUser.surname}`,
-      role,
-      lastLogin: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date()
+    try {
+      // Use Neo4j service to create/update user
+      const userProfile = await neo4jService.createOrUpdateUser(dukeUser)
+      console.log('Created/updated user in Neo4j:', userProfile)
+      return userProfile
+    } catch (error) {
+      console.error('Failed to create/update user in Neo4j:', error)
+      
+      // Fallback: create profile without persisting to database
+      const netId = dukeUser.eppn.split('@')[0]
+      const role = this.parseRole(dukeUser.affiliation)
+      
+      return {
+        id: `duke_${netId}`,
+        netId,
+        email: dukeUser.mail,
+        firstName: dukeUser.givenName,
+        lastName: dukeUser.surname,
+        displayName: dukeUser.displayName || `${dukeUser.givenName} ${dukeUser.surname}`,
+        role,
+        dukeID: dukeUser.dukeID,
+        isActive: true,
+        lastLogin: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
     }
-    
-    // In a real application, you would save this to your database
-    // Example with Prisma/MongoDB/SQL:
-    /*
-    const existingUser = await db.user.findUnique({
-      where: { netId }
-    })
-    
-    if (existingUser) {
-      return await db.user.update({
-        where: { netId },
-        data: {
-          ...userProfile,
-          lastLogin: new Date(),
-          updatedAt: new Date()
-        }
-      })
-    } else {
-      return await db.user.create({
-        data: userProfile
-      })
+  }
+
+  /**
+   * Get user by NetID from Neo4j
+   */
+  static async getUserByNetId(netId: string): Promise<UserProfile | null> {
+    try {
+      return await neo4jService.getUserByNetId(netId)
+    } catch (error) {
+      console.error('Failed to get user from Neo4j:', error)
+      return null
     }
-    */
-    
-    // For now, return the profile (you'd implement database storage)
-    console.log('Creating/updating user:', userProfile)
-    return userProfile
+  }
+
+  /**
+   * Log user activity
+   */
+  static async logUserActivity(netId: string, action: string, metadata: any = {}): Promise<void> {
+    try {
+      await neo4jService.logUserActivity(netId, action, metadata)
+    } catch (error) {
+      console.error('Failed to log user activity:', error)
+    }
   }
   
   /**
    * Parse Duke affiliation to determine user role
    */
-  private static parseRole(affiliation: string): 'faculty' | 'staff' | 'student' | 'other' {
+  private static parseRole(affiliation: string): string {
     const affiliationLower = affiliation.toLowerCase()
     
     if (affiliationLower.includes('faculty')) return 'faculty'
@@ -98,15 +85,35 @@ export class UserManager {
   static getUserPermissions(userProfile: UserProfile): string[] {
     const permissions: string[] = ['view_dashboard']
     
+    // Add role-specific permissions
     switch (userProfile.role) {
       case 'faculty':
-        permissions.push('admin_access', 'manage_users', 'view_reports', 'export_data')
+        permissions.push(
+          'generate_reports',
+          'view_all_data',
+          'export_data',
+          'manage_settings',
+          'view_admin_panel',
+          'delete_reports'
+        )
         break
+      
       case 'staff':
-        permissions.push('admin_access', 'view_reports', 'manage_alerts')
+        permissions.push(
+          'generate_reports',
+          'view_limited_data',
+          'export_data'
+        )
         break
+      
       case 'student':
-        permissions.push('view_reports')
+        permissions.push(
+          'view_limited_data'
+        )
+        break
+      
+      default:
+        // 'other' role gets minimal permissions
         break
     }
     
@@ -114,20 +121,21 @@ export class UserManager {
   }
   
   /**
-   * Log user activity for audit purposes
+   * Validate user session data
    */
-  static async logUserActivity(netId: string, action: string, details?: any): Promise<void> {
-    const logEntry = {
-      netId,
-      action,
-      details,
-      timestamp: new Date(),
-      ip: 'unknown' // You'd get this from request headers
+  static validateSession(sessionData: any): UserProfile | null {
+    if (!sessionData || !sessionData.user) {
+      return null
     }
     
-    // In a real application, save to audit log
-    console.log('User activity:', logEntry)
+    // Check if session is expired
+    if (Date.now() > sessionData.expires) {
+      return null
+    }
+    
+    return sessionData.user
   }
 }
 
+// Re-export types for backward compatibility
 export type { DukeUser, UserProfile } 

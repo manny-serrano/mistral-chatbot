@@ -36,7 +36,7 @@ const REPORT_GENERATOR_SCRIPT = path.join(PROJECT_ROOT, "report_generator.py");
  */
 export async function POST(request: NextRequest) {
   try {
-    const { type = 'standard', force = false } = await request.json();
+    const { type = 'standard', duration_hours = 24 } = await request.json();
 
     // Validate report generator script availability
     if (!fs.existsSync(REPORT_GENERATOR_SCRIPT)) {
@@ -52,8 +52,18 @@ export async function POST(request: NextRequest) {
     const requestId = `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     try {
+      // Prepare command arguments for Python script
+      const pythonArgs = [REPORT_GENERATOR_SCRIPT];
+      
+      // For user-specific reports, add appropriate parameters
+      if (type === 'custom' || duration_hours !== 24) {
+        pythonArgs.push('--user', 'testuser', '--time-range', duration_hours.toString(), '--type', type);
+      }
+      
+      console.log(`Executing: python3 ${pythonArgs.join(' ')}`);
+      
       // Start report generation process in background
-      const reportProcess = spawn('python3', [REPORT_GENERATOR_SCRIPT], {
+      const reportProcess = spawn('python3', pythonArgs, {
         cwd: PROJECT_ROOT,
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe']
@@ -62,7 +72,37 @@ export async function POST(request: NextRequest) {
       // Log process initiation for monitoring/debugging
       console.log(`[${new Date().toISOString()}] Started report generation process ${reportProcess.pid} for request ${requestId}`);
 
-      // Detach process to run independently
+      // Add process monitoring for better error handling
+      let processOutput = '';
+      let processError = '';
+      
+      if (reportProcess.stdout) {
+        reportProcess.stdout.on('data', (data) => {
+          processOutput += data.toString();
+          console.log(`[${requestId}] STDOUT: ${data.toString().trim()}`);
+        });
+      }
+      
+      if (reportProcess.stderr) {
+        reportProcess.stderr.on('data', (data) => {
+          processError += data.toString();
+          console.log(`[${requestId}] STDERR: ${data.toString().trim()}`);
+        });
+      }
+      
+      reportProcess.on('exit', (code, signal) => {
+        console.log(`[${new Date().toISOString()}] Process ${reportProcess.pid} exited with code ${code}, signal ${signal}`);
+        if (code !== 0) {
+          console.error(`[${requestId}] Process failed with output:`, processOutput);
+          console.error(`[${requestId}] Process errors:`, processError);
+        }
+      });
+      
+      reportProcess.on('error', (error) => {
+        console.error(`[${new Date().toISOString()}] Process ${reportProcess.pid} error:`, error);
+      });
+
+      // Detach process to run independently (after setting up monitoring)
       reportProcess.unref();
 
       // Store process metadata (in production, use Redis/DB for persistence)
@@ -82,9 +122,11 @@ export async function POST(request: NextRequest) {
         message: 'Report generation started successfully',
         requestId,
         status: 'generating',
-        estimatedTime: '2-3 minutes',
+        estimatedTime: duration_hours > 24 ? '3-5 minutes' : '30-60 seconds',
         type,
-        pid: reportProcess.pid
+        duration_hours,
+        pid: reportProcess.pid,
+        command: `python3 ${pythonArgs.join(' ')}`
       });
 
     } catch (error) {
