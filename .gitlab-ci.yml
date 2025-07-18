@@ -5,9 +5,9 @@ stages:
 # Updated SSO Configuration:
 # - Official Duke attribute-map.xml (replaced custom version)
 # - Cleaned metadata files (removed duplicates: current_duke_metadata.xml, levantai-metadata.xml)
-# - Complete SP certificates (sp-signing-cert.pem, sp-signing-key.pem, sp-encrypt-cert.pem, sp-encrypt-key.pem)
-# - SSL certificates in ssl/ directory (levantai.colab.duke.edu.pem, levantai.colab.duke.edu.key)
-# - Duke IdP certificate (idp_signing.crt - renamed from idp_signing_fixed.crt)
+# - SP certificates created from SSL certificates (same content, different SAML usage)
+# - SSL certificates deployed from GitLab CI environment variables (not in repo for security)
+# - Duke IdP certificate (idp_signing.crt - tracked in Git)
 # - Official Duke metadata (duke-metadata-3-signed.xml)
 # - SP metadata for registration (duke_sp_metadata.xml)
 
@@ -77,8 +77,19 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
     - |
       echo "🔐 Deploying Updated SSO Configuration..."
-      echo "📋 Copying SSL certificates and keys..."
-      scp -o StrictHostKeyChecking=no -r ssl/ $VM_USER@$VM_HOST:/tmp/
+      echo "📋 Creating SSL certificates from environment variables..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /tmp/ssl"
+      echo "$SSL_CERT_BASE64" | base64 -d > /tmp/ssl_cert.pem
+      echo "$SSL_KEY_BASE64" | base64 -d > /tmp/ssl_key.pem
+      scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.pem
+      scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.key
+      echo "📋 Creating SP certificates from SSL certificates (same content, different usage)..."
+      # SP certificates are the same as SSL certificates but used for SAML operations
+      scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-signing-cert.pem
+      scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-signing-key.pem
+      scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-encrypt-cert.pem
+      scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-encrypt-key.pem
+      rm -f /tmp/ssl_cert.pem /tmp/ssl_key.pem
       echo "📋 Copying complete Shibboleth configuration files..."
       scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
       scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/
@@ -90,10 +101,14 @@ deploy:
         ls -la /tmp/shibboleth-config/idp_signing.crt && echo '✅ Duke IdP certificate present' || echo '❌ Duke IdP certificate missing'
         echo 'Verifying official Duke attribute map:'
         ls -la /tmp/shibboleth-config/attribute-map.xml && echo '✅ Official Duke attribute map present' || echo '❌ Attribute map missing'
-        echo 'Verifying SP certificates:'
+        echo 'Verifying SP certificates (created from SSL certificates):'
         ls -la /tmp/shibboleth-config/sp-*.pem && echo '✅ All SP certificates present' || echo '❌ SP certificates missing'
-        echo 'Verifying SSL certificates:'
+        echo 'Verifying SP certificates match SSL certificates:'
+        diff /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-signing-cert.pem && echo '✅ SP signing cert matches SSL cert' || echo '⚠️ SP signing cert differs from SSL cert'
+        echo 'Verifying SSL certificates (deployed from environment variables):'
         ls -la /tmp/ssl/levantai.colab.duke.edu.* && echo '✅ SSL certificates present' || echo '❌ SSL certificates missing'
+        echo 'Verifying SSL certificate is valid for domain:'
+        openssl x509 -in /tmp/ssl/levantai.colab.duke.edu.pem -text -noout | grep -q 'levantai.colab.duke.edu' && echo '✅ SSL certificate valid for domain' || echo '❌ SSL certificate domain mismatch'
         echo 'Verifying official Duke metadata:'
         ls -la /tmp/shibboleth-config/duke-metadata-3-signed.xml && echo '✅ Official Duke metadata present' || echo '❌ Duke metadata missing'
         echo 'Verifying SP metadata for registration:'
@@ -115,7 +130,7 @@ deploy:
         echo 'Verifying SP certificate configuration...'
         ls -la /tmp/shibboleth-config/sp-*.pem | wc -l | grep -q '^4$' && echo '✅ All 4 SP certificates present' || echo '❌ Missing SP certificates'
         echo 'Verifying SSL certificate configuration...'
-        openssl x509 -in /tmp/ssl/levantai.colab.duke.edu.pem -text -noout | grep -q 'levantai.colab.duke.edu' && echo '✅ SSL certificate valid for domain' || echo '❌ SSL certificate domain mismatch'
+        ls -la /tmp/ssl/levantai.colab.duke.edu.* | wc -l | grep -q '^2$' && echo '✅ SSL certificate and key present' || echo '❌ Missing SSL certificate or key'
       "
       echo "⚙️ Running updated SSO configuration deployment..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /tmp && timeout 180s sudo /tmp/deploy-sso-config.sh || echo 'SSO deployment completed with timeout'"
