@@ -6,25 +6,6 @@
 
     <OutOfProcess tranLogFormat="%u|%s|%IDP|%i|%ac|%t|%attr|%n|%b|%E|%S|%SS|%L|%UA|%a" />
 
-    <MetadataProvider type="XML" validate="true" uri="https://shib.oit.duke.edu/duke-metadata-3-signed.xml"
-                          backingFilePath="/var/cache/shibboleth/duke-metadata-3-signed.xml"
-                          reloadInterval="3600" 
-                          maxRefreshDelay="14400">
-            <!-- Signature verification disabled due to Duke's metadata signature issues -->
-            <!-- <MetadataFilter type="Signature" certificate="idp_signing.crt"/> -->
-            
-            <!-- Whitelist filter for Duke entities only -->
-            <MetadataFilter type="Whitelist">
-                <Include>https://shib.oit.duke.edu/shibboleth-idp</Include>
-            </MetadataFilter>
-            
-            <!-- Require valid metadata with extended validity period (20 years) -->
-            <MetadataFilter type="RequireValidUntil" maxValidityInterval="630720000"/>
-        </MetadataProvider>n:mace:shibboleth:3.0:native:sp:config"
-    xmlns:conf="urn:mace:shibboleth:3.0:native:sp:config"
-    xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
-    clockSkew="180">
-
     <!-- The ApplicationDefaults element is where most of Shibboleth's SAML bits are defined. -->
     <ApplicationDefaults entityID="https://levantai.colab.duke.edu"
                          REMOTE_USER="eppn"
@@ -102,4 +83,4 @@
     <!-- Low-level configuration about protocols and bindings available for use. -->
     <ProtocolProvider type="XML" validate="true" path="protocols.xml"/>
 
-</SPConfig> 
+</SPConfig>

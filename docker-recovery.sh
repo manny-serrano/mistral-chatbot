@@ -1,0 +1,132 @@
+#!/bin/bash
+
+echo "🐳 Docker Container Recovery Script"
+echo "================================="
+
+# Function to check if a service is healthy
+check_service_health() {
+    local service=$1
+    local port=$2
+    local max_attempts=30
+    local attempt=1
+    
+    echo "🔍 Checking $service health on port $port..."
+    
+    while [ $attempt -le $max_attempts ]; do
+        if curl -s -f "http://localhost:$port" >/dev/null 2>&1; then
+            echo "✅ $service is healthy"
+            return 0
+        fi
+        echo "⏳ Attempt $attempt/$max_attempts - waiting for $service..."
+        sleep 10
+        ((attempt++))
+    done
+    
+    echo "❌ $service failed to become healthy after $max_attempts attempts"
+    return 1
+}
+
+# Function to restart services in proper order
+restart_services_sequentially() {
+    echo "🔄 Restarting services in proper order..."
+    
+    # Stop all services first
+    echo "🛑 Stopping all services..."
+    docker-compose down --remove-orphans
+    
+    # Clean up any dangling resources
+    echo "🧹 Cleaning up dangling resources..."
+    docker system prune -f >/dev/null 2>&1
+    
+    # Start infrastructure services first
+    echo "🚀 Starting infrastructure services..."
+    docker-compose up -d etcd minio neo4j
+    sleep 30
+    
+    # Start Milvus (depends on etcd and minio)
+    echo "🚀 Starting Milvus..."
+    docker-compose up -d milvus
+    sleep 30
+    
+    # Start application services
+    echo "🚀 Starting application services..."
+    docker-compose up -d mistral-app
+    sleep 30
+    
+    # Start frontend last
+    echo "🚀 Starting frontend..."
+    docker-compose up -d frontend
+    sleep 15
+    
+    echo "✅ All services started"
+}
+
+# Function to check overall system health
+check_system_health() {
+    echo "🏥 Performing system health check..."
+    
+    # Check container status
+    echo "📊 Container Status:"
+    docker-compose ps
+    
+    # Check critical services
+    local services_ok=true
+    
+    # Check if Neo4j is accessible
+    if ! check_service_health "Neo4j" "7474"; then
+        services_ok=false
+    fi
+    
+    # Check if MinIO is accessible  
+    if ! check_service_health "MinIO" "9001"; then
+        services_ok=false
+    fi
+    
+    # Check if main application is accessible
+    if ! check_service_health "Mistral App" "8000"; then
+        services_ok=false
+    fi
+    
+    # Check if frontend is accessible
+    if ! check_service_health "Frontend" "3000"; then
+        services_ok=false
+    fi
+    
+    if $services_ok; then
+        echo "✅ All critical services are healthy"
+        return 0
+    else
+        echo "❌ Some services are not healthy"
+        return 1
+    fi
+}
+
+# Main execution
+echo "📋 Starting Docker recovery process..."
+
+# Check current status
+echo "📊 Current container status:"
+docker-compose ps
+
+# Restart services
+restart_services_sequentially
+
+# Wait for startup
+echo "⏳ Waiting for services to fully initialize..."
+sleep 60
+
+# Check health
+if check_system_health; then
+    echo "🎉 Docker recovery completed successfully!"
+    echo "🌐 Services should be accessible at:"
+    echo "   - Frontend: http://localhost:3000"
+    echo "   - API: http://localhost:8000"
+    echo "   - Neo4j Browser: http://localhost:7474"
+    echo "   - MinIO Console: http://localhost:9001"
+    exit 0
+else
+    echo "⚠️ Docker recovery completed with some issues"
+    echo "📋 Check individual service logs:"
+    echo "   docker-compose logs <service_name>"
+    exit 1
+fi
