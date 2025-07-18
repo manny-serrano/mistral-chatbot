@@ -46,6 +46,7 @@
     "ai": "latest",
     "aria-hidden": "^1.2.6",
     "autoprefixer": "^10.4.20",
+    "axios": "^1.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
