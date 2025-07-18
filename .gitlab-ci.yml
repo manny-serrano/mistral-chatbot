@@ -93,7 +93,33 @@ deploy:
         "
         echo "✅ Pre-built Docker image transferred and loaded"
       else
-        echo "⚠️ No pre-built image found, will build on VM as fallback"
+        echo "⚠️ No pre-built image found, preparing for VM build..."
+        echo "🧹 Running comprehensive cleanup before Docker build..."
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+          if [ -f /home/$VM_USER/scripts/pre-docker-cleanup.sh ]; then
+            echo 'Using comprehensive pre-Docker cleanup script...'
+            cd /home/$VM_USER && timeout 300s /home/$VM_USER/scripts/pre-docker-cleanup.sh || echo 'Pre-Docker cleanup completed'
+          else
+            echo 'Fallback to manual cleanup...'
+            echo 'Stopping all containers...'
+            docker stop \$(docker ps -aq) 2>/dev/null || true
+            echo 'Removing all containers...'
+            docker rm \$(docker ps -aq) 2>/dev/null || true
+            echo 'Pruning system (images, networks, volumes)...'
+            docker system prune -af --volumes 2>/dev/null || true
+            echo 'Pruning build cache...'
+            docker builder prune -af 2>/dev/null || true
+            echo 'Cleaning apt cache...'
+            apt-get clean 2>/dev/null || true
+            echo 'Cleaning journal logs...'
+            journalctl --vacuum-size=100M 2>/dev/null || true
+            echo 'Cleaning temporary files...'
+            rm -rf /tmp/* 2>/dev/null || true
+            echo 'Space after cleanup:'
+            df -h / | tail -1
+          fi
+        "
+        echo "✅ Space cleaned up for Docker build"
       fi
     - |
       echo "🌐 Testing VM network connectivity..."
@@ -119,7 +145,8 @@ deploy:
       echo "📦 Copying new improved scripts (if available)..."
       scp -o StrictHostKeyChecking=no docker-start-improved.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "docker-start-improved.sh not found - will use existing docker startup method"
       scp -o StrictHostKeyChecking=no fix-shibboleth-certs.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "fix-shibboleth-certs.sh not found - will use existing shibboleth configuration"
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-start-improved.sh /home/$VM_USER/scripts/fix-shibboleth-certs.sh 2>/dev/null || true"
+      scp -o StrictHostKeyChecking=no pre-docker-cleanup.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "pre-docker-cleanup.sh not found"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-start-improved.sh /home/$VM_USER/scripts/fix-shibboleth-certs.sh /home/$VM_USER/scripts/pre-docker-cleanup.sh 2>/dev/null || true"
     - |
       echo "🌐 Running network stability check..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && timeout 60s /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
@@ -255,28 +282,7 @@ deploy:
       echo "🧹 Running selective cleanup and pre-build setup..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "timeout 180s bash /tmp/manage-storage.sh cleanup || echo 'Cleanup timed out, continuing...'"
     - |
-      echo "🐳 Aggressive cleanup to free disk space..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
-        echo 'Stopping all containers...'
-        docker stop \$(docker ps -aq) 2>/dev/null || true
-        echo 'Removing all containers...'
-        docker rm \$(docker ps -aq) 2>/dev/null || true
-        echo 'Pruning system (images, networks, volumes)...'
-        docker system prune -af --volumes 2>/dev/null || true
-        echo 'Pruning build cache...'
-        docker builder prune -af 2>/dev/null || true
-        echo 'Cleaning apt cache...'
-        apt-get clean 2>/dev/null || true
-        echo 'Cleaning journal logs...'
-        journalctl --vacuum-size=100M 2>/dev/null || true
-        echo 'Cleaning temporary files...'
-        rm -rf /tmp/* 2>/dev/null || true
-        echo 'Final storage status:'
-        df -h / | tail -1
-        echo '✅ Aggressive cleanup completed'
-      " || echo "Cleanup failed, continuing..."
-    - |
-      echo "📈 Post-optimization storage status:"
+      echo " Post-optimization storage status:"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "df -h / | tail -1 && df -h /srv/homedir | tail -1"
     - |
       echo "🚀 Running quick SSO fix and container restart..."
