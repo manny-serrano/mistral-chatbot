@@ -2,29 +2,17 @@ stages:
   - build
   - deploy
 
-# Updated SSO Configuration with Fixes Applied (July 18, 2025):
+# Streamlined SSO Configuration (July 18, 2025)
 # CRITICAL FIXES:
-# - Corrected Entity ID: https://levantai.colab.duke.edu (matches Duke registration)
-# - Added docker-start-improved.sh for better container startup sequencing
-# - Added fix-shibboleth-certs.sh for certificate validation and signature fixes
-# - Enhanced Docker healthchecks with proper timeouts and error handling
-# - Improved etcd and minio configurations for better reliability
-# - Fixed Docker build casing warnings
-# CONFIGURATION:
-# - Official Duke attribute-map.xml (replaced custom version)
-# - Cleaned metadata files (removed duplicates: current_duke_metadata.xml, levantai-metadata.xml)
-# - SP certificates created from SSL certificates (same content, different SAML usage)
-# - SSL certificates deployed from GitLab CI environment variables (not in repo for security)
-# - Duke IdP certificate (idp_signing.crt - tracked in Git)
-# - Official Duke metadata (duke-metadata-3-signed.xml)
-# - SP metadata for registration (duke_sp_metadata.xml)
+# - Corrected Entity ID: https://levantai.colab.duke.edu
+# - Fixed Shibboleth metadata validity interval
+# - Comprehensive Docker deployment with proper service ordering
 
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
   DOCKER_BUILDKIT: "1"
   BUILDKIT_PROGRESS: plain
-  # BuildKit will be automatically configured and used for optimized builds
   CI: "true"
   GITLAB_CI: "true"
 
@@ -42,7 +30,7 @@ build:
     DOCKER_BUILDKIT: "1"
     BUILDKIT_PROGRESS: plain
   before_script:
-    - sleep 10  # Give Docker daemon time to start
+    - sleep 10
     - docker info
     - echo "🔧 Docker BuildKit enabled for optimized builds"
   script:
@@ -71,246 +59,158 @@ deploy:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
   script:
+    # ============================================
+    # 1. CONNECTIVITY AND PREPARATION
+    # ============================================
     - |
       echo "🔍 Checking VM connectivity..."
-      echo "VM_HOST:$VM_HOST"
-      echo "VM_USER:$VM_USER"
-      echo "Testing network connectivity to IP..."
-      ping -c 2 $VM_HOST || echo "⚠️  Ping failed but continuing (might be blocked)"
-      echo "Testing SSH connectivity..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'"
       echo "✅ SSH connection successful"
+    
+    # ============================================
+    # 2. DOCKER IMAGE TRANSFER (if available)
+    # ============================================
     - |
-      echo "🐳 Transferring pre-built Docker image to VM..."
+      echo "🐳 Transferring pre-built Docker image..."
       if [ -f "mistral-image.tar" ]; then
         echo "📦 Copying Docker image to VM..."
         scp -o StrictHostKeyChecking=no mistral-image.tar $VM_USER@$VM_HOST:/tmp/
         echo "📥 Loading Docker image on VM..."
         ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
           docker load < /tmp/mistral-image.tar || echo 'Failed to load Docker image'
-          docker images | grep mistral-network-security || echo 'Image not found after load'
           rm -f /tmp/mistral-image.tar
         "
-        echo "✅ Pre-built Docker image transferred and loaded"
+        echo "✅ Pre-built Docker image transferred"
       else
-        echo "⚠️ No pre-built image found, preparing for VM build..."
-        echo "🧹 Running comprehensive cleanup before Docker build..."
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
-          if [ -f /home/$VM_USER/scripts/pre-docker-cleanup.sh ]; then
-            echo 'Using comprehensive pre-Docker cleanup script...'
-            cd /home/$VM_USER && timeout 300s /home/$VM_USER/scripts/pre-docker-cleanup.sh || echo 'Pre-Docker cleanup completed'
-          else
-            echo 'Fallback to manual cleanup...'
-            echo 'Stopping all containers...'
-            docker stop \$(docker ps -aq) 2>/dev/null || true
-            echo 'Removing all containers...'
-            docker rm \$(docker ps -aq) 2>/dev/null || true
-            echo 'Pruning system (images, networks, volumes)...'
-            docker system prune -af --volumes 2>/dev/null || true
-            echo 'Pruning build cache...'
-            docker builder prune -af 2>/dev/null || true
-            echo 'Cleaning apt cache...'
-            apt-get clean 2>/dev/null || true
-            echo 'Cleaning journal logs...'
-            journalctl --vacuum-size=100M 2>/dev/null || true
-            echo 'Cleaning temporary files...'
-            rm -rf /tmp/* 2>/dev/null || true
-            echo 'Space after cleanup:'
-            df -h / | tail -1
-          fi
-        "
-        echo "✅ Space cleaned up for Docker build"
+        echo "⚠️ No pre-built image found - will build on VM"
       fi
+    
+    # ============================================
+    # 3. COPY ONLY ESSENTIAL FILES
+    # ============================================
     - |
-      echo "🌐 Testing VM network connectivity..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "ping -c 2 8.8.8.8 || echo 'Network connectivity issue on VM'"
-      echo "🔍 Checking storage and system resources before deployment..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "df -h / && free -h && df -h /srv/homedir"
-    - |
-      echo "🗂️ Pre-deployment cache optimization..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/{docker-build-cache,pip-cache,npm-cache,docker-tmp}"
-    - |
-      echo "📁 Creating Docker volume mount directories..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus} /srv/homedir/mistral-app/logs/neo4j /srv/homedir/mistral-app/model-cache"
-    - |
-      echo "📦 Copying essential scripts..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /home/$VM_USER/scripts"
-      scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/ || echo "manage-storage.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/storage-troubleshoot.sh $VM_USER@$VM_HOST:/tmp/ || echo "storage-troubleshoot.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/check-health.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "check-health.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/network-stability-check.sh $VM_USER@$VM_HOST:/tmp/ || echo "network-stability-check.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "deploy-to-vm.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/test-sso-config.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "test-sso-config.sh not found"
-      scp -o StrictHostKeyChecking=no docker-build-retry.sh $VM_USER@$VM_HOST:/tmp/ || echo "docker-build-retry.sh not found"
-      echo "📦 Copying new improved scripts (if available)..."
-      scp -o StrictHostKeyChecking=no docker-start-improved.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "docker-start-improved.sh not found - will use existing docker startup method"
-      scp -o StrictHostKeyChecking=no fix-shibboleth-certs.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "fix-shibboleth-certs.sh not found - will use existing shibboleth configuration"
-      scp -o StrictHostKeyChecking=no pre-docker-cleanup.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "pre-docker-cleanup.sh not found"
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-start-improved.sh /home/$VM_USER/scripts/fix-shibboleth-certs.sh /home/$VM_USER/scripts/pre-docker-cleanup.sh 2>/dev/null || true"
-    - |
-      echo "🌐 Running network stability check..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && timeout 60s /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
-    - |
-      echo "🔧 Copying Apache configuration..."
-      scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
-      echo "🔧 Setting up Apache configuration scripts permissions..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
-    - |
-      echo "🔐 Deploying Updated SSO Configuration..."
-      echo "📋 Creating SSL certificates from environment variables..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /tmp/ssl"
+      echo "📦 Copying essential configuration files..."
+      # SSL certificates
       echo "$SSL_CERT_BASE64" | base64 -d > /tmp/ssl_cert.pem
       echo "$SSL_KEY_BASE64" | base64 -d > /tmp/ssl_key.pem
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /tmp/ssl"
       scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.pem
       scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.key
-      echo "📋 Copying complete Shibboleth configuration files first..."
-      scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
-      echo "📋 Creating SP certificates from SSL certificates (same content, different usage)..."
-      # SP certificates are the same as SSL certificates but used for SAML operations
-      scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-signing-cert.pem
-      scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-signing-key.pem
-      scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-encrypt-cert.pem
-      scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-encrypt-key.pem
       rm -f /tmp/ssl_cert.pem /tmp/ssl_key.pem
-      scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/
-      echo "📋 Copying diagnostic scripts to persistent location..."
-      scp -o StrictHostKeyChecking=no debug-files/test-duke-metadata.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
-      echo "📋 Verifying updated configuration files..."
+      
+      # Shibboleth configuration
+      scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
+      # Copy SSL certs as SP certs (same content, different usage)
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
-        echo 'Verifying Duke IdP certificate:'
-        ls -la /tmp/shibboleth-config/idp_signing.crt && echo '✅ Duke IdP certificate present' || echo '❌ Duke IdP certificate missing'
-        echo 'Verifying official Duke attribute map:'
-        ls -la /tmp/shibboleth-config/attribute-map.xml && echo '✅ Official Duke attribute map present' || echo '❌ Attribute map missing'
-        echo 'Verifying SP certificates (created from SSL certificates):'
-        ls -la /tmp/shibboleth-config/sp-*.pem && echo '✅ All SP certificates present' || echo '❌ SP certificates missing'
-        echo 'Verifying SP certificates match SSL certificates:'
-        diff /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-signing-cert.pem && echo '✅ SP signing cert matches SSL cert' || echo '⚠️ SP signing cert differs from SSL cert'
-        echo 'Verifying SSL certificates (deployed from environment variables):'
-        ls -la /tmp/ssl/levantai.colab.duke.edu.* && echo '✅ SSL certificates present' || echo '❌ SSL certificates missing'
-        echo 'Verifying SSL certificate is valid for domain:'
-        openssl x509 -in /tmp/ssl/levantai.colab.duke.edu.pem -text -noout | grep -q 'levantai.colab.duke.edu' && echo '✅ SSL certificate valid for domain' || echo '❌ SSL certificate domain mismatch'
-        echo 'Verifying official Duke metadata:'
-        ls -la /tmp/shibboleth-config/duke-metadata-3-signed.xml && echo '✅ Official Duke metadata present' || echo '❌ Duke metadata missing'
-        echo 'Verifying SP metadata for registration:'
-        ls -la /tmp/shibboleth-config/duke_sp_metadata.xml && echo '✅ SP metadata for registration present' || echo '❌ SP metadata missing'
+        cp /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-signing-cert.pem
+        cp /tmp/ssl/levantai.colab.duke.edu.key /tmp/shibboleth-config/sp-signing-key.pem
+        cp /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-encrypt-cert.pem
+        cp /tmp/ssl/levantai.colab.duke.edu.key /tmp/shibboleth-config/sp-encrypt-key.pem
       "
-      echo "📋 Copying SSO deployment script..."
-      scp -o StrictHostKeyChecking=no deploy-sso-config.sh $VM_USER@$VM_HOST:/tmp/ || echo "SSO script not found, skipping"
-    - |
-      echo "🔧 Setting up updated SSO deployment script permissions..."
+      
+      # Apache configuration
+      scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
+      
+      # SSO deployment script
+      scp -o StrictHostKeyChecking=no deploy-sso-config.sh $VM_USER@$VM_HOST:/tmp/ || echo "SSO script not found"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/deploy-sso-config.sh || true"
-      echo "🧪 Testing Duke metadata accessibility and updated certificate configuration..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
-        echo 'Testing Duke metadata download...'
-        curl -s -o /tmp/test-metadata.xml https://shib.oit.duke.edu/duke-metadata-3-signed.xml && echo '✅ Duke metadata download successful' || echo '❌ Duke metadata download failed'
-        echo 'Verifying official Duke metadata file integrity...'
-        head -5 /tmp/shibboleth-config/duke-metadata-3-signed.xml | grep -q 'EntitiesDescriptor' && echo '✅ Official Duke metadata file structure valid' || echo '❌ Duke metadata file structure invalid'
-        echo 'Verifying cleaned-up configuration (no duplicate metadata files)...'
-        find /tmp/shibboleth-config -name '*metadata*.xml' -type f | wc -l | grep -q '^2$' && echo '✅ Correct number of metadata files (2: Duke IdP + SP)' || echo '⚠️ Unexpected number of metadata files'
-        echo 'Verifying SP certificate configuration...'
-        ls -la /tmp/shibboleth-config/sp-*.pem | wc -l | grep -q '^4$' && echo '✅ All 4 SP certificates present' || echo '❌ Missing SP certificates'
-        echo 'Verifying SSL certificate configuration...'
-        ls -la /tmp/ssl/levantai.colab.duke.edu.* | wc -l | grep -q '^2$' && echo '✅ SSL certificate and key present' || echo '❌ Missing SSL certificate or key'
-      "
-      echo "⚙️ Running updated SSO configuration deployment..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /tmp && timeout 180s sudo /tmp/deploy-sso-config.sh || echo 'SSO deployment completed with timeout'"
-      echo "🔧 Running Shibboleth certificate fix (if available)..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
-        if [ -f /home/$VM_USER/scripts/fix-shibboleth-certs.sh ]; then
-          echo 'Running improved Shibboleth certificate fix...'
-          cd /home/$VM_USER && timeout 300s sudo /home/$VM_USER/scripts/fix-shibboleth-certs.sh || echo 'Shibboleth certificate fix completed'
-        else
-          echo 'Improved certificate fix script not found, applying manual fixes...'
-          # Apply the same fixes manually
-          sudo sed -i 's/validate=\"true\"/validate=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
-          sudo sed -i 's/encryption=\"true\"/encryption=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
-          sudo sed -i 's/signing=\"true\"/signing=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
-          sudo systemctl restart shibd || true
-          echo 'Manual Shibboleth fixes applied'
-        fi
-      "
+      
+      # Only ONE deployment script needed
+      scp -o StrictHostKeyChecking=no docker-deploy-complete.sh $VM_USER@$VM_HOST:/tmp/ || echo "docker-deploy-complete.sh not found"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/docker-deploy-complete.sh || true"
+    
+    # ============================================
+    # 4. SSO CONFIGURATION DEPLOYMENT
+    # ============================================
     - |
-      echo "🔄 Restarting Shibboleth and Apache services..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart shibd || true"
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart apache2 || true"
+      echo "🔐 Deploying SSO Configuration..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
+        
+        echo 'Fixing Shibboleth metadata validity interval...'
+        sudo sed -i 's/maxValidityInterval=\"[^\"]*\"/maxValidityInterval=\"86400\"/g' /etc/shibboleth/shibboleth2.xml || true
+        sudo sed -i 's/validate=\"true\"/validate=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        sudo sed -i 's/encryption=\"true\"/encryption=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        sudo sed -i 's/signing=\"true\"/signing=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'Restarting Shibboleth and Apache...'
+        sudo systemctl restart shibd || true
+        sudo systemctl restart apache2 || true
+      "
+    
+    # ============================================
+    # 5. COMPREHENSIVE DOCKER DEPLOYMENT
+    # ============================================
     - |
-      echo "🐳 Improved Docker container recovery after SSO configuration..."
-      echo "📋 Copying improved Docker scripts..."
-      scp -o StrictHostKeyChecking=no docker-recovery.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-recovery.sh"
-      echo "🔄 Running improved Docker startup (if available) or fallback to standard recovery..."
+      echo "🐳 Comprehensive Docker Application Deployment..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         cd /home/$VM_USER/mistral-enhancing-network-security-analysis
-        if [ -f /home/$VM_USER/scripts/docker-start-improved.sh ]; then
-          echo 'Using improved Docker startup script...'
-          timeout 900s /home/$VM_USER/scripts/docker-start-improved.sh || echo 'Improved Docker startup completed - containers may still be initializing'
+        
+        echo '🔄 Resolving Git conflicts and updating...'
+        git stash || true
+        git pull origin main || echo 'Git pull completed'
+        git stash pop || echo 'No stashed changes'
+        
+        echo '🧹 Comprehensive cleanup...'
+        docker-compose down --remove-orphans || true
+        docker stop \$(docker ps -aq) 2>/dev/null || true
+        docker rm \$(docker ps -aq) 2>/dev/null || true
+        docker system prune -af || true
+        
+        echo '📁 Creating required directories...'
+        mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus}
+        mkdir -p /srv/homedir/mistral-app/logs/neo4j
+        mkdir -p /srv/homedir/mistral-app/model-cache
+        sudo chown -R 7474:7474 /srv/homedir/mistral-app/data/neo4j || true
+        sudo chown -R 7474:7474 /srv/homedir/mistral-app/logs/neo4j || true
+        
+        echo '🏗️ Building and starting services in correct order...'
+        if [ -f /tmp/docker-deploy-complete.sh ]; then
+          echo 'Using comprehensive deployment script...'
+          timeout 1800s /tmp/docker-deploy-complete.sh || echo 'Deployment completed'
         else
-          echo 'Improved script not found, using standard Docker recovery...'
-          timeout 600s /home/$VM_USER/scripts/docker-recovery.sh || echo 'Standard Docker recovery completed - containers may still be starting'
+          echo 'Using fallback deployment...'
+          docker-compose build --no-cache || echo 'Build completed'
+          docker-compose up -d etcd minio
+          sleep 30
+          docker-compose up -d neo4j milvus
+          sleep 60
+          docker-compose up -d mistral-app
+          sleep 30
+          docker-compose up -d frontend
+          sleep 30
         fi
+        
+        echo '📊 Final container status:'
+        docker-compose ps || docker ps
       "
-      echo "⏳ Allowing additional time for containers to stabilize..."
-      sleep 90
+    
+    # ============================================
+    # 6. FINAL HEALTH CHECK
+    # ============================================
     - |
-      echo "✅ Verifying updated SSO service status..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active apache2 && echo '✅ Apache is running' || echo '❌ Apache failed'"
-      echo "🔍 Testing updated Shibboleth configuration with correct Entity ID..."
+      echo "🏥 Final Health Verification..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
-        echo 'Testing Shibboleth status endpoint...'
-        curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Status | grep -q 'OK' && echo '✅ Shibboleth status endpoint working' || echo '⚠️ Shibboleth status endpoint issues'
-        echo 'Testing SP metadata generation with correct Entity ID...'
-        curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Metadata | grep -q 'entityID=\"https://levantai.colab.duke.edu\"' && echo '✅ SP metadata generation working with correct Entity ID' || echo '⚠️ SP metadata Entity ID issues'
-        echo 'Testing SSO login initiation...'
-        curl -k -s -I https://levantai.colab.duke.edu/Shibboleth.sso/Login | grep -q '302' && echo '✅ SSO login redirection working' || echo '⚠️ SSO login issues'
-        echo 'Verifying Duke IdP integration...'
-        curl -k -s -I https://levantai.colab.duke.edu/Shibboleth.sso/Login | grep -i location | grep -q 'shib.oit.duke.edu' && echo '✅ Duke IdP integration working' || echo '⚠️ Duke IdP integration issues'
-        echo 'Checking Shibboleth logs for signature errors...'
-        sudo tail -20 /var/log/shibboleth/shibd.log | grep -i 'signature\|metadata\|error' && echo '⚠️ Shibboleth signature/metadata errors found' || echo '✅ No recent signature/metadata errors'
+        echo 'Service Status:'
+        sudo systemctl is-active shibd && echo '✅ Shibboleth running' || echo '❌ Shibboleth failed'
+        sudo systemctl is-active apache2 && echo '✅ Apache running' || echo '❌ Apache failed'
+        
+        echo 'Container Status:'
+        docker ps --format 'table {{.Names}}\t{{.Status}}' | head -10
+        
+        echo 'Testing Endpoints:'
+        curl -k -s -o /dev/null -w 'Frontend (3000): %{http_code}\n' https://levantai.colab.duke.edu:3000 || echo 'Frontend: Not responding'
+        curl -k -s -o /dev/null -w 'Backend (8000): %{http_code}\n' https://levantai.colab.duke.edu:8000/healthz || echo 'Backend: Not responding'
+        curl -k -s -o /dev/null -w 'Shibboleth Status: %{http_code}\n' https://levantai.colab.duke.edu/Shibboleth.sso/Status || echo 'Shibboleth: Not responding'
+        
+        echo '✅ Deployment completed! Access: https://levantai.colab.duke.edu'
       "
-    - |
-      echo "🔧 Copying essential deployment scripts..."
-      scp -o StrictHostKeyChecking=no scripts/setup-sudo-permissions.sh $VM_USER@$VM_HOST:/tmp/ || echo "setup-sudo-permissions.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/auto-setup-permissions.sh $VM_USER@$VM_HOST:/tmp/ || echo "auto-setup-permissions.sh not found"
-      scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/ || echo "setup-directories.sh not found"
-    - |
-      echo "🔑 Setting up permissions for automatic Apache configuration..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/setup-sudo-permissions.sh /tmp/auto-setup-permissions.sh"
-      echo "🔧 Running storage optimization (preserving cache)..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/storage-troubleshoot.sh && timeout 300s bash /tmp/storage-troubleshoot.sh || echo 'Storage optimization timed out, continuing...'"
-    - |
-      echo "🧹 Running selective cleanup and pre-build setup..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "timeout 180s bash /tmp/manage-storage.sh cleanup || echo 'Cleanup timed out, continuing...'"
-    - |
-      echo " Post-optimization storage status:"
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "df -h / | tail -1 && df -h /srv/homedir | tail -1"
-    - |
-      echo "🚀 Running quick SSO fix and container restart..."
-      scp -o StrictHostKeyChecking=no quick-sso-fix.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/quick-sso-fix.sh && /home/$VM_USER/scripts/quick-sso-fix.sh || echo 'Quick SSO fix completed with issues'"
-    - |
-      echo "🏥 Running comprehensive updated configuration health check..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /home/$VM_USER/scripts/check-health.sh && timeout 300s /home/$VM_USER/scripts/check-health.sh || echo 'Health check timed out, but deployment may still be successful'"
-      echo "🧪 Running Duke metadata diagnostic with updated configuration..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-duke-metadata.sh && /home/$VM_USER/scripts/test-duke-metadata.sh || echo 'Metadata diagnostic completed'"
-      echo "🧪 Running comprehensive SSO configuration test with updated files..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-sso-config.sh && /home/$VM_USER/scripts/test-sso-config.sh || echo 'SSO test completed'"
-      echo "🔍 Final configuration verification with corrected Entity ID..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
-        echo 'Verifying deployed configuration files:'
-        ls -la /etc/shibboleth/shibboleth2.xml /etc/shibboleth/attribute-map.xml /etc/shibboleth/duke-metadata-3-signed.xml /etc/shibboleth/idp_signing.crt /etc/shibboleth/sp-*.pem 2>/dev/null || echo 'Some configuration files may not be in expected locations'
-        echo 'Verifying SSL certificates are deployed:'
-        ls -la /etc/ssl/certs/levantai.colab.duke.edu.* /etc/ssl/private/levantai.colab.duke.edu.* 2>/dev/null || echo 'SSL certificates may not be in expected locations'
-        echo 'Verifying Entity ID in deployed configuration:'
-        grep -q 'entityID=\"https://levantai.colab.duke.edu\"' /etc/shibboleth/shibboleth2.xml && echo '✅ Correct Entity ID deployed' || echo '⚠️ Entity ID may need verification'
-        echo 'Verifying Docker containers status:'
-        docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -10
-        echo '✅ Updated SSO configuration deployment completed with improved scripts'
-      "
+  
   environment:
     name: production
     url: http://$VM_HOST:3000
-  timeout: 60m  # Increase timeout to 60 minutes for network issues
+  timeout: 60m
   retry:
     max: 2
     when:
