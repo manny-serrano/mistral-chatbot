@@ -95,7 +95,9 @@ deploy:
     - |
       echo "🐳 Restarting Docker containers after SSO configuration..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && docker-compose down || true"
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && docker-compose up -d || true"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && docker-compose up -d --no-build || true"
+      echo "⏳ Waiting for containers to start..."
+      sleep 30
     - |
       echo "✅ Verifying SSO service status..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"
@@ -143,8 +145,9 @@ deploy:
       echo "📈 Post-optimization storage status:"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "df -h / | tail -1 && df -h /srv/homedir | tail -1"
     - |
-      echo "🚀 Proceeding with cache-optimized deployment with network retry logic..."
-      ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=15 $VM_USER@$VM_HOST "CI='true' GITLAB_CI='true' LIGHTWEIGHT_MODE='true' OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' timeout 1800s bash /home/$VM_USER/scripts/deploy-to-vm.sh || echo 'Main deployment timed out after 30 minutes'"
+      echo "🚀 Running quick SSO fix and container restart..."
+      scp -o StrictHostKeyChecking=no quick-sso-fix.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/quick-sso-fix.sh && /home/$VM_USER/scripts/quick-sso-fix.sh || echo 'Quick SSO fix completed with issues'"
     - |
       echo "🏥 Running comprehensive health check..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /home/$VM_USER/scripts/check-health.sh && timeout 300s /home/$VM_USER/scripts/check-health.sh || echo 'Health check timed out, but deployment may still be successful'"
@@ -155,7 +158,7 @@ deploy:
   environment:
     name: production
     url: http://$VM_HOST:3000
-  timeout: 45m  # Increase timeout to 45 minutes for network issues
+  timeout: 60m  # Increase timeout to 60 minutes for network issues
   retry:
     max: 2
     when:

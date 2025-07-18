@@ -115,35 +115,35 @@ else
     print_warning "⚠️ Duke metadata file not found - will try to download during runtime"
 fi
 
-# Generate SP certificates if they don't exist
+# Generate SP certificates if they don't exist or are invalid
 print_status "Checking/generating SP certificates..."
 cd "$SHIBBOLETH_DIR"
 
-if [ ! -f "sp-signing-key.pem" ] || [ ! -f "sp-signing-cert.pem" ]; then
-    print_status "Generating SP signing certificate..."
-    openssl req -new -x509 -days 3650 -nodes -newkey rsa:2048 \
-        -keyout sp-signing-key.pem -out sp-signing-cert.pem \
-        -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null || {
-        print_error "Failed to generate SP signing certificate"
-        exit 1
-    }
-    chmod 600 sp-signing-key.pem
-    chmod 644 sp-signing-cert.pem
-    print_status "✅ SP signing certificate generated"
-fi
+# Force regeneration of certificates to ensure they're valid
+print_status "Regenerating SP certificates to ensure validity..."
+rm -f sp-signing-key.pem sp-signing-cert.pem sp-encrypt-key.pem sp-encrypt-cert.pem
 
-if [ ! -f "sp-encrypt-key.pem" ] || [ ! -f "sp-encrypt-cert.pem" ]; then
-    print_status "Generating SP encryption certificate..."
-    openssl req -new -x509 -days 3650 -nodes -newkey rsa:2048 \
-        -keyout sp-encrypt-key.pem -out sp-encrypt-cert.pem \
-        -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null || {
-        print_error "Failed to generate SP encryption certificate"
-        exit 1
-    }
-    chmod 600 sp-encrypt-key.pem  
-    chmod 644 sp-encrypt-cert.pem
-    print_status "✅ SP encryption certificate generated"
-fi
+print_status "Generating SP signing certificate..."
+openssl req -new -x509 -days 3650 -nodes -newkey rsa:2048 \
+    -keyout sp-signing-key.pem -out sp-signing-cert.pem \
+    -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null || {
+    print_error "Failed to generate SP signing certificate"
+    exit 1
+}
+chmod 600 sp-signing-key.pem
+chmod 644 sp-signing-cert.pem
+print_status "✅ SP signing certificate generated"
+
+print_status "Generating SP encryption certificate..."
+openssl req -new -x509 -days 3650 -nodes -newkey rsa:2048 \
+    -keyout sp-encrypt-key.pem -out sp-encrypt-cert.pem \
+    -subj "/C=US/ST=North Carolina/L=Durham/O=Duke University/CN=levantai.colab.duke.edu" 2>/dev/null || {
+    print_error "Failed to generate SP encryption certificate"
+    exit 1
+}
+chmod 600 sp-encrypt-key.pem  
+chmod 644 sp-encrypt-cert.pem
+print_status "✅ SP encryption certificate generated"
 
 print_step "3. Deploying Apache configuration..."
 

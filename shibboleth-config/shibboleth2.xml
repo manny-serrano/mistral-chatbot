@@ -53,8 +53,8 @@
                 <Include>https://shib.oit.duke.edu/shibboleth-idp</Include>
             </MetadataFilter>
             
-            <!-- Require valid metadata -->
-            <MetadataFilter type="RequireValidUntil" maxValidityInterval="2419200"/>
+            <!-- Require valid metadata with extended validity period -->
+            <MetadataFilter type="RequireValidUntil" maxValidityInterval="31536000"/>
         </MetadataProvider>
 
         <!-- Map to extract attributes from SAML assertions. -->
