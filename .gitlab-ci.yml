@@ -74,10 +74,10 @@ deploy:
       scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "deploy-to-vm.sh not found"
       scp -o StrictHostKeyChecking=no scripts/test-sso-config.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "test-sso-config.sh not found"
       scp -o StrictHostKeyChecking=no docker-build-retry.sh $VM_USER@$VM_HOST:/tmp/ || echo "docker-build-retry.sh not found"
-      echo "📦 Copying new improved scripts..."
-      scp -o StrictHostKeyChecking=no docker-start-improved.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
-      scp -o StrictHostKeyChecking=no fix-shibboleth-certs.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-start-improved.sh /home/$VM_USER/scripts/fix-shibboleth-certs.sh"
+      echo "📦 Copying new improved scripts (if available)..."
+      scp -o StrictHostKeyChecking=no docker-start-improved.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "docker-start-improved.sh not found - will use existing docker startup method"
+      scp -o StrictHostKeyChecking=no fix-shibboleth-certs.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "fix-shibboleth-certs.sh not found - will use existing shibboleth configuration"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-start-improved.sh /home/$VM_USER/scripts/fix-shibboleth-certs.sh 2>/dev/null || true"
     - |
       echo "🌐 Running network stability check..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && timeout 60s /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
@@ -145,8 +145,21 @@ deploy:
       "
       echo "⚙️ Running updated SSO configuration deployment..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /tmp && timeout 180s sudo /tmp/deploy-sso-config.sh || echo 'SSO deployment completed with timeout'"
-      echo "🔧 Running Shibboleth certificate fix with corrected Entity ID..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER && timeout 300s sudo /home/$VM_USER/scripts/fix-shibboleth-certs.sh || echo 'Shibboleth certificate fix completed'"
+      echo "🔧 Running Shibboleth certificate fix (if available)..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        if [ -f /home/$VM_USER/scripts/fix-shibboleth-certs.sh ]; then
+          echo 'Running improved Shibboleth certificate fix...'
+          cd /home/$VM_USER && timeout 300s sudo /home/$VM_USER/scripts/fix-shibboleth-certs.sh || echo 'Shibboleth certificate fix completed'
+        else
+          echo 'Improved certificate fix script not found, applying manual fixes...'
+          # Apply the same fixes manually
+          sudo sed -i 's/validate=\"true\"/validate=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+          sudo sed -i 's/encryption=\"true\"/encryption=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+          sudo sed -i 's/signing=\"true\"/signing=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+          sudo systemctl restart shibd || true
+          echo 'Manual Shibboleth fixes applied'
+        fi
+      "
     - |
       echo "🔄 Restarting Shibboleth and Apache services..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart shibd || true"
@@ -156,8 +169,17 @@ deploy:
       echo "📋 Copying improved Docker scripts..."
       scp -o StrictHostKeyChecking=no docker-recovery.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-recovery.sh"
-      echo "🔄 Running improved Docker startup with better error handling..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && timeout 900s /home/$VM_USER/scripts/docker-start-improved.sh || echo 'Improved Docker startup completed - containers may still be initializing'"
+      echo "🔄 Running improved Docker startup (if available) or fallback to standard recovery..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        cd /home/$VM_USER/mistral-enhancing-network-security-analysis
+        if [ -f /home/$VM_USER/scripts/docker-start-improved.sh ]; then
+          echo 'Using improved Docker startup script...'
+          timeout 900s /home/$VM_USER/scripts/docker-start-improved.sh || echo 'Improved Docker startup completed - containers may still be initializing'
+        else
+          echo 'Improved script not found, using standard Docker recovery...'
+          timeout 600s /home/$VM_USER/scripts/docker-recovery.sh || echo 'Standard Docker recovery completed - containers may still be starting'
+        fi
+      "
       echo "⏳ Allowing additional time for containers to stabilize..."
       sleep 90
     - |
