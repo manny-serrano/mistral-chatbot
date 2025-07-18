@@ -3,7 +3,10 @@ stages:
   - deploy
 
 # Updated SSO Configuration:
-# - Official Duke attribute-map.xml (replaced custom version)
+# - Official Duke attribute-map.x      scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-encrypt-key.pem
+      rm -f /tmp/ssl_cert.pem /tmp/ssl_key.pem
+      echo "📋 Copying debug files..."
+      scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/(replaced custom version)
 # - Cleaned metadata files (removed duplicates: current_duke_metadata.xml, levantai-metadata.xml)
 # - SP certificates created from SSL certificates (same content, different SAML usage)
 # - SSL certificates deployed from GitLab CI environment variables (not in repo for security)
@@ -83,6 +86,8 @@ deploy:
       echo "$SSL_KEY_BASE64" | base64 -d > /tmp/ssl_key.pem
       scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.pem
       scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.key
+      echo "📋 Copying complete Shibboleth configuration files first..."
+      scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
       echo "📋 Creating SP certificates from SSL certificates (same content, different usage)..."
       # SP certificates are the same as SSL certificates but used for SAML operations
       scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-signing-cert.pem
@@ -90,8 +95,6 @@ deploy:
       scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-encrypt-cert.pem
       scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-encrypt-key.pem
       rm -f /tmp/ssl_cert.pem /tmp/ssl_key.pem
-      echo "📋 Copying complete Shibboleth configuration files..."
-      scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
       scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/
       echo "📋 Copying diagnostic scripts to persistent location..."
       scp -o StrictHostKeyChecking=no debug-files/test-duke-metadata.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
