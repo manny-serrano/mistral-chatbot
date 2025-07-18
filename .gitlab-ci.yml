@@ -34,8 +34,8 @@ build:
     - docker info
     - echo "🔧 Docker BuildKit enabled for optimized builds"
   script:
-    - echo "🐳 Building Docker image..."
-    - docker build --progress=plain -t mistral-network-security:latest .
+    - echo "🐳 Building Docker image with simplified Dockerfile..."
+    - docker build --progress=plain --build-arg BUILDKIT_INLINE_CACHE=1 -f Dockerfile.simple -t mistral-network-security:latest .
     - echo "✅ Docker image built successfully"
     - docker images | grep mistral-network-security
     - echo "🏷️ Tagging image for deployment..."
@@ -153,37 +153,50 @@ deploy:
         git stash pop || echo 'No stashed changes'
         
         echo '🧹 Comprehensive cleanup...'
-        docker-compose down --remove-orphans || true
+        docker-compose down --remove-orphans --volumes || true
         docker stop \$(docker ps -aq) 2>/dev/null || true
         docker rm \$(docker ps -aq) 2>/dev/null || true
-        docker system prune -af || true
+        docker system prune -af --volumes || true
         
         echo '📁 Creating required directories...'
-        mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus}
-        mkdir -p /srv/homedir/mistral-app/logs/neo4j
-        mkdir -p /srv/homedir/mistral-app/model-cache
+        sudo mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus}
+        sudo mkdir -p /srv/homedir/mistral-app/logs/neo4j
+        sudo mkdir -p /srv/homedir/mistral-app/model-cache
+        mkdir -p ./data ./logs ./network-storage/model-cache
         sudo chown -R 7474:7474 /srv/homedir/mistral-app/data/neo4j || true
         sudo chown -R 7474:7474 /srv/homedir/mistral-app/logs/neo4j || true
+        sudo chown -R \$USER:\$USER /srv/homedir/mistral-app/model-cache || true
         
-        echo '🏗️ Building and starting services in correct order...'
-        if [ -f /tmp/docker-deploy-complete.sh ]; then
-          echo 'Using comprehensive deployment script...'
-          timeout 1800s /tmp/docker-deploy-complete.sh || echo 'Deployment completed'
-        else
-          echo 'Using fallback deployment...'
-          docker-compose build --no-cache || echo 'Build completed'
-          docker-compose up -d etcd minio
-          sleep 30
-          docker-compose up -d neo4j milvus
-          sleep 60
-          docker-compose up -d mistral-app
-          sleep 30
-          docker-compose up -d frontend
-          sleep 30
-        fi
+        echo '🏗️ Building and starting services in optimized order...'
+        # Use simplified Dockerfile for faster builds
+        export DOCKER_BUILDKIT=1
+        export COMPOSE_DOCKER_CLI_BUILD=1
+        
+        # Build images first
+        docker-compose build --no-cache mistral-app || echo 'Mistral app build completed'
+        docker-compose build --no-cache frontend || echo 'Frontend build completed'
+        
+        # Start infrastructure services first
+        echo 'Starting infrastructure services...'
+        docker-compose up -d etcd minio
+        sleep 20
+        
+        echo 'Starting database services...'
+        docker-compose up -d neo4j milvus
+        sleep 40
+        
+        echo 'Starting application services...'
+        docker-compose up -d mistral-app
+        sleep 30
+        
+        echo 'Starting frontend...'
+        docker-compose up -d frontend
+        sleep 20
         
         echo '📊 Final container status:'
-        docker-compose ps || docker ps
+        docker-compose ps
+        echo 'All containers:'
+        docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
       "
     
     # ============================================
