@@ -44,7 +44,7 @@ interface LocationData {
   alertCount?: number
   lastSeen?: string
   region?: string
-  timezone?: string
+  timezone?: string | { id?: string; utc?: string } | any
   isp?: string
   org?: string
   security?: {
