@@ -144,7 +144,9 @@ deploy:
       scp -o StrictHostKeyChecking=no docker-recovery.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-recovery.sh"
       echo "🔄 Running comprehensive Docker recovery..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && timeout 300s /home/$VM_USER/scripts/docker-recovery.sh || echo 'Docker recovery completed with timeout - containers may still be starting'"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && timeout 600s /home/$VM_USER/scripts/docker-recovery.sh || echo 'Docker recovery completed with extended timeout - containers may still be starting'"
+      echo "⏳ Allowing additional time for containers to stabilize..."
+      sleep 60
     - |
       echo "✅ Verifying updated SSO service status..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"

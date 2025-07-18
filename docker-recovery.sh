@@ -3,6 +3,28 @@
 echo "🐳 Docker Container Recovery Script"
 echo "================================="
 
+# Function to wait for container to be ready
+wait_for_container() {
+    local container_name=$1
+    local max_attempts=60
+    local attempt=1
+    
+    echo "⏳ Waiting for $container_name to be ready..."
+    
+    while [ $attempt -le $max_attempts ]; do
+        if docker-compose ps -q $container_name >/dev/null 2>&1 && docker-compose exec -T $container_name echo "ready" >/dev/null 2>&1; then
+            echo "✅ $container_name is ready"
+            return 0
+        fi
+        echo "⏳ Attempt $attempt/$max_attempts - waiting for $container_name..."
+        sleep 5
+        ((attempt++))
+    done
+    
+    echo "❌ $container_name failed to become ready after $max_attempts attempts"
+    return 1
+}
+
 # Function to check if a service is healthy
 check_service_health() {
     local service=$1
@@ -32,31 +54,40 @@ restart_services_sequentially() {
     
     # Stop all services first
     echo "🛑 Stopping all services..."
-    docker-compose down --remove-orphans
+    docker-compose down --remove-orphans --timeout 60
     
     # Clean up any dangling resources
     echo "🧹 Cleaning up dangling resources..."
     docker system prune -f >/dev/null 2>&1
     
-    # Start infrastructure services first
+    # Start infrastructure services first (no dependencies)
     echo "🚀 Starting infrastructure services..."
-    docker-compose up -d etcd minio neo4j
-    sleep 30
+    docker-compose up -d etcd minio neo4j --timeout 120
+    
+    # Wait for infrastructure to be ready
+    echo "⏳ Waiting for infrastructure services..."
+    sleep 45
+    wait_for_container "etcd" || echo "⚠️ etcd may not be fully ready"
+    wait_for_container "minio" || echo "⚠️ minio may not be fully ready"
+    wait_for_container "neo4j" || echo "⚠️ neo4j may not be fully ready"
     
     # Start Milvus (depends on etcd and minio)
     echo "🚀 Starting Milvus..."
-    docker-compose up -d milvus
-    sleep 30
+    docker-compose up -d milvus --timeout 120
+    sleep 45
+    wait_for_container "milvus" || echo "⚠️ milvus may not be fully ready"
     
     # Start application services
     echo "🚀 Starting application services..."
-    docker-compose up -d mistral-app
-    sleep 30
+    docker-compose up -d mistral-app --timeout 120
+    sleep 45
+    wait_for_container "mistral-app" || echo "⚠️ mistral-app may not be fully ready"
     
     # Start frontend last
     echo "🚀 Starting frontend..."
-    docker-compose up -d frontend
-    sleep 15
+    docker-compose up -d frontend --timeout 120
+    sleep 30
+    wait_for_container "frontend" || echo "⚠️ frontend may not be fully ready"
     
     echo "✅ All services started"
 }
