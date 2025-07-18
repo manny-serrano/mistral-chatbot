@@ -9,18 +9,18 @@
     <!-- The ApplicationDefaults element is where most of Shibboleth's SAML bits are defined. -->
     <ApplicationDefaults entityID="https://levantai.colab.duke.edu"
                          REMOTE_USER="eppn"
-                         encryption="true"
-                         signing="true"
+                         encryption="false"
+                         signing="false"
                          signingAlg="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
                          digestAlg="http://www.w3.org/2001/04/xmlenc#sha256">
 
         <!-- Controls session lifetimes, address checks, cookie handling, and the protocol handlers. -->
         <Sessions lifetime="28800" timeout="3600" relayState="ss:mem"
                   checkAddress="false" handlerSSL="true" cookieProps="https"
-                  redirectLimit="exact" redirectWhitelist="https://shib.oit.duke.edu/">
+                  redirectLimit="exact" redirectWhitelist="https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/">
 
-            <!-- Default SSO location -->
-            <SSO entityID="https://shib.oit.duke.edu/shibboleth-idp" discoveryProtocol="SAMLDS" discoveryURL="https://shib.oit.duke.edu/discovery">
+            <!-- Default SSO location - Points to Duke IdP with official URLs -->
+            <SSO entityID="https://shib.oit.duke.edu/shibboleth-idp">
                 SAML2 SAML1
             </SSO>
 
@@ -37,27 +37,28 @@
         </Sessions>
 
         <!-- Allows overriding of error template information/filenames. -->
-        <Errors supportContact="support@levantai.colab.duke.edu"
+        <Errors supportContact="admin@duke.edu"
                 helpLocation="/about.html"
                 styleSheet="/shibboleth-sp/main.css"/>
 
-        <!-- Duke University Metadata Provider with improved error handling -->
-        <MetadataProvider type="XML" validate="true"
+        <!-- Duke University Metadata Provider with official configuration -->
+        <MetadataProvider type="XML" validate="false"
                           url="https://shib.oit.duke.edu/duke-metadata-3-signed.xml"
-                          backingFilePath="duke-metadata-3-signed.xml" 
+                          backingFilePath="duke-metadata-3-signed.xml"
                           reloadInterval="7200"
                           maxRefreshDelay="14400"
                           ignoreTransport="true">
-            <!-- Relax signature verification temporarily for troubleshooting -->
-            <!-- MetadataFilter type="Signature" certificate="idp_signing.crt"/ -->
             
-            <!-- Whitelist filter for Duke entities only -->
+            <!-- Use Duke's signing certificate for metadata verification -->
+            <MetadataFilter type="Signature" certificate="idp_signing.crt"/>
+            
+            <!-- Whitelist filter for Duke IdP -->
             <MetadataFilter type="Whitelist">
                 <Include>https://shib.oit.duke.edu/shibboleth-idp</Include>
             </MetadataFilter>
             
             <!-- Require valid metadata with extended validity period -->
-            <MetadataFilter type="RequireValidUntil" maxValidityInterval="31536000"/>
+            <MetadataFilter type="RequireValidUntil" maxValidityInterval="86400"/>
         </MetadataProvider>
 
         <!-- Map to extract attributes from SAML assertions. -->

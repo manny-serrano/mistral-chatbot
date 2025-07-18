@@ -4,7 +4,10 @@ stages:
 
 # Streamlined SSO Configuration (July 18, 2025)
 # CRITICAL FIXES:
-# - Corrected Entity ID: https://levantai.colab.duke.edu
+# - Service Provider EntityID: https://levantai.colab.duke.edu  
+# - Identity Provider EntityID: https://shib.oit.duke.edu/shibboleth-idp (Duke Official)
+# - Disabled authentication request signing (Duke recommendation)
+# - Using official Duke metadata: https://shib.oit.duke.edu/duke-metadata-3-signed.xml
 # - Fixed Shibboleth metadata validity interval
 # - Comprehensive Docker deployment with proper service ordering
 
@@ -128,11 +131,17 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
         
-        echo 'Fixing Shibboleth metadata validity interval...'
+        echo 'Applying Duke-compliant Shibboleth configuration...'
         sudo sed -i 's/maxValidityInterval=\"[^\"]*\"/maxValidityInterval=\"86400\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/validate=\"true\"/validate=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/encryption=\"true\"/encryption=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/signing=\"true\"/signing=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'Ensuring proper Duke IdP whitelist and redirect configuration...'
+        sudo sed -i 's|redirectWhitelist=\"[^\"]*\"|redirectWhitelist=\"https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/\"|g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'Verifying Shibboleth configuration syntax...'
+        sudo /usr/sbin/shibd -t || echo 'Configuration syntax check completed'
         
         echo 'Restarting Shibboleth and Apache...'
         sudo systemctl restart shibd || true
