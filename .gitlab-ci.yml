@@ -3,10 +3,7 @@ stages:
   - deploy
 
 # Updated SSO Configuration:
-# - Official Duke attribute-map.x      scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/shibboleth-config/sp-encrypt-key.pem
-      rm -f /tmp/ssl_cert.pem /tmp/ssl_key.pem
-      echo "📋 Copying debug files..."
-      scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/(replaced custom version)
+# - Official Duke attribute-map.xml (replaced custom version)
 # - Cleaned metadata files (removed duplicates: current_duke_metadata.xml, levantai-metadata.xml)
 # - SP certificates created from SSL certificates (same content, different SAML usage)
 # - SSL certificates deployed from GitLab CI environment variables (not in repo for security)
