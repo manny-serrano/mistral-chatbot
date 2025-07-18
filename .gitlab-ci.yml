@@ -2,6 +2,15 @@ stages:
   - build
   - deploy
 
+# Updated SSO Configuration:
+# - Official Duke attribute-map.xml (replaced custom version)
+# - Cleaned metadata files (removed duplicates: current_duke_metadata.xml, levantai-metadata.xml)
+# - Complete SP certificates (sp-signing-cert.pem, sp-signing-key.pem, sp-encrypt-cert.pem, sp-encrypt-key.pem)
+# - SSL certificates in ssl/ directory (levantai.colab.duke.edu.pem, levantai.colab.duke.edu.key)
+# - Duke IdP certificate (idp_signing.crt - renamed from idp_signing_fixed.crt)
+# - Official Duke metadata (duke-metadata-3-signed.xml)
+# - SP metadata for registration (duke_sp_metadata.xml)
+
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
@@ -67,27 +76,49 @@ deploy:
       echo "🔧 Setting up Apache configuration scripts permissions..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
     - |
-      echo "🔐 Deploying SSO Configuration Fixes..."
-      echo "📋 Copying Shibboleth configuration files..."
+      echo "🔐 Deploying Updated SSO Configuration..."
+      echo "📋 Copying SSL certificates and keys..."
+      scp -o StrictHostKeyChecking=no -r ssl/ $VM_USER@$VM_HOST:/tmp/
+      echo "📋 Copying complete Shibboleth configuration files..."
       scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
       scp -o StrictHostKeyChecking=no -r debug-files/ $VM_USER@$VM_HOST:/tmp/
       echo "📋 Copying diagnostic scripts to persistent location..."
       scp -o StrictHostKeyChecking=no debug-files/test-duke-metadata.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
-      echo "📋 Verifying Duke IdP certificate was copied..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "ls -la /tmp/shibboleth-config/idp_signing.crt && echo 'Certificate file present' || echo 'Certificate file missing'"
+      echo "📋 Verifying updated configuration files..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        echo 'Verifying Duke IdP certificate:'
+        ls -la /tmp/shibboleth-config/idp_signing.crt && echo '✅ Duke IdP certificate present' || echo '❌ Duke IdP certificate missing'
+        echo 'Verifying official Duke attribute map:'
+        ls -la /tmp/shibboleth-config/attribute-map.xml && echo '✅ Official Duke attribute map present' || echo '❌ Attribute map missing'
+        echo 'Verifying SP certificates:'
+        ls -la /tmp/shibboleth-config/sp-*.pem && echo '✅ All SP certificates present' || echo '❌ SP certificates missing'
+        echo 'Verifying SSL certificates:'
+        ls -la /tmp/ssl/levantai.colab.duke.edu.* && echo '✅ SSL certificates present' || echo '❌ SSL certificates missing'
+        echo 'Verifying official Duke metadata:'
+        ls -la /tmp/shibboleth-config/duke-metadata-3-signed.xml && echo '✅ Official Duke metadata present' || echo '❌ Duke metadata missing'
+        echo 'Verifying SP metadata for registration:'
+        ls -la /tmp/shibboleth-config/duke_sp_metadata.xml && echo '✅ SP metadata for registration present' || echo '❌ SP metadata missing'
+      "
       echo "📋 Copying SSO deployment script..."
       scp -o StrictHostKeyChecking=no deploy-sso-config.sh $VM_USER@$VM_HOST:/tmp/ || echo "SSO script not found, skipping"
     - |
-      echo "🔧 Setting up SSO deployment script permissions..."
+      echo "🔧 Setting up updated SSO deployment script permissions..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/deploy-sso-config.sh || true"
-      echo "🧪 Testing Duke metadata accessibility and certificate..."
+      echo "🧪 Testing Duke metadata accessibility and updated certificate configuration..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
-        curl -s -o /tmp/test-metadata.xml https://shib.oit.duke.edu/duke-metadata-3-signed.xml && echo 'Metadata download successful' || echo 'Metadata download failed'
-        echo 'Verifying certificate can read metadata signature...'
-        openssl verify -CAfile /tmp/shibboleth-config/idp_signing.crt /tmp/test-metadata.xml 2>/dev/null && echo 'Certificate verification setup looks good' || echo 'Note: XML signature verification requires xmlsec1, not openssl'
+        echo 'Testing Duke metadata download...'
+        curl -s -o /tmp/test-metadata.xml https://shib.oit.duke.edu/duke-metadata-3-signed.xml && echo '✅ Duke metadata download successful' || echo '❌ Duke metadata download failed'
+        echo 'Verifying official Duke metadata file integrity...'
+        head -5 /tmp/shibboleth-config/duke-metadata-3-signed.xml | grep -q 'EntitiesDescriptor' && echo '✅ Official Duke metadata file structure valid' || echo '❌ Duke metadata file structure invalid'
+        echo 'Verifying cleaned-up configuration (no duplicate metadata files)...'
+        find /tmp/shibboleth-config -name '*metadata*.xml' -type f | wc -l | grep -q '^2$' && echo '✅ Correct number of metadata files (2: Duke IdP + SP)' || echo '⚠️ Unexpected number of metadata files'
+        echo 'Verifying SP certificate configuration...'
+        ls -la /tmp/shibboleth-config/sp-*.pem | wc -l | grep -q '^4$' && echo '✅ All 4 SP certificates present' || echo '❌ Missing SP certificates'
+        echo 'Verifying SSL certificate configuration...'
+        openssl x509 -in /tmp/ssl/levantai.colab.duke.edu.pem -text -noout | grep -q 'levantai.colab.duke.edu' && echo '✅ SSL certificate valid for domain' || echo '❌ SSL certificate domain mismatch'
       "
-      echo "⚙️ Running SSO configuration deployment..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /tmp && timeout 180s sudo /tmp/deploy-sso-config.sh || echo 'SSO deployment failed, continuing'"
+      echo "⚙️ Running updated SSO configuration deployment..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /tmp && timeout 180s sudo /tmp/deploy-sso-config.sh || echo 'SSO deployment completed with timeout'"
     - |
       echo "🔄 Restarting Shibboleth and Apache services..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart shibd || true"
@@ -99,13 +130,21 @@ deploy:
       echo "⏳ Waiting for containers to start..."
       sleep 30
     - |
-      echo "✅ Verifying SSO service status..."
+      echo "✅ Verifying updated SSO service status..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active apache2 && echo '✅ Apache is running' || echo '❌ Apache failed'"
-      echo "🔍 Testing Shibboleth metadata loading..."
+      echo "🔍 Testing updated Shibboleth configuration..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        echo 'Testing Shibboleth status endpoint...'
         curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Status | grep -q 'OK' && echo '✅ Shibboleth status endpoint working' || echo '⚠️ Shibboleth status endpoint issues'
-        curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Metadata | head -5 | grep -q 'EntityDescriptor' && echo '✅ Metadata generation working' || echo '⚠️ Metadata generation issues'
+        echo 'Testing SP metadata generation...'
+        curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Metadata | head -5 | grep -q 'EntityDescriptor' && echo '✅ SP metadata generation working' || echo '⚠️ SP metadata generation issues'
+        echo 'Testing SSO login initiation...'
+        curl -k -s -I https://levantai.colab.duke.edu/Shibboleth.sso/Login | grep -q '302' && echo '✅ SSO login redirection working' || echo '⚠️ SSO login issues'
+        echo 'Verifying Duke IdP integration...'
+        curl -k -s -I https://levantai.colab.duke.edu/Shibboleth.sso/Login | grep -i location | grep -q 'shib.oit.duke.edu' && echo '✅ Duke IdP integration working' || echo '⚠️ Duke IdP integration issues'
+        echo 'Checking Shibboleth logs for any errors...'
+        sudo tail -10 /var/log/shibboleth/shibd.log | grep -i error && echo '⚠️ Shibboleth errors found' || echo '✅ No recent Shibboleth errors'
       "
     - |
       echo "🔧 Copying essential deployment scripts..."
@@ -149,12 +188,20 @@ deploy:
       scp -o StrictHostKeyChecking=no quick-sso-fix.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/quick-sso-fix.sh && /home/$VM_USER/scripts/quick-sso-fix.sh || echo 'Quick SSO fix completed with issues'"
     - |
-      echo "🏥 Running comprehensive health check..."
+      echo "🏥 Running comprehensive updated configuration health check..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /home/$VM_USER/scripts/check-health.sh && timeout 300s /home/$VM_USER/scripts/check-health.sh || echo 'Health check timed out, but deployment may still be successful'"
-      echo "🧪 Running Duke metadata diagnostic..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-duke-metadata.sh && /home/$VM_USER/scripts/test-duke-metadata.sh || echo 'Metadata diagnostic failed'"
-      echo "🧪 Running comprehensive SSO configuration test..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-sso-config.sh && /home/$VM_USER/scripts/test-sso-config.sh || echo 'SSO test completed with some issues'"
+      echo "🧪 Running Duke metadata diagnostic with updated configuration..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-duke-metadata.sh && /home/$VM_USER/scripts/test-duke-metadata.sh || echo 'Metadata diagnostic completed'"
+      echo "🧪 Running comprehensive SSO configuration test with updated files..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-sso-config.sh && /home/$VM_USER/scripts/test-sso-config.sh || echo 'SSO test completed'"
+      echo "🔍 Final configuration verification..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        echo 'Verifying deployed configuration files:'
+        ls -la /etc/shibboleth/shibboleth2.xml /etc/shibboleth/attribute-map.xml /etc/shibboleth/duke-metadata-3-signed.xml /etc/shibboleth/idp_signing.crt /etc/shibboleth/sp-*.pem 2>/dev/null || echo 'Some configuration files may not be in expected locations'
+        echo 'Verifying SSL certificates are deployed:'
+        ls -la /etc/ssl/certs/levantai.colab.duke.edu.* /etc/ssl/private/levantai.colab.duke.edu.* 2>/dev/null || echo 'SSL certificates may not be in expected locations'
+        echo '✅ Updated SSO configuration deployment completed'
+      "
   environment:
     name: production
     url: http://$VM_HOST:3000

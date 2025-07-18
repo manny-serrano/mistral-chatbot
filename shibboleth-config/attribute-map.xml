@@ -1,141 +1,61 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <Attributes xmlns="urn:mace:shibboleth:2.0:attribute-map" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
-    <!-- 
-    Duke University Attribute Mappings
-    Based on Duke's official Shibboleth attribute documentation
-    Uses proper ScopedAttributeDecoder for scoped attributes like eppn
-    Reference: https://oit.duke.edu/help/articles/kb0010893
-    -->
-    
-    <!-- eduPersonPrincipalName - Duke NetID (scoped: netid@duke.edu) -->
+    <!-- First some useful eduPerson attributes that many sites might use. -->
     <Attribute name="urn:mace:dir:attribute-def:eduPersonPrincipalName" id="eppn">
-        <AttributeDecoder xsi:type="ScopedAttributeDecoder" caseSensitive="false"/>
+        <AttributeDecoder xsi:type="ScopedAttributeDecoder"/>
     </Attribute>
-    
-    <!-- Alternative EPPN encoding (OID format) - OFFICIAL DUKE FORMAT -->
+
     <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.6" id="eppn">
-        <AttributeDecoder xsi:type="ScopedAttributeDecoder" caseSensitive="false"/>
+        <AttributeDecoder xsi:type="ScopedAttributeDecoder"/>
     </Attribute>
-    
-    <!-- eduPersonScopedAffiliation - User's role at Duke (scoped: role@duke.edu) -->
+
     <Attribute name="urn:mace:dir:attribute-def:eduPersonScopedAffiliation" id="affiliation">
         <AttributeDecoder xsi:type="ScopedAttributeDecoder" caseSensitive="false"/>
     </Attribute>
-    
-    <!-- Alternative affiliation encoding (OID format) - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.9" id="affiliation">
-        <AttributeDecoder xsi:type="ScopedAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- eduPersonPrimaryAffiliation - Primary role (unscoped) -->
-    <Attribute name="urn:mace:dir:attribute-def:eduPersonPrimaryAffiliation" id="primary-affiliation">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Alternative primary affiliation encoding (OID format) -->
-    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.5" id="primary-affiliation">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- eduPersonAffiliation - Multi-valued unscoped affiliation -->
-    <Attribute name="urn:mace:dir:attribute-def:eduPersonAffiliation" id="unscoped-affiliation">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Alternative unscoped affiliation encoding (OID format) -->
-    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.1" id="unscoped-affiliation">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Common Name (cn) - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:2.5.4.3" id="cn">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Display Name - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:2.16.840.1.113730.3.1.241" id="displayName">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Given Name (First Name) - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:2.5.4.42" id="givenName">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Surname (Last Name) - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:2.5.4.4" id="sn">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Email Address - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:0.9.2342.19200300.100.1.3" id="mail">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Duke Unique ID - OFFICIAL DUKE FORMAT (CORRECTED NAME) -->
-    <Attribute name="urn:mace:duke.edu:idms:unique-id" id="duDukeID">
-        <AttributeDecoder xsi:type="StringAttributeDecoder"/>
-    </Attribute>
-    
-    <!-- UID (unscoped NetID) - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:0.9.2342.19200300.100.1.1" id="uid">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Organizational Unit - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:2.5.4.11" id="ou">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Group membership (Grouper) - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.5.1.1" id="isMemberOf">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- eduPersonNickname (preferred first name) - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.2" id="nickname">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Telephone Number - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:2.5.4.20" id="telephoneNumber">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Title - OFFICIAL DUKE FORMAT -->
-    <Attribute name="urn:oid:2.5.4.12" id="title">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- Duke Middle Name -->
-    <Attribute name="urn:mace:duke.edu:idms:middle-name1" id="duMiddleName1">
-        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    
-    <!-- DKU ID (Duke Kunshan University) -->
-    <Attribute name="urn:mace:duke.edu:idms:dku-id" id="dkuID">
-        <AttributeDecoder xsi:type="StringAttributeDecoder"/>
-    </Attribute>
-    
-    <!-- Duke Alumni Database ID -->
-    <Attribute name="urn:mace:duke.edu:idms:dadd:entityid" id="duDADDEntityId">
-        <AttributeDecoder xsi:type="StringAttributeDecoder"/>
-    </Attribute>
-    
-    <!-- eduPersonTargetedID (persistent anonymous identifier) -->
-    <Attribute name="urn:mace:dir:attribute-def:eduPersonTargetedID" id="targeted-id">
-        <AttributeDecoder xsi:type="NameIDAttributeDecoder" formatter="$NameQualifier!$SPNameQualifier!$Name" defaultQualifiers="true"/>
-    </Attribute>
-    
-    <!-- Alternative targeted ID encoding -->
-    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.10" id="targeted-id">
-        <AttributeDecoder xsi:type="NameIDAttributeDecoder" formatter="$NameQualifier!$SPNameQualifier!$Name" defaultQualifiers="true"/>
-    </Attribute>
-    
-    <!-- Persistent ID (similar to targeted ID but different format) -->
-    <Attribute name="urn:mace:dir:attribute-def:eduPersonPrincipalName" id="persistent-id">
+    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.9" id="affiliation" >
         <AttributeDecoder xsi:type="ScopedAttributeDecoder" caseSensitive="false"/>
     </Attribute>
 
-</Attributes> 
+    <Attribute name="urn:mace:dir:attribute-def:eduPersonAffiliation" id="unscoped-affiliation">
+        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
+    </Attribute>
+    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.1" id="unscoped-affiliation">
+        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
+    </Attribute>
+
+    <Attribute name="urn:mace:dir:attribute-def:eduPersonEntitlement" id="entitlement"/>
+    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.7" id="entitlement"/>
+
+    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.11" id="assurance"/>
+
+    <!-- A persistent id attribute that supports personalized anonymous access. -->
+
+    <!-- First, the deprecated version, decoded as a scoped string: -->
+    <Attribute name="urn:mace:dir:attribute-def:eduPersonTargetedID" id="targeted-id">
+        <AttributeDecoder xsi:type="ScopedAttributeDecoder"/>
+    </Attribute>
+
+    <!-- Third, the new version (note the OID-style name): -->
+    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.10" id="persistent-id">
+        <AttributeDecoder xsi:type="NameIDAttributeDecoder" formatter="$NameQualifier!$SPNameQualifier!$Name" defaultQualifiers="true"/>
+    </Attribute>
+
+    <!-- Fourth, the SAML 2.0 NameID Format: -->
+    <Attribute name="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent" id="persistent-id">
+        <AttributeDecoder xsi:type="NameIDAttributeDecoder" formatter="$NameQualifier!$SPNameQualifier!$Name" defaultQualifiers="true"/>
+    </Attribute>
+
+    <Attribute name="urn:oid:2.5.4.42" id="givenName"/>
+    <Attribute name="urn:oid:2.5.4.4" id="sn"/>
+    <Attribute name="urn:oid:0.9.2342.19200300.100.1.1" id="uid"/>
+    <Attribute name="urn:mace:duke.edu:idms:unique-id" id="duDukeID"/>
+    <Attribute name="urn:oid:2.16.840.1.113730.3.1.241" id="displayName"/>
+    <Attribute name="urn:oid:0.9.2342.19200300.100.1.3" id="mail"/>
+    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.5.1.1" id="isMemberOf"/>
+    <Attribute name="urn:mace:dir:attribute-def:eduPersonPrimaryAffiliation" id="primary-affiliation">
+        <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
+    </Attribute>
+   <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.5" id="primary-affiliation">
+       <AttributeDecoder xsi:type="StringAttributeDecoder" caseSensitive="false"/>
+   </Attribute>
+</Attributes>
