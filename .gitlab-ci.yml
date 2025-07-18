@@ -9,6 +9,7 @@ stages:
 # - Added fix-shibboleth-certs.sh for certificate validation and signature fixes
 # - Enhanced Docker healthchecks with proper timeouts and error handling
 # - Improved etcd and minio configurations for better reliability
+# - Fixed Docker build casing warnings
 # CONFIGURATION:
 # - Official Duke attribute-map.xml (replaced custom version)
 # - Cleaned metadata files (removed duplicates: current_duke_metadata.xml, levantai-metadata.xml)
@@ -21,6 +22,8 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
+  DOCKER_BUILDKIT: "1"
+  BUILDKIT_PROGRESS: plain
   # BuildKit will be automatically configured and used for optimized builds
   CI: "true"
   GITLAB_CI: "true"
