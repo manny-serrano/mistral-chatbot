@@ -139,11 +139,12 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart shibd || true"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart apache2 || true"
     - |
-      echo "🐳 Restarting Docker containers after SSO configuration..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && docker-compose down || true"
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && docker-compose up -d --no-build || true"
-      echo "⏳ Waiting for containers to start..."
-      sleep 30
+      echo "🐳 Improved Docker container recovery after SSO configuration..."
+      echo "📋 Copying Docker recovery script..."
+      scp -o StrictHostKeyChecking=no docker-recovery.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-recovery.sh"
+      echo "🔄 Running comprehensive Docker recovery..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && timeout 300s /home/$VM_USER/scripts/docker-recovery.sh || echo 'Docker recovery completed with timeout - containers may still be starting'"
     - |
       echo "✅ Verifying updated SSO service status..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"
