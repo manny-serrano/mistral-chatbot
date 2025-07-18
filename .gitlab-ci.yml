@@ -30,10 +30,32 @@ variables:
 
 build:
   stage: build
-  image: alpine:latest
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: 1
+    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+    DOCKER_BUILDKIT: "1"
+    BUILDKIT_PROGRESS: plain
+  before_script:
+    - docker info
+    - echo "🔧 Docker BuildKit enabled for optimized builds"
   script:
-    - echo "✅ Build stage completed - ready for deployment"
-    - echo "🔧 Docker build system will ensure BuildKit is available and configured"
+    - echo "🐳 Building Docker image..."
+    - docker build --progress=plain -t mistral-network-security:latest .
+    - echo "✅ Docker image built successfully"
+    - docker images | grep mistral-network-security
+    - echo "🏷️ Tagging image for deployment..."
+    - docker tag mistral-network-security:latest mistral-network-security:$CI_COMMIT_SHA
+    - docker save mistral-network-security:latest > mistral-image.tar
+    - echo "💾 Docker image saved for deployment"
+  artifacts:
+    paths:
+      - mistral-image.tar
+    expire_in: 1 hour
   only:
     - main
 
@@ -56,6 +78,21 @@ deploy:
       echo "Testing SSH connectivity..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'"
       echo "✅ SSH connection successful"
+    - |
+      echo "🐳 Transferring pre-built Docker image to VM..."
+      if [ -f "mistral-image.tar" ]; then
+        echo "📦 Copying Docker image to VM..."
+        scp -o StrictHostKeyChecking=no mistral-image.tar $VM_USER@$VM_HOST:/tmp/
+        echo "📥 Loading Docker image on VM..."
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+          docker load < /tmp/mistral-image.tar || echo 'Failed to load Docker image'
+          docker images | grep mistral-network-security || echo 'Image not found after load'
+          rm -f /tmp/mistral-image.tar
+        "
+        echo "✅ Pre-built Docker image transferred and loaded"
+      else
+        echo "⚠️ No pre-built image found, will build on VM as fallback"
+      fi
     - |
       echo "🌐 Testing VM network connectivity..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "ping -c 2 8.8.8.8 || echo 'Network connectivity issue on VM'"

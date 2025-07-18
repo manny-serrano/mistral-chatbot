@@ -59,7 +59,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     rm -rf /tmp/pip-cache/* /tmp/*.whl
 
 # Production stage
-FROM python:3.11-slim
+FROM python:3.11-slim AS production
 
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
