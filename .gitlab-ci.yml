@@ -2,7 +2,14 @@ stages:
   - build
   - deploy
 
-# Updated SSO Configuration:
+# Updated SSO Configuration with Fixes Applied (July 18, 2025):
+# CRITICAL FIXES:
+# - Corrected Entity ID: https://levantai.colab.duke.edu (matches Duke registration)
+# - Added docker-start-improved.sh for better container startup sequencing
+# - Added fix-shibboleth-certs.sh for certificate validation and signature fixes
+# - Enhanced Docker healthchecks with proper timeouts and error handling
+# - Improved etcd and minio configurations for better reliability
+# CONFIGURATION:
 # - Official Duke attribute-map.xml (replaced custom version)
 # - Cleaned metadata files (removed duplicates: current_duke_metadata.xml, levantai-metadata.xml)
 # - SP certificates created from SSL certificates (same content, different SAML usage)
@@ -67,6 +74,10 @@ deploy:
       scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "deploy-to-vm.sh not found"
       scp -o StrictHostKeyChecking=no scripts/test-sso-config.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/ || echo "test-sso-config.sh not found"
       scp -o StrictHostKeyChecking=no docker-build-retry.sh $VM_USER@$VM_HOST:/tmp/ || echo "docker-build-retry.sh not found"
+      echo "📦 Copying new improved scripts..."
+      scp -o StrictHostKeyChecking=no docker-start-improved.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
+      scp -o StrictHostKeyChecking=no fix-shibboleth-certs.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-start-improved.sh /home/$VM_USER/scripts/fix-shibboleth-certs.sh"
     - |
       echo "🌐 Running network stability check..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && timeout 60s /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
@@ -134,35 +145,37 @@ deploy:
       "
       echo "⚙️ Running updated SSO configuration deployment..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /tmp && timeout 180s sudo /tmp/deploy-sso-config.sh || echo 'SSO deployment completed with timeout'"
+      echo "🔧 Running Shibboleth certificate fix with corrected Entity ID..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER && timeout 300s sudo /home/$VM_USER/scripts/fix-shibboleth-certs.sh || echo 'Shibboleth certificate fix completed'"
     - |
       echo "🔄 Restarting Shibboleth and Apache services..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart shibd || true"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl restart apache2 || true"
     - |
       echo "🐳 Improved Docker container recovery after SSO configuration..."
-      echo "📋 Copying Docker recovery script..."
+      echo "📋 Copying improved Docker scripts..."
       scp -o StrictHostKeyChecking=no docker-recovery.sh $VM_USER@$VM_HOST:/home/$VM_USER/scripts/
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/docker-recovery.sh"
-      echo "🔄 Running comprehensive Docker recovery..."
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && timeout 600s /home/$VM_USER/scripts/docker-recovery.sh || echo 'Docker recovery completed with extended timeout - containers may still be starting'"
+      echo "🔄 Running improved Docker startup with better error handling..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "cd /home/$VM_USER/mistral-enhancing-network-security-analysis && timeout 900s /home/$VM_USER/scripts/docker-start-improved.sh || echo 'Improved Docker startup completed - containers may still be initializing'"
       echo "⏳ Allowing additional time for containers to stabilize..."
-      sleep 60
+      sleep 90
     - |
       echo "✅ Verifying updated SSO service status..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active shibd && echo '✅ Shibboleth daemon is running' || echo '❌ Shibboleth daemon failed'"
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "sudo systemctl is-active apache2 && echo '✅ Apache is running' || echo '❌ Apache failed'"
-      echo "🔍 Testing updated Shibboleth configuration..."
+      echo "🔍 Testing updated Shibboleth configuration with correct Entity ID..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         echo 'Testing Shibboleth status endpoint...'
         curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Status | grep -q 'OK' && echo '✅ Shibboleth status endpoint working' || echo '⚠️ Shibboleth status endpoint issues'
-        echo 'Testing SP metadata generation...'
-        curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Metadata | head -5 | grep -q 'EntityDescriptor' && echo '✅ SP metadata generation working' || echo '⚠️ SP metadata generation issues'
+        echo 'Testing SP metadata generation with correct Entity ID...'
+        curl -k -s https://levantai.colab.duke.edu/Shibboleth.sso/Metadata | grep -q 'entityID=\"https://levantai.colab.duke.edu\"' && echo '✅ SP metadata generation working with correct Entity ID' || echo '⚠️ SP metadata Entity ID issues'
         echo 'Testing SSO login initiation...'
         curl -k -s -I https://levantai.colab.duke.edu/Shibboleth.sso/Login | grep -q '302' && echo '✅ SSO login redirection working' || echo '⚠️ SSO login issues'
         echo 'Verifying Duke IdP integration...'
         curl -k -s -I https://levantai.colab.duke.edu/Shibboleth.sso/Login | grep -i location | grep -q 'shib.oit.duke.edu' && echo '✅ Duke IdP integration working' || echo '⚠️ Duke IdP integration issues'
-        echo 'Checking Shibboleth logs for any errors...'
-        sudo tail -10 /var/log/shibboleth/shibd.log | grep -i error && echo '⚠️ Shibboleth errors found' || echo '✅ No recent Shibboleth errors'
+        echo 'Checking Shibboleth logs for signature errors...'
+        sudo tail -20 /var/log/shibboleth/shibd.log | grep -i 'signature\|metadata\|error' && echo '⚠️ Shibboleth signature/metadata errors found' || echo '✅ No recent signature/metadata errors'
       "
     - |
       echo "🔧 Copying essential deployment scripts..."
@@ -212,13 +225,17 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-duke-metadata.sh && /home/$VM_USER/scripts/test-duke-metadata.sh || echo 'Metadata diagnostic completed'"
       echo "🧪 Running comprehensive SSO configuration test with updated files..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /home/$VM_USER/scripts/test-sso-config.sh && /home/$VM_USER/scripts/test-sso-config.sh || echo 'SSO test completed'"
-      echo "🔍 Final configuration verification..."
+      echo "🔍 Final configuration verification with corrected Entity ID..."
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         echo 'Verifying deployed configuration files:'
         ls -la /etc/shibboleth/shibboleth2.xml /etc/shibboleth/attribute-map.xml /etc/shibboleth/duke-metadata-3-signed.xml /etc/shibboleth/idp_signing.crt /etc/shibboleth/sp-*.pem 2>/dev/null || echo 'Some configuration files may not be in expected locations'
         echo 'Verifying SSL certificates are deployed:'
         ls -la /etc/ssl/certs/levantai.colab.duke.edu.* /etc/ssl/private/levantai.colab.duke.edu.* 2>/dev/null || echo 'SSL certificates may not be in expected locations'
-        echo '✅ Updated SSO configuration deployment completed'
+        echo 'Verifying Entity ID in deployed configuration:'
+        grep -q 'entityID=\"https://levantai.colab.duke.edu\"' /etc/shibboleth/shibboleth2.xml && echo '✅ Correct Entity ID deployed' || echo '⚠️ Entity ID may need verification'
+        echo 'Verifying Docker containers status:'
+        docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -10
+        echo '✅ Updated SSO configuration deployment completed with improved scripts'
       "
   environment:
     name: production

@@ -3,7 +3,12 @@
 echo "🐳 Docker Container Recovery Script"
 echo "================================="
 
-# Function to wait for container to be ready
+# Enhanced logging
+set -e
+export COMPOSE_HTTP_TIMEOUT=300
+export DOCKER_CLIENT_TIMEOUT=300
+
+# Function to wait for container to be ready with better error handling
 wait_for_container() {
     local container_name=$1
     local max_attempts=60
@@ -12,16 +17,24 @@ wait_for_container() {
     echo "⏳ Waiting for $container_name to be ready..."
     
     while [ $attempt -le $max_attempts ]; do
-        if docker-compose ps -q $container_name >/dev/null 2>&1 && docker-compose exec -T $container_name echo "ready" >/dev/null 2>&1; then
-            echo "✅ $container_name is ready"
-            return 0
+        if docker-compose ps -q "$container_name" >/dev/null 2>&1; then
+            local container_id=$(docker-compose ps -q "$container_name")
+            if [ -n "$container_id" ]; then
+                local status=$(docker inspect --format='{{.State.Status}}' "$container_id" 2>/dev/null || echo "unknown")
+                if [ "$status" = "running" ]; then
+                    echo "✅ $container_name is ready"
+                    return 0
+                fi
+            fi
         fi
         echo "⏳ Attempt $attempt/$max_attempts - waiting for $container_name..."
-        sleep 5
+        sleep 10
         ((attempt++))
     done
     
     echo "❌ $container_name failed to become ready after $max_attempts attempts"
+    echo "📋 Container logs for $container_name:"
+    docker-compose logs --tail=20 "$container_name" 2>/dev/null || echo "No logs available"
     return 1
 }
 

@@ -49,12 +49,16 @@
     <!-- Message encoders/decoders -->
     <MessageEncoders>
         <MessageEncoder xsi:type="MessageEncoderFactoryType" 
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                         type="urn:mace:shibboleth:2.0:native:sp:config:HTTPPostEncoder"/>
         <MessageEncoder xsi:type="MessageEncoderFactoryType" 
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                         type="urn:mace:shibboleth:2.0:native:sp:config:HTTPRedirectEncoder"/>
         <MessageEncoder xsi:type="MessageEncoderFactoryType" 
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                         type="urn:mace:shibboleth:2.0:native:sp:config:HTTPArtifactEncoder"/>
         <MessageEncoder xsi:type="MessageEncoderFactoryType" 
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                         type="urn:mace:shibboleth:2.0:native:sp:config:SOAPEncoder"/>
     </MessageEncoders>
 
