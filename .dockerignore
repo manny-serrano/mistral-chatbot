@@ -2,6 +2,18 @@
 .git
 .gitignore
 *.md
+README*
+
+# Docker files and images
+*.tar
+Dockerfile
+docker-compose.yml
+docker-*.sh
+
+# Logs and data directories
+logs/
+data/
+*.log
 
 # Python cache and virtual environments
 __pycache__

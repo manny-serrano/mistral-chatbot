@@ -30,8 +30,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     find /usr/local -name '*.pyc' -delete && \
     find /usr/local -name '__pycache__' -type d -exec rm -rf {} + || true
 
-# Copy application code (excluding unnecessary files)
-COPY --exclude='.git' --exclude='logs' --exclude='data' --exclude='*.tar' --exclude='node_modules' . .
+# Copy application code (excluding unnecessary files via .dockerignore)
+COPY . .
 
 # Create necessary directories and set permissions
 RUN mkdir -p /app/data /app/logs /app/.cache && \
