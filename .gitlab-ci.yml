@@ -169,10 +169,16 @@ deploy:
         echo 'Verifying metadata file deployment and debugging Shibboleth...'
         sudo ls -la /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Local metadata file not found'
         sudo ls -la /etc/shibboleth/idp_signing.crt || echo 'Signing certificate not found'
+        sudo ls -la /etc/shibboleth/shibboleth2.xml || echo 'Main config file not found'
         
         echo 'Testing metadata file readability and content...'
         sudo head -5 /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Cannot read metadata file'
         sudo grep -o 'https://shib.oit.duke.edu/shibboleth-idp' /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Duke IdP entityID not found in metadata'
+        
+        echo 'Verifying metadata file permissions and ownership...'
+        sudo stat /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Cannot stat metadata file'
+        sudo chown _shibd:_shibd /etc/shibboleth/duke-metadata-3-signed.xml 2>/dev/null || sudo chown shibd:shibd /etc/shibboleth/duke-metadata-3-signed.xml 2>/dev/null || echo 'Could not change ownership'
+        sudo chmod 644 /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Could not change permissions'
         
         echo 'Clearing Shibboleth logs and restarting for fresh debug info...'
         sudo rm -f /var/log/shibboleth/shibd.log /var/log/shibboleth/transaction.log || true

@@ -41,9 +41,26 @@
                 helpLocation="/about.html"
                 styleSheet="/shibboleth-sp/main.css"/>
 
-        <!-- Simplified local metadata provider for Duke IdP -->
-        <MetadataProvider type="XML" validate="false" file="duke-metadata-3-signed.xml">
-            <!-- No filters initially to ensure metadata loads -->
+        <!-- Multiple metadata providers for redundancy -->
+        <!-- Primary: Local file metadata provider -->
+        <MetadataProvider type="XML" validate="false" file="duke-metadata-3-signed.xml"/>
+        
+        <!-- Fallback: URL-based metadata provider -->
+        <MetadataProvider type="XML" validate="false"
+                          url="https://shib.oit.duke.edu/duke-metadata-3-signed.xml"
+                          backingFilePath="duke-metadata-fallback.xml"
+                          reloadInterval="7200"/>
+        
+        <!-- Emergency fallback: Minimal metadata provider -->
+        <MetadataProvider type="XML" validate="false">
+            <Inline>
+                <md:EntityDescriptor entityID="https://shib.oit.duke.edu/shibboleth-idp" xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata">
+                    <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+                        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://shib.oit.duke.edu/idp/profile/SAML2/Redirect/SSO"/>
+                        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://shib.oit.duke.edu/idp/profile/SAML2/POST/SSO"/>
+                    </md:IDPSSODescriptor>
+                </md:EntityDescriptor>
+            </Inline>
         </MetadataProvider>
 
         <!-- Map to extract attributes from SAML assertions. -->
