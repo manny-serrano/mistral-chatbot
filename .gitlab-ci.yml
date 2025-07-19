@@ -71,19 +71,42 @@ deploy:
       echo "✅ SSH connection successful"
     
     # ============================================
-    # 2. DOCKER IMAGE TRANSFER (if available)
+    # 2. DOCKER IMAGE TRANSFER (with disk space check)
     # ============================================
     - |
       echo "🐳 Transferring pre-built Docker image..."
       if [ -f "mistral-image.tar" ]; then
-        echo "📦 Copying Docker image to VM..."
-        scp -o StrictHostKeyChecking=no mistral-image.tar $VM_USER@$VM_HOST:/tmp/
-        echo "📥 Loading Docker image on VM..."
+        echo "📦 Checking disk space on VM before transfer..."
         ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
-          docker load < /tmp/mistral-image.tar || echo 'Failed to load Docker image'
-          rm -f /tmp/mistral-image.tar
+          echo 'Available disk space:'
+          df -h /tmp /home
+          echo 'Current /tmp contents:'
+          ls -la /tmp/ | wc -l
+          echo 'Cleaning old Docker artifacts in /tmp...'
+          sudo rm -f /tmp/mistral-image.tar* /tmp/docker-*.tar* || true
+          echo 'Space after cleanup:'
+          df -h /tmp
         "
-        echo "✅ Pre-built Docker image transferred"
+        
+        echo "📦 Copying Docker image to VM (with compression)..."
+        if scp -o StrictHostKeyChecking=no -C mistral-image.tar $VM_USER@$VM_HOST:/tmp/; then
+          echo "📥 Loading Docker image on VM..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+            if [ -f /tmp/mistral-image.tar ]; then
+              docker load < /tmp/mistral-image.tar || echo 'Failed to load Docker image'
+              rm -f /tmp/mistral-image.tar
+              echo '✅ Pre-built Docker image loaded successfully'
+            else
+              echo '❌ Image file not found after transfer'
+            fi
+          "
+        else
+          echo "⚠️ Image transfer failed - will build on VM instead"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+            echo 'Image transfer failed, cleaning up any partial files...'
+            rm -f /tmp/mistral-image.tar* || true
+          "
+        fi
       else
         echo "⚠️ No pre-built image found - will build on VM"
       fi
@@ -161,11 +184,16 @@ deploy:
         git pull origin main || echo 'Git pull completed'
         git stash pop || echo 'No stashed changes'
         
-        echo '🧹 Comprehensive cleanup...'
+        echo '🧹 Comprehensive cleanup and disk space management...'
         docker-compose down --remove-orphans --volumes || true
         docker stop \$(docker ps -aq) 2>/dev/null || true
         docker rm \$(docker ps -aq) 2>/dev/null || true
         docker system prune -af --volumes || true
+        
+        echo 'Checking available disk space after cleanup:'
+        df -h /
+        echo 'Checking Docker disk usage:'
+        docker system df || true
         
         echo '📁 Creating required directories...'
         sudo mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus}
@@ -181,8 +209,15 @@ deploy:
         export DOCKER_BUILDKIT=1
         export COMPOSE_DOCKER_CLI_BUILD=1
         
-        # Build images first
-        docker-compose build --no-cache mistral-app || echo 'Mistral app build completed'
+        # Check if we have pre-built image, otherwise build locally
+        if docker image inspect mistral-network-security:latest >/dev/null 2>&1; then
+          echo 'Using pre-built Docker image...'
+        else
+          echo 'Building Docker image on VM with simplified Dockerfile...'
+          docker build -f Dockerfile.simple -t mistral-network-security:latest . || echo 'Local build completed'
+        fi
+        
+        # Build other images
         docker-compose build --no-cache frontend || echo 'Frontend build completed'
         
         # Start infrastructure services first
