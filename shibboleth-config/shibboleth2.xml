@@ -8,19 +8,27 @@
 
     <!-- The ApplicationDefaults element is where most of Shibboleth's SAML bits are defined. -->
     <ApplicationDefaults entityID="https://levantai.colab.duke.edu"
-                         REMOTE_USER="eppn"
+                         REMOTE_USER="eppn persistent-id targeted-id"
                          encryption="false"
                          signing="false"
+                         requireAuthenticatedEncryption="false"
+                         requireTransportAuth="false"
                          signingAlg="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
                          digestAlg="http://www.w3.org/2001/04/xmlenc#sha256">
 
         <!-- Controls session lifetimes, address checks, cookie handling, and the protocol handlers. -->
         <Sessions lifetime="28800" timeout="3600" relayState="ss:mem"
                   checkAddress="false" handlerSSL="true" cookieProps="https"
-                  redirectLimit="exact" redirectWhitelist="https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/">
+                  redirectLimit="exact" redirectWhitelist="https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/"
+                  consistentAddress="false"
+                  sameSiteSessionCookie="None">
 
             <!-- Default SSO location - Points to Duke IdP with official URLs -->
-            <SSO entityID="https://shib.oit.duke.edu/shibboleth-idp">
+            <!-- Accept any authentication context to resolve AuthnStatement issues -->
+            <SSO entityID="https://shib.oit.duke.edu/shibboleth-idp" 
+                 authnContextClassRef="urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
+                 authnContextComparison="minimum"
+                 nameIDFormat="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent">
                 SAML2 SAML1
             </SSO>
 

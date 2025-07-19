@@ -241,19 +241,46 @@ echo
 print_status "Backup location: $BACKUP_DIR"
 echo
 
-print_step "8. Next Steps for Service Restart..."
+print_step "8. Restarting Shibboleth Services..."
 
-echo "After deployment, you need to restart services:"
-echo "  sudo systemctl restart shibd"
-echo "  sudo systemctl restart apache2"
-echo
+echo "Restarting Shibboleth daemon..."
+if command -v systemctl >/dev/null 2>&1; then
+    # systemd systems
+    if systemctl is-active --quiet shibd; then
+        echo "  Stopping shibd..."
+        sudo systemctl stop shibd 2>/dev/null || print_warning "Could not stop shibd via systemctl"
+    fi
+    echo "  Starting shibd..."
+    sudo systemctl start shibd 2>/dev/null || print_warning "Could not start shibd via systemctl"
+    sudo systemctl enable shibd 2>/dev/null || print_warning "Could not enable shibd via systemctl"
+    
+    # Also restart Apache if it's running
+    if systemctl is-active --quiet apache2; then
+        echo "  Restarting Apache..."
+        sudo systemctl restart apache2 2>/dev/null || print_warning "Could not restart apache2"
+    elif systemctl is-active --quiet httpd; then
+        echo "  Restarting httpd..."
+        sudo systemctl restart httpd 2>/dev/null || print_warning "Could not restart httpd"
+    fi
+elif command -v service >/dev/null 2>&1; then
+    # sysv init systems
+    sudo service shibd restart 2>/dev/null || print_warning "Could not restart shibd via service"
+    sudo service apache2 restart 2>/dev/null || sudo service httpd restart 2>/dev/null || print_warning "Could not restart web server"
+else
+    print_warning "No service management system found. Manual restart required:"
+    echo "  sudo systemctl restart shibd"
+    echo "  sudo systemctl restart apache2"
+fi
+
+print_step "9. Testing Configuration..."
+
 echo "For testing:"
 echo "  1. Check Shibboleth status: https://levantai.colab.duke.edu/Shibboleth.sso/Status"
 echo "  2. Test with debug page: https://levantai.colab.duke.edu/shib-debug.php"
 echo "  3. Test login flow: https://levantai.colab.duke.edu/login"
 echo
 
-print_step "9. Critical Configuration Changes Made..."
+print_step "10. Critical Configuration Changes Made..."
 
 echo "🔧 FIXES APPLIED TO RESOLVE 'Missing required Duke NetID (eppn)' ERROR:"
 echo
