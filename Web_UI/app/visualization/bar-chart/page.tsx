@@ -410,17 +410,6 @@ export default function BarChartVisualizationPage() {
                     <div className="text-2xl font-bold text-white">{data.data.length}</div>
                   </CardContent>
                 </Card>
-
-                <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-zinc-400">Diversity</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-white">
-                      {data.data[0]?.percentage < 50 ? "🌈" : "📊"}
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
             )}
           </div>

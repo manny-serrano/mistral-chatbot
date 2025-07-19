@@ -212,7 +212,7 @@ export function useReportStatus(options: UseReportStatusOptions = {}) {
     
     // Fallback polling in case EventSource fails
     let retryCount = 0
-    const maxRetries = 60 // Increased to 4 minutes (60 * 4 seconds = 4 minutes)
+    const maxRetries = 150 // Increased to 10 minutes (150 * 4 seconds = 10 minutes)
     const baseDelay = 4000 // 4 seconds between checks
     let lastProgress = 0
     

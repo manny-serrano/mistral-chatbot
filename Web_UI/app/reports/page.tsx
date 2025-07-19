@@ -318,8 +318,8 @@ export default function ReportsPage() {
   const fetchReports = async (options = { silent: false }) => {
     try {
       if (!options.silent) {
-        setLoading(true)
-        setError(null)
+      setLoading(true)
+      setError(null)
       }
       
       const response = await fetch('/api/reports')
@@ -348,13 +348,13 @@ export default function ReportsPage() {
       }
     } finally {
       if (!options.silent) {
-        setLoading(false)
+      setLoading(false)
       }
     }
   }
 
   const generateStandardReport = async () => {
-    setIsGeneratingStandard(true)
+      setIsGeneratingStandard(true)
     
     try {
       const response = await fetch('/api/reports/generate-optimized', {
@@ -367,11 +367,11 @@ export default function ReportsPage() {
           reportType: 'standard'
         }),
       })
-
+      
       if (!response.ok) {
         throw new Error('Failed to start report generation')
       }
-
+      
       const result = await response.json()
       
       if (result.reportId) {
@@ -396,15 +396,15 @@ export default function ReportsPage() {
         // Start tracking this report's progress
         reportStatus.startTracking(result.reportId)
         
-        toast({
+                toast({
           title: 'Report Generation Started',
           description: 'Your security report is being generated. Real-time progress will be shown below.',
         })
       }
       
-    } catch (error) {
+          } catch (error) {
       console.error('Error generating report:', error)
-      toast({
+              toast({
         title: 'Generation Failed',
         description: 'Failed to start report generation. Please try again.',
         variant: 'destructive',
@@ -424,7 +424,7 @@ export default function ReportsPage() {
       return
     }
 
-    setIsGeneratingCustom(true)
+      setIsGeneratingCustom(true)
     
     try {
       const response = await fetch('/api/reports/generate-optimized', {
@@ -438,11 +438,11 @@ export default function ReportsPage() {
           customConfig: customReport
         }),
       })
-
+      
       if (!response.ok) {
         throw new Error('Failed to start custom report generation')
       }
-
+      
       const result = await response.json()
       
       if (result.reportId) {
@@ -687,11 +687,11 @@ export default function ReportsPage() {
 
   // Helper function to check if a report has been generating too long
   const isGeneratingTooLong = (report: ReportData): boolean => {
-    if (report.status !== 'generating') return false
+    if (report.status !== 'generating' && report.status !== 'draft') return false
     const reportTime = new Date(report.date).getTime()
     const now = Date.now()
-    const twoMinutes = 2 * 60 * 1000 // 2 minutes in milliseconds
-    return (now - reportTime) > twoMinutes
+    const thirtySeconds = 30 * 1000 // 30 seconds in milliseconds
+    return (now - reportTime) > thirtySeconds
   }
 
   return (
@@ -748,7 +748,7 @@ export default function ReportsPage() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4">
-              <ProfileDropdown />
+            <ProfileDropdown />
             </div>
           </div>
         </div>
@@ -764,14 +764,14 @@ export default function ReportsPage() {
           {/* Page Header - Responsive */}
           <div className="mb-6 sm:mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
+                <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Security Reports</h1>
                 <p className="text-sm sm:text-base text-zinc-300">Generate and analyze comprehensive security reports</p>
-              </div>
+                </div>
               <div className="flex items-center gap-2 sm:gap-4">
-                <Button 
+                <Button
                   onClick={() => fetchReports()} 
-                  variant="outline" 
+                  variant="outline"
                   className="border-purple-500/60 text-purple-300 hover:text-white hover:bg-purple-900/40 hover:border-purple-400/80 bg-purple-950/30 text-xs sm:text-sm px-3 py-2 h-auto transition-all duration-200"
                 >
                   <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -822,7 +822,7 @@ export default function ReportsPage() {
 
           {/* Reports Content - Remove Tabs and show content directly */}
           <div className="space-y-4 sm:space-y-6">
-            {/* Quick Stats - Responsive Grid */}
+              {/* Quick Stats - Responsive Grid */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
                   <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
@@ -855,8 +855,9 @@ export default function ReportsPage() {
                       <Database className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
                     </div>
                     <div className="text-xl sm:text-2xl font-bold text-white">
-                      {summary?.total_flows_analyzed?.toLocaleString() || 0}
+                      {summary?.latest_report?.flows_analyzed?.toLocaleString() || '0'}
                     </div>
+                    <div className="text-xs text-zinc-500">Latest report</div>
                   </CardHeader>
                 </Card>
 
@@ -867,7 +868,9 @@ export default function ReportsPage() {
                       <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-amber-400" />
                     </div>
                     <div className="text-xs sm:text-sm font-medium text-white">
-                      {summary?.latest_report ? new Date(summary.latest_report.date).toLocaleDateString() : 'No reports'}
+                      {summary?.latest_report ? 
+                        `${new Date(summary.latest_report.date).toLocaleDateString()} ${new Date(summary.latest_report.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` 
+                        : 'No reports'}
                     </div>
                   </CardHeader>
                 </Card>
@@ -894,28 +897,28 @@ export default function ReportsPage() {
                           <SelectItem value="custom" className="text-white hover:bg-purple-900/40 hover:text-white focus:bg-purple-900/40 focus:text-white">Custom Range</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
+                  </div>
 
-                    {dateFilter === 'custom' && (
+                  {dateFilter === 'custom' && (
                       <>
                         <div className="flex-1">
                           <Label className="text-zinc-200 text-xs sm:text-sm font-medium">Start Date</Label>
-                          <Input
-                            type="date"
-                            value={customDateRange.start}
-                            onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                        <Input
+                          type="date"
+                          value={customDateRange.start}
+                          onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
                             className="bg-gray-800/50 border-purple-400/30 text-white text-xs sm:text-sm"
-                          />
-                        </div>
+                        />
+                      </div>
                         <div className="flex-1">
                           <Label className="text-zinc-200 text-xs sm:text-sm font-medium">End Date</Label>
-                          <Input
-                            type="date"
-                            value={customDateRange.end}
-                            onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                        <Input
+                          type="date"
+                          value={customDateRange.end}
+                          onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
                             className="bg-gray-800/50 border-purple-400/30 text-white text-xs sm:text-sm"
-                          />
-                        </div>
+                        />
+                      </div>
                       </>
                     )}
                   </div>
@@ -977,42 +980,42 @@ export default function ReportsPage() {
                           const progressMessage = reportStatus.getProgressMessage(report.id)
                           
                           return (
-                            <div
-                              key={report.id}
-                              className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 bg-gray-800/50 rounded-lg border border-purple-500/20 hover:bg-gray-800/70 transition-colors"
-                              data-testid={report.status === 'generating' ? 'generating-report-placeholder' : undefined}
-                            >
+                          <div
+                            key={report.id}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 bg-gray-800/50 rounded-lg border border-purple-500/20 hover:bg-gray-800/70 transition-colors"
+                            data-testid={report.status === 'generating' ? 'generating-report-placeholder' : undefined}
+                          >
                               <div className="flex-1 mb-3 sm:mb-0 sm:mr-4">
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-2">
                                   <h3 className="font-medium text-white text-sm sm:text-base">{report.title}</h3>
-                                  <div className="flex items-center gap-2">
-                                    <Badge 
+                            <div className="flex items-center gap-2">
+                              <Badge
                                       variant={
                                         report.status === 'generating' ? 'default' :
                                         report.status === 'completed' ? 'secondary' : 
                                         report.status === 'failed' ? 'destructive' : 'outline'
                                       }
-                                      className={`text-xs ${
+                                className={`text-xs ${
                                         report.status === 'generating' ? 'bg-blue-600 text-blue-100' :
                                         report.status === 'completed' ? 'bg-green-600 text-green-100' :
                                         report.status === 'failed' ? 'bg-red-600 text-red-100' :
                                         'bg-gray-600 text-gray-100'
-                                      }`}
-                                    >
+                                }`}
+                              >
                                       {report.status === 'generating' ? 'Generating...' : report.status}
-                                    </Badge>
-                                    <Badge 
-                                      variant="outline" 
+                              </Badge>
+                              <Badge
+                                variant="outline"
                                       className={`text-xs border ${
                                         report.risk_level === 'HIGH' ? 'border-red-500/50 text-red-300' :
                                         report.risk_level === 'MEDIUM' ? 'border-amber-500/50 text-amber-300' :
                                         report.risk_level === 'LOW' ? 'border-green-500/50 text-green-300' :
                                         report.risk_level === 'ANALYZING' ? 'border-blue-500/50 text-blue-300' :
                                         'border-gray-500/50 text-gray-300'
-                                      }`}
-                                    >
+                                }`}
+                              >
                                       {report.risk_level === 'ANALYZING' ? 'Analyzing...' : `${report.risk_level} Risk`}
-                                    </Badge>
+                              </Badge>
                                   </div>
                                 </div>
                                 
@@ -1032,7 +1035,7 @@ export default function ReportsPage() {
                                 <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-zinc-400">
                                   <span className="flex items-center gap-1">
                                     <Calendar className="h-3 w-3" />
-                                    {new Date(report.date).toLocaleDateString()}
+                                    {new Date(report.date).toLocaleDateString()} {new Date(report.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                   </span>
                                   <span className="flex items-center gap-1">
                                     <Clock className="h-3 w-3" />
@@ -1052,17 +1055,17 @@ export default function ReportsPage() {
                               <div className="flex items-center gap-2">
                                 {report.status === 'completed' && (
                                   <>
-                                    <Button
-                                      size="sm"
+                                <Button
+                                  size="sm"
                                       variant="ghost"
                                       onClick={() => handleViewReport(report.id)}
                                       className="text-zinc-400 hover:text-white hover:bg-purple-900/40 text-xs sm:text-sm px-2 py-1 h-auto"
-                                    >
+                                >
                                       <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                                       <span className="hidden sm:inline">View</span>
-                                    </Button>
-                                    <Button
-                                      size="sm"
+                                </Button>
+                                <Button
+                                  size="sm"
                                       variant="ghost"
                                       onClick={() => handleDownloadPDF(report.id, report.title)}
                                       disabled={downloadingPDF === report.id}
@@ -1074,19 +1077,19 @@ export default function ReportsPage() {
                                         <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                                       )}
                                       <span className="hidden sm:inline">PDF</span>
-                                    </Button>
+                                </Button>
                                   </>
                                 )}
 
-                                {report.status === 'generating' && (
+                                {(report.status === 'generating' || report.status === 'draft') && (
                                   <div className="flex items-center gap-2">
                                     <div className="flex items-center gap-2 text-zinc-400">
                                       <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                                       <span className="text-xs sm:text-sm">Processing...</span>
                                     </div>
                                     {isGeneratingTooLong(report) && (
-                                      <Button
-                                        size="sm"
+                                    <Button
+                                      size="sm"
                                         variant="ghost"
                                         onClick={() => setCancelDialog({ open: true, reportId: report.id, reportName: report.title, isLoading: false })}
                                         className="text-red-400 hover:text-red-300 hover:bg-red-900/40 text-xs sm:text-sm px-2 py-1 h-auto"
@@ -1104,33 +1107,33 @@ export default function ReportsPage() {
                                     <DropdownMenuTrigger asChild>
                                       <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white hover:bg-purple-900/40 p-1">
                                         <MoreVertical className="h-3 w-3 sm:h-4 sm:w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
+                                    </Button>
+                                  </DropdownMenuTrigger>
                                     <DropdownMenuContent className="bg-gray-800 border-purple-500/20">
-                                      <DropdownMenuItem
+                                      <DropdownMenuItem 
                                         onClick={() => setArchiveDialog({ open: true, reportId: report.id, reportName: report.title, isLoading: false })}
                                         className="text-zinc-300 hover:text-white hover:bg-purple-900/40"
                                       >
                                         <Archive className="h-4 w-4 mr-2" />
                                         Archive
                                       </DropdownMenuItem>
-                                      <DropdownMenuSeparator className="bg-purple-500/20" />
-                                      <DropdownMenuItem
+                                    <DropdownMenuSeparator className="bg-purple-500/20" />
+                                    <DropdownMenuItem 
                                         onClick={() => setDeleteDialog({ open: true, reportId: report.id, reportName: report.title, isLoading: false })}
                                         className="text-red-400 hover:text-red-300 hover:bg-red-900/40"
-                                      >
+                                    >
                                         <Trash2 className="h-4 w-4 mr-2" />
-                                        Delete
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                                 )}
                               </div>
                             </div>
                           )
                         })}
                       </div>
-
+                      
                       {/* Pagination - Responsive */}
                       {totalPages > 1 && (
                         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-t border-purple-500/20">
@@ -1138,27 +1141,27 @@ export default function ReportsPage() {
                             Showing {(currentPage - 1) * reportsPerPage + 1} to {Math.min(currentPage * reportsPerPage, filteredReports.length)} of {filteredReports.length} reports
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
+                          <Button
+                            size="sm"
                               variant="ghost"
                               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                              disabled={currentPage === 1}
+                            disabled={currentPage === 1}
                               className="text-zinc-400 hover:text-white hover:bg-purple-900/40 text-xs sm:text-sm px-2 py-1 h-auto"
-                            >
+                          >
                               <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
+                          </Button>
                             <span className="text-xs sm:text-sm text-zinc-300 px-2">
                               {currentPage} of {totalPages}
                             </span>
-                            <Button
-                              size="sm"
+                          <Button
+                            size="sm"
                               variant="ghost"
                               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                              disabled={currentPage === totalPages}
+                            disabled={currentPage === totalPages}
                               className="text-zinc-400 hover:text-white hover:bg-purple-900/40 text-xs sm:text-sm px-2 py-1 h-auto"
-                            >
+                          >
                               <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
+                          </Button>
                           </div>
                         </div>
                       )}
@@ -1166,34 +1169,34 @@ export default function ReportsPage() {
                   )}
                 </CardContent>
               </Card>
-            </div>
-          </div>
-        </main>
-
-        {/* Confirmation Dialogs */}
-        <DeleteConfirmationDialog
-          open={deleteDialog.open}
-          onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
-          onConfirm={handleDeleteReport}
-          itemName={deleteDialog.reportName}
-          isLoading={deleteDialog.isLoading}
-        />
-        
-        <ArchiveConfirmationDialog
-          open={archiveDialog.open}
-          onOpenChange={(open) => setArchiveDialog(prev => ({ ...prev, open }))}
-          onConfirm={handleArchiveReport}
-          itemName={archiveDialog.reportName}
-          isLoading={archiveDialog.isLoading}
-        />
-        
-        <RestoreConfirmationDialog
-          open={restoreDialog.open}
-          onOpenChange={(open) => setRestoreDialog(prev => ({ ...prev, open }))}
-          onConfirm={handleRestoreReport}
-          itemName={restoreDialog.reportName}
-          isLoading={restoreDialog.isLoading}
-        />
+                      </div>
+        </div>
+      </main>
+      
+      {/* Confirmation Dialogs */}
+      <DeleteConfirmationDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        onConfirm={handleDeleteReport}
+        itemName={deleteDialog.reportName}
+        isLoading={deleteDialog.isLoading}
+      />
+      
+      <ArchiveConfirmationDialog
+        open={archiveDialog.open}
+        onOpenChange={(open) => setArchiveDialog(prev => ({ ...prev, open }))}
+        onConfirm={handleArchiveReport}
+        itemName={archiveDialog.reportName}
+        isLoading={archiveDialog.isLoading}
+      />
+      
+      <RestoreConfirmationDialog
+        open={restoreDialog.open}
+        onOpenChange={(open) => setRestoreDialog(prev => ({ ...prev, open }))}
+        onConfirm={handleRestoreReport}
+        itemName={restoreDialog.reportName}
+        isLoading={restoreDialog.isLoading}
+      />
         
         <DeleteConfirmationDialog
           open={cancelDialog.open}
@@ -1202,6 +1205,6 @@ export default function ReportsPage() {
           itemName={cancelDialog.reportName}
           isLoading={cancelDialog.isLoading}
         />
-      </div>
-    )
-  }
+    </div>
+  )
+}

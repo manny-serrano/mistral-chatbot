@@ -381,23 +381,25 @@ async function updateReportWithPartialData(reportId: string, userNetId: string, 
 async function startSimulationMode(reportId: string, userNetId: string) {
   console.log(`[${reportId}] Starting development simulation mode`);
   
-  // Simulate realistic progress updates for demo purposes
-  const simulateProgress = async () => {
+  // Start simulation asynchronously but don't block the response
+  setTimeout(async () => {
     try {
+      console.log(`[${reportId}] Beginning simulation steps...`);
+      
       const progressSteps = [
-        { progress: 20, message: 'Connecting to security databases...', delay: 1500 },
-        { progress: 30, message: 'Loading network flow data...', delay: 2000 },
-        { progress: 45, message: 'Analyzing traffic patterns...', delay: 2500 },
-        { progress: 60, message: 'Detecting security threats...', delay: 2000 },
-        { progress: 75, message: 'Processing threat intelligence...', delay: 1800 },
-        { progress: 85, message: 'Generating risk assessments...', delay: 1500 },
-        { progress: 95, message: 'Finalizing security report...', delay: 1200 },
-        { progress: 100, message: 'Report generation completed!', delay: 800 }
+        { progress: 20, message: 'Connecting to security databases...', delay: 800 },
+        { progress: 35, message: 'Loading network flow data...', delay: 1000 },
+        { progress: 50, message: 'Analyzing traffic patterns...', delay: 1200 },
+        { progress: 70, message: 'Detecting security threats...', delay: 1000 },
+        { progress: 85, message: 'Processing threat intelligence...', delay: 800 },
+        { progress: 95, message: 'Finalizing security report...', delay: 600 },
+        { progress: 100, message: 'Report generation completed!', delay: 400 }
       ];
       
       for (const step of progressSteps) {
         await new Promise(resolve => setTimeout(resolve, step.delay));
         await updateReportProgress(reportId, userNetId, step.progress, step.message);
+        console.log(`[${reportId}] Progress: ${step.progress}% - ${step.message}`);
       }
       
       // Add some realistic report data
@@ -409,6 +411,7 @@ async function startSimulationMode(reportId: string, userNetId: string) {
           generated_by: 'LEVANT AI Security Platform',
           user_netid: userNetId,
           generation_timestamp: new Date().toISOString(),
+          completion_timestamp: new Date().toISOString(),
           generation_status: 'completed'
         },
         executive_summary: {
@@ -496,9 +499,9 @@ async function startSimulationMode(reportId: string, userNetId: string) {
     } catch (error) {
       console.error(`[${reportId}] Simulation error:`, error);
       
-      // Mark as failed if simulation fails
+      // Mark as completed even if simulation fails
       await neo4jService.updateReport(reportId, userNetId, {
-        status: 'PUBLISHED' as any, // Use PUBLISHED instead of FAILED for better UX
+        status: 'PUBLISHED' as any,
         riskLevel: 'LOW',
         metadata: {
           generation_status: 'completed_with_errors',
@@ -507,8 +510,5 @@ async function startSimulationMode(reportId: string, userNetId: string) {
         }
       });
     }
-  };
-  
-  // Start simulation in background (don't await to return immediately)
-  simulateProgress();
+  }, 0); // Use 0ms to ensure it runs after the initial response
 } 
