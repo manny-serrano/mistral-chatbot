@@ -166,18 +166,31 @@ deploy:
         echo 'Testing metadata loading...'
         sudo curl -k -s -o /dev/null -w 'Duke Metadata fetch: %{http_code}\n' https://shib.oit.duke.edu/duke-metadata-3-signed.xml || echo 'Metadata fetch failed'
         
-        echo 'Verifying metadata file deployment...'
+        echo 'Verifying metadata file deployment and debugging Shibboleth...'
         sudo ls -la /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Local metadata file not found'
         sudo ls -la /etc/shibboleth/idp_signing.crt || echo 'Signing certificate not found'
         
-        echo 'Testing metadata file readability...'
-        sudo head -3 /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Cannot read metadata file'
+        echo 'Testing metadata file readability and content...'
+        sudo head -5 /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Cannot read metadata file'
+        sudo grep -o 'https://shib.oit.duke.edu/shibboleth-idp' /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Duke IdP entityID not found in metadata'
         
-        echo 'Verifying Shibboleth configuration syntax...'
+        echo 'Clearing Shibboleth logs and restarting for fresh debug info...'
+        sudo rm -f /var/log/shibboleth/shibd.log /var/log/shibboleth/transaction.log || true
+        sudo systemctl stop shibd || true
+        sleep 3
+        
+        echo 'Verifying Shibboleth configuration syntax before restart...'
         sudo /usr/sbin/shibd -t || echo 'Configuration syntax check completed'
         
-        echo 'Checking Shibboleth logs for any metadata errors...'
-        sudo tail -10 /var/log/shibboleth/shibd.log || echo 'No Shibboleth logs found'
+        echo 'Starting Shibboleth with verbose logging...'
+        sudo systemctl start shibd || true
+        sleep 5
+        
+        echo 'Checking fresh Shibboleth logs for metadata loading...'
+        sudo tail -20 /var/log/shibboleth/shibd.log || echo 'No Shibboleth logs found'
+        
+        echo 'Testing Shibboleth metadata endpoint directly...'
+        curl -k -s 'https://levantai.colab.duke.edu/Shibboleth.sso/Metadata' | head -5 || echo 'Metadata endpoint failed'
         
         echo 'Restarting Shibboleth and Apache...'
         sudo systemctl restart shibd || true
@@ -274,9 +287,13 @@ deploy:
         curl -k -s -o /dev/null -w 'Backend (8000): %{http_code}\n' https://levantai.colab.duke.edu:8000/healthz || echo 'Backend: Not responding'
         curl -k -s -o /dev/null -w 'Shibboleth Status: %{http_code}\n' https://levantai.colab.duke.edu/Shibboleth.sso/Status || echo 'Shibboleth: Not responding'
         curl -k -s -o /dev/null -w 'Shibboleth Metadata: %{http_code}\n' https://levantai.colab.duke.edu/Shibboleth.sso/Metadata || echo 'Metadata: Not available'
+        curl -k -s -o /dev/null -w 'Shibboleth Session: %{http_code}\n' https://levantai.colab.duke.edu/Shibboleth.sso/Session || echo 'Session: Not available'
         
-        echo 'Checking Shibboleth metadata loading...'
-        sudo grep -i 'metadata' /var/log/shibboleth/shibd.log | tail -5 || echo 'No metadata logs found'
+        echo 'Final Shibboleth status check...'
+        sudo systemctl status shibd --no-pager || echo 'Shibboleth service status check completed'
+        
+        echo 'Checking if Duke IdP is properly configured...'
+        sudo grep -i 'duke\|metadata\|entityid' /var/log/shibboleth/shibd.log | tail -10 || echo 'No Duke-related logs found'
         
         echo '✅ Deployment completed! Access: https://levantai.colab.duke.edu'
       "

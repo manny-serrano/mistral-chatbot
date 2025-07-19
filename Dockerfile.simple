@@ -1,7 +1,7 @@
 # Simplified Dockerfile for reliable production deployment
 FROM python:3.11-slim
 
-# Install system dependencies
+# Install system dependencies in a single layer to reduce size
 RUN apt-get update && apt-get install -y \
     curl \
     netcat-openbsd \
@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     build-essential \
     && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && apt-get clean \
+    && apt-get autoremove -y
 
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
@@ -21,17 +22,21 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies with optimized settings
+# Install Python dependencies with size optimization
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt && \
-    rm -rf /root/.cache/pip/*
+    pip cache purge && \
+    rm -rf /root/.cache/pip/* /tmp/* /var/tmp/* && \
+    find /usr/local -name '*.pyc' -delete && \
+    find /usr/local -name '__pycache__' -type d -exec rm -rf {} + || true
 
-# Copy application code
-COPY . .
+# Copy application code (excluding unnecessary files)
+COPY --exclude='.git' --exclude='logs' --exclude='data' --exclude='*.tar' --exclude='node_modules' . .
 
 # Create necessary directories and set permissions
 RUN mkdir -p /app/data /app/logs /app/.cache && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chmod +x /app/entrypoint.sh
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -41,9 +46,6 @@ ENV PYTHONUNBUFFERED=1 \
     LOG_LEVEL=INFO \
     LOW_MEMORY_MODE=true \
     PYTHONPATH="/app:/app/Agent"
-
-# Make entrypoint executable
-RUN chmod +x /app/entrypoint.sh
 
 # Switch to non-root user
 USER appuser
