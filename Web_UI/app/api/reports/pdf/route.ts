@@ -367,19 +367,23 @@ export async function POST(request: NextRequest) {
       const configDetails = safeObject(dataConfig.configuration_details)
       const ipfixElements = safeArray(dataConfig.ipfix_information_elements)
       
+      // Database icon SVG (consistent with browser component)
+      const databaseIcon = `<svg class="h-4 w-4 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
+      </svg>`
+      
       return `
-        <section class="${REPORT_STYLES.layout.sectionContainer}">
-          <h2 class="${REPORT_STYLES.typography.sectionTitle}">Data Sources & Configuration</h2>
+        <section class="mb-8 print:mb-6">
+          <h2 class="text-2xl font-bold text-gray-900 mb-4 print:text-xl">Data Sources & Configuration</h2>
           
-          <div class="${REPORT_STYLES.grids.cols2}">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Data Sources -->
             <div>
-              <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Data Sources</h3>
+              <h3 class="text-lg font-semibold text-gray-900 mb-3">Data Sources</h3>
               <div class="space-y-3">
-                <div class="${REPORT_STYLES.cards.content}">
+                <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                   <div class="flex items-center mb-2">
-                    <svg class="h-4 w-4 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
-                    </svg>
+                    ${databaseIcon}
                     <span class="font-medium text-gray-900">Primary Data Source</span>
                   </div>
                   <p class="text-sm text-gray-700 mb-1">
@@ -388,11 +392,9 @@ export async function POST(request: NextRequest) {
                 </div>
                 
                 ${yafSensors.length > 0 ? `
-                  <div class="${REPORT_STYLES.cards.content}">
+                  <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                     <div class="flex items-center mb-2">
-                      <svg class="h-4 w-4 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
-                      </svg>
+                      ${databaseIcon}
                       <span class="font-medium text-gray-900">YAF IPFIX Sensors</span>
                     </div>
                     <ul class="text-sm text-gray-700">
@@ -404,11 +406,9 @@ export async function POST(request: NextRequest) {
                 ` : ''}
                 
                 ${threatSources.length > 0 ? `
-                  <div class="${REPORT_STYLES.cards.content}">
+                  <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                     <div class="flex items-center mb-2">
-                      <svg class="h-4 w-4 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"/>
-                      </svg>
+                      ${databaseIcon}
                       <span class="font-medium text-gray-900">Threat Intelligence Sources</span>
                     </div>
                     <ul class="text-sm text-gray-700">
@@ -421,9 +421,10 @@ export async function POST(request: NextRequest) {
               </div>
             </div>
 
+            <!-- Analysis Configuration -->
             <div>
-              <h3 class="${REPORT_STYLES.typography.subsectionTitle}">Analysis Configuration</h3>
-              <div class="${REPORT_STYLES.cards.content}">
+              <h3 class="text-lg font-semibold text-gray-900 mb-3">Analysis Configuration</h3>
+              <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
                 <div class="space-y-3">
                   ${Object.keys(analysisMethodology).length > 0 ? `
                     <div>
@@ -802,12 +803,18 @@ export async function POST(request: NextRequest) {
       /* Utility */
       .w-2 { width: 0.5rem; }
       .h-2 { height: 0.5rem; }
-      .h-4 { width: 1rem; }
-      .w-4 { height: 1rem; }
-      .h-5 { width: 1.25rem; }
-      .w-5 { height: 1.25rem; }
+      .h-4 { width: 1rem; height: 1rem; }
+      .w-4 { width: 1rem; height: 1rem; }
+      .h-5 { width: 1.25rem; height: 1.25rem; }
+      .w-5 { width: 1.25rem; height: 1.25rem; }
       .flex-shrink-0 { flex-shrink: 0; }
       .list-disc { list-style-type: disc; }
+      
+      /* Additional card styling */
+      .shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+      .gap-6 { gap: 1.5rem; }
+      .p-6 { padding: 1.5rem; }
+      .mb-3 { margin-bottom: 0.75rem; }
       
       /* Print styles */
       @media print {

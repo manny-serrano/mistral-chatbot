@@ -31,10 +31,24 @@ function formatFileSize(bytes: number): string {
 function getUserFromSession(request: NextRequest): { netId: string; role: string } | null {
   try {
     const sessionCookie = request.cookies.get('duke-sso-session');
-    if (!sessionCookie) return null;
+    if (!sessionCookie) {
+      // Development mode fallback
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Development mode: Using fallback authentication');
+        return { netId: 'testuser', role: 'faculty' };
+      }
+      return null;
+    }
     
     const sessionData = JSON.parse(Buffer.from(sessionCookie.value, 'base64').toString());
-    if (Date.now() > sessionData.expires) return null;
+    if (Date.now() > sessionData.expires) {
+      // Development mode fallback even for expired sessions
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Development mode: Using fallback authentication for expired session');
+        return { netId: 'testuser', role: 'faculty' };
+      }
+      return null;
+    }
     
     const user = sessionData.user;
     const netId = user.eppn ? user.eppn.split('@')[0] : user.netId || 'unknown';
@@ -46,18 +60,48 @@ function getUserFromSession(request: NextRequest): { netId: string; role: string
     return { netId, role };
   } catch (error) {
     console.error('Session parsing error in main reports API:', error);
+    // Development mode fallback
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Development mode: Using fallback authentication after error');
+      return { netId: 'testuser', role: 'faculty' };
+    }
     return null;
   }
 }
 
 function mapReportToMetadata(report: ReportWithUser): ReportMetadata {
+  // Map database status to frontend status
+  let frontendStatus: "completed" | "generating" | "failed" | "draft" | "archived";
+  
+  // Handle status conversion - note that GENERATING and FAILED may come from 
+  // the application layer, not the database schema
+  const reportStatus = report.status as string;
+  switch (reportStatus) {
+    case 'PUBLISHED':
+      frontendStatus = 'completed';
+      break;
+    case 'GENERATING':
+    case 'DRAFT':
+      frontendStatus = 'generating';
+      break;
+    case 'ARCHIVED':
+      frontendStatus = 'archived';
+      break;
+    case 'FAILED':
+      frontendStatus = 'failed';
+      break;
+    default:
+      // Fallback for any other status
+      frontendStatus = 'draft';
+  }
+
   return {
     id: report.id,
     title: report.name,
     type: report.type,
     category: report.generatedBy.role === 'faculty' ? 'admin' : 'user',
     date: report.createdAt.toISOString(),
-    status: report.status.toLowerCase() as any,
+    status: frontendStatus,
     size: formatFileSize(report.fileSize || 0),
     filename: report.pdfPath ? report.pdfPath.split('/').pop() : undefined,
     duration_hours: report.statistics?.analysis_duration_hours || 0,
@@ -159,7 +203,7 @@ export async function GET(request: NextRequest) {
       };
 
       return NextResponse.json({
-        reports: {
+        categorized: {
           shared: [], // Legacy, no longer used
           user: userReports,
           admin: adminReports

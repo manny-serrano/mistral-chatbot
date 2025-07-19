@@ -54,8 +54,20 @@ function ThreatDashboard() {
       .then(res => res.json())
       .then(data => {
         let count = 0;
-        if (data.reports) {
+        // Handle new categorized structure
+        if (data.categorized) {
           // Handle categorized reports structure
+          if (data.categorized.shared && Array.isArray(data.categorized.shared)) {
+            count += data.categorized.shared.length;
+          }
+          if (data.categorized.user && Array.isArray(data.categorized.user)) {
+            count += data.categorized.user.length;
+          }
+          if (data.categorized.admin && Array.isArray(data.categorized.admin)) {
+            count += data.categorized.admin.length;
+          }
+        } else if (data.reports) {
+          // Handle legacy reports structure for backward compatibility
           if (data.reports.shared && Array.isArray(data.reports.shared)) {
             count += data.reports.shared.length;
           }
