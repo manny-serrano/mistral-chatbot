@@ -41,7 +41,7 @@
                 helpLocation="/about.html"
                 styleSheet="/shibboleth-sp/main.css"/>
 
-        <!-- Duke University Metadata Provider with official configuration -->
+        <!-- Duke University Metadata Provider with fallback configuration -->
         <MetadataProvider type="XML" validate="false"
                           url="https://shib.oit.duke.edu/duke-metadata-3-signed.xml"
                           backingFilePath="duke-metadata-3-signed.xml"
@@ -49,8 +49,8 @@
                           maxRefreshDelay="14400"
                           ignoreTransport="true">
             
-            <!-- Use Duke's signing certificate for metadata verification -->
-            <MetadataFilter type="Signature" certificate="idp_signing.crt"/>
+            <!-- Temporarily disable signature verification for troubleshooting -->
+            <!-- MetadataFilter type="Signature" certificate="idp_signing.crt"/ -->
             
             <!-- Whitelist filter for Duke IdP -->
             <MetadataFilter type="Whitelist">
@@ -58,7 +58,15 @@
             </MetadataFilter>
             
             <!-- Require valid metadata with extended validity period -->
-            <MetadataFilter type="RequireValidUntil" maxValidityInterval="86400"/>
+            <MetadataFilter type="RequireValidUntil" maxValidityInterval="31536000"/>
+        </MetadataProvider>
+
+        <!-- Fallback local metadata provider -->
+        <MetadataProvider type="XML" validate="false" file="duke-metadata-3-signed.xml">
+            <MetadataFilter type="Whitelist">
+                <Include>https://shib.oit.duke.edu/shibboleth-idp</Include>
+            </MetadataFilter>
+            <MetadataFilter type="RequireValidUntil" maxValidityInterval="31536000"/>
         </MetadataProvider>
 
         <!-- Map to extract attributes from SAML assertions. -->

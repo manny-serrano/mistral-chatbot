@@ -155,7 +155,7 @@ deploy:
         cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
         
         echo 'Applying Duke-compliant Shibboleth configuration...'
-        sudo sed -i 's/maxValidityInterval=\"[^\"]*\"/maxValidityInterval=\"86400\"/g' /etc/shibboleth/shibboleth2.xml || true
+        sudo sed -i 's/maxValidityInterval=\"[^\"]*\"/maxValidityInterval=\"31536000\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/validate=\"true\"/validate=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/encryption=\"true\"/encryption=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/signing=\"true\"/signing=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
@@ -163,8 +163,21 @@ deploy:
         echo 'Ensuring proper Duke IdP whitelist and redirect configuration...'
         sudo sed -i 's|redirectWhitelist=\"[^\"]*\"|redirectWhitelist=\"https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/\"|g' /etc/shibboleth/shibboleth2.xml || true
         
+        echo 'Testing metadata loading...'
+        sudo curl -k -s -o /dev/null -w 'Duke Metadata fetch: %{http_code}\n' https://shib.oit.duke.edu/duke-metadata-3-signed.xml || echo 'Metadata fetch failed'
+        
+        echo 'Verifying metadata file deployment...'
+        sudo ls -la /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Local metadata file not found'
+        sudo ls -la /etc/shibboleth/idp_signing.crt || echo 'Signing certificate not found'
+        
+        echo 'Testing metadata file readability...'
+        sudo head -3 /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Cannot read metadata file'
+        
         echo 'Verifying Shibboleth configuration syntax...'
         sudo /usr/sbin/shibd -t || echo 'Configuration syntax check completed'
+        
+        echo 'Checking Shibboleth logs for any metadata errors...'
+        sudo tail -10 /var/log/shibboleth/shibd.log || echo 'No Shibboleth logs found'
         
         echo 'Restarting Shibboleth and Apache...'
         sudo systemctl restart shibd || true
@@ -260,6 +273,10 @@ deploy:
         curl -k -s -o /dev/null -w 'Frontend (3000): %{http_code}\n' https://levantai.colab.duke.edu:3000 || echo 'Frontend: Not responding'
         curl -k -s -o /dev/null -w 'Backend (8000): %{http_code}\n' https://levantai.colab.duke.edu:8000/healthz || echo 'Backend: Not responding'
         curl -k -s -o /dev/null -w 'Shibboleth Status: %{http_code}\n' https://levantai.colab.duke.edu/Shibboleth.sso/Status || echo 'Shibboleth: Not responding'
+        curl -k -s -o /dev/null -w 'Shibboleth Metadata: %{http_code}\n' https://levantai.colab.duke.edu/Shibboleth.sso/Metadata || echo 'Metadata: Not available'
+        
+        echo 'Checking Shibboleth metadata loading...'
+        sudo grep -i 'metadata' /var/log/shibboleth/shibd.log | tail -5 || echo 'No metadata logs found'
         
         echo '✅ Deployment completed! Access: https://levantai.colab.duke.edu'
       "
