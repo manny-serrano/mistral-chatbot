@@ -552,6 +552,59 @@ class Neo4jService {
   }
 
   /**
+   * Delete all reports for a user (bulk delete)
+   */
+  async deleteAllReportsForUser(netId: string, includeArchived: boolean = true): Promise<{ deletedCount: number; success: boolean }> {
+    console.log('🗃️ Neo4j deleteAllReportsForUser called', { netId, includeArchived })
+    
+    const session = await this.getSession()
+    
+    try {
+      let whereClause = ''
+      if (!includeArchived) {
+        whereClause = ' AND r.status <> "ARCHIVED"'
+      }
+
+      const query = `
+        MATCH (u:User {netId: $netId})-[:GENERATED]->(r:Report)
+        WHERE 1=1 ${whereClause}
+        DETACH DELETE r
+        RETURN count(r) as deletedCount
+      `
+
+      console.log('📝 Executing Neo4j query:', query)
+      console.log('🔧 Query parameters:', { netId })
+
+      const result = await session.run(query, { netId })
+      console.log('📋 Raw Neo4j result:', result.records.length > 0 ? result.records[0] : 'No records')
+      
+      // Handle both regular numbers and Neo4j Integer objects
+      const deletedCountValue = result.records[0]?.get('deletedCount')
+      const deletedCount = typeof deletedCountValue === 'object' && deletedCountValue?.toNumber 
+        ? deletedCountValue.toNumber() 
+        : Number(deletedCountValue) || 0
+      
+      console.log('🔢 Deleted count:', deletedCount)
+      
+      const response = {
+        deletedCount,
+        success: deletedCount >= 0
+      }
+      
+      console.log('✅ Neo4j deleteAllReportsForUser result:', response)
+      return response
+    } catch (error) {
+      console.error('💥 Error deleting all reports for user:', error)
+      return {
+        deletedCount: 0,
+        success: false
+      }
+    } finally {
+      await session.close()
+    }
+  }
+
+  /**
    * Archive a report (soft delete)
    */
   async archiveReport(reportId: string, netId: string, allowAdmin: boolean = false): Promise<boolean> {

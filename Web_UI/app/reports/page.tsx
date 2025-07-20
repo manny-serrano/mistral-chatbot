@@ -160,6 +160,12 @@ export default function ReportsPage() {
     isLoading: false
   })
 
+  // State for clear all confirmation dialog
+  const [clearAllDialog, setClearAllDialog] = useState({
+    open: false,
+    isLoading: false
+  })
+
   // Helper function to filter reports by date
   const filterReportsByDate = (reports: ReportData[]) => {
     if (dateFilter === 'all') return reports
@@ -639,6 +645,55 @@ export default function ReportsPage() {
     }
   }
 
+  const handleClearAllReports = async () => {
+    setClearAllDialog(prev => ({ ...prev, isLoading: true }))
+    
+    try {
+      console.log('🧹 Starting bulk delete of all reports...')
+      
+      const response = await fetch('/api/reports/bulk', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ includeArchived: true }),
+      })
+
+      console.log('📡 API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      })
+
+      if (!response.ok) {
+        // Get the error details from the response
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        console.error('❌ API Error Details:', errorData)
+        throw new Error(`Failed to clear all reports: ${errorData.error || response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('✅ Bulk delete successful:', result)
+
+      toast({
+        title: 'All Reports Cleared',
+        description: result.message || 'All reports have been successfully deleted.',
+      })
+
+      // Refresh reports list
+      await refreshAndResetPage()
+    } catch (error) {
+      console.error('💥 Error clearing all reports:', error)
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to clear all reports. Please try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setClearAllDialog({ open: false, isLoading: false })
+    }
+  }
+
   // Helper function to cancel a generating report
   const handleCancelReport = async () => {
     if (!cancelDialog.reportId) return
@@ -823,7 +878,7 @@ export default function ReportsPage() {
           {/* Reports Content - Remove Tabs and show content directly */}
           <div className="space-y-4 sm:space-y-6">
               {/* Quick Stats - Responsive Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
                   <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
                     <div className="flex items-center justify-between">
@@ -832,18 +887,6 @@ export default function ReportsPage() {
                     </div>
                     <div className="text-xl sm:text-2xl font-bold text-white">
                       {summary?.total_reports || 0}
-                    </div>
-                  </CardHeader>
-                </Card>
-
-                <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
-                  <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs sm:text-sm font-medium text-zinc-300">Completed</CardTitle>
-                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-400" />
-                    </div>
-                    <div className="text-xl sm:text-2xl font-bold text-white">
-                      {summary?.completed_reports || 0}
                     </div>
                   </CardHeader>
                 </Card>
@@ -930,9 +973,27 @@ export default function ReportsPage() {
                 <CardHeader className="p-4 sm:p-6">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base sm:text-lg text-white">Recent Reports</CardTitle>
-                    <Badge variant="secondary" className="bg-purple-900/40 text-purple-200 border-purple-500/30 text-xs">
-                      {filteredReports.length} reports
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="bg-purple-900/40 text-purple-200 border-purple-500/30 text-xs">
+                        {filteredReports.length} reports
+                      </Badge>
+                      {filteredReports.length > 0 && (
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          onClick={() => setClearAllDialog({ open: true, isLoading: false })}
+                          className="text-xs bg-red-600/80 hover:bg-red-600 border-red-500/30"
+                          disabled={clearAllDialog.isLoading}
+                        >
+                          {clearAllDialog.isLoading ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3 mr-1" />
+                          )}
+                          Clear All
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -1204,6 +1265,14 @@ export default function ReportsPage() {
           onConfirm={handleCancelReport}
           itemName={cancelDialog.reportName}
           isLoading={cancelDialog.isLoading}
+      />
+
+      <DeleteConfirmationDialog
+        open={clearAllDialog.open}
+        onOpenChange={(open) => setClearAllDialog(prev => ({ ...prev, open }))}
+        onConfirm={handleClearAllReports}
+        itemName="all reports"
+        isLoading={clearAllDialog.isLoading}
       />
     </div>
   )
