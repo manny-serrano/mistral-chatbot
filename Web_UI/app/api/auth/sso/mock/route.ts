@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { UserManager, type DukeUser } from '@/lib/user-management'
+import { cookies } from 'next/headers'
 
 export async function GET(req: NextRequest) {
   try {
@@ -7,8 +7,8 @@ export async function GET(req: NextRequest) {
     const target = searchParams.get('target') || '/dashboard'
     
     // Mock Duke user attributes (in production, these come from Shibboleth)
-    const mockUser: DukeUser = {
-      eppn: 'testuser@duke.edu', // eduPersonPrincipalName
+    const mockUser = {
+      eppn: 'testuser', // eduPersonPrincipalName (just NetID, no @duke.edu)
       affiliation: 'faculty@duke.edu', // eduPersonScopedAffiliation
       displayName: 'Test User',
       givenName: 'Test',
@@ -17,19 +17,9 @@ export async function GET(req: NextRequest) {
       dukeID: '123456789'
     }
     
-    // Create or update user profile using UserManager (which now uses Neo4j)
-    const userProfile = await UserManager.createOrUpdateUser(mockUser)
-    
-    // Log the login activity
-    await UserManager.logUserActivity(userProfile.netId, 'login', {
-      method: 'mock_sso',
-      ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown'
-    })
-    
-    // Create a session token with full user profile
+    // Create a simple session token (in production, use proper JWT or session management)
     const sessionToken = Buffer.from(JSON.stringify({
-      user: userProfile,
-      permissions: UserManager.getUserPermissions(userProfile),
+      user: mockUser,
       timestamp: Date.now(),
       expires: Date.now() + (8 * 60 * 60 * 1000) // 8 hours
     })).toString('base64')

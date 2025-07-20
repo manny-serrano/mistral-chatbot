@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AttributeFilterPolicyGroup 
+    xmlns="urn:mace:shibboleth:2.0:afp"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:afp="urn:mace:shibboleth:2.0:afp">
+
+    <!-- Duke University Attribute Release Policy -->
+    <!-- This policy allows all Duke University attributes to be released -->
+    <!-- Reference: https://oit.duke.edu/help/articles/kb0010893 -->
+
+    <!-- Shared rule for Duke University affiliation values - OFFICIAL DUKE FORMAT -->
+    <afp:PermitValueRule id="eduPersonAffiliationValues" xsi:type="OR">
+        <afp:Rule xsi:type="Value" value="faculty"/>
+        <afp:Rule xsi:type="Value" value="student"/>
+        <afp:Rule xsi:type="Value" value="staff"/>
+        <afp:Rule xsi:type="Value" value="emeritus"/>
+        <afp:Rule xsi:type="Value" value="alum"/>
+        <afp:Rule xsi:type="Value" value="alumni"/>
+        <afp:Rule xsi:type="Value" value="member"/>
+        <afp:Rule xsi:type="Value" value="affiliate"/>
+        <afp:Rule xsi:type="Value" value="employee"/>
+        <afp:Rule xsi:type="Value" value="library-walk-in"/>
+    </afp:PermitValueRule>
+
+    <!-- Scoping rule for Duke domain -->
+    <PermitValueRule id="DukeScopingRule" xsi:type="ScopeMatchesShibMDScope"/>
+
+    <!-- Main attribute filter policy -->
+    <AttributeFilterPolicy>
+        <!-- This policy applies to all requests -->
+        <PolicyRequirementRule xsi:type="ANY"/>
+
+        <!-- eduPersonPrincipalName (eppn) - CRITICAL for authentication -->
+        <AttributeRule attributeID="eppn">
+            <PermitValueRuleReference ref="DukeScopingRule"/>
+        </AttributeRule>
+
+        <!-- eduPersonScopedAffiliation -->
+        <AttributeRule attributeID="affiliation">
+            <PermitValueRule xsi:type="AND">
+                <RuleReference ref="eduPersonAffiliationValues"/>
+                <RuleReference ref="DukeScopingRule"/>
+            </PermitValueRule>
+        </AttributeRule>
+
+        <!-- eduPersonPrimaryAffiliation (unscoped) -->
+        <AttributeRule attributeID="primary-affiliation">
+            <PermitValueRuleReference ref="eduPersonAffiliationValues"/>
+        </AttributeRule>
+
+        <!-- eduPersonAffiliation (unscoped, multi-valued) -->
+        <AttributeRule attributeID="unscoped-affiliation">
+            <PermitValueRuleReference ref="eduPersonAffiliationValues"/>
+        </AttributeRule>
+
+        <!-- Personal information attributes -->
+        <AttributeRule attributeID="displayName">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="givenName">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="sn">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="cn">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="nickname">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <!-- Contact information -->
+        <AttributeRule attributeID="mail">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="telephoneNumber">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <!-- Duke-specific attributes -->
+        <AttributeRule attributeID="duDukeID">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="uid">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="ou">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="title">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="duMiddleName1">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="dkuID">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="duDADDEntityId">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <!-- Persistent identifiers -->
+        <AttributeRule attributeID="targeted-id">
+            <PermitValueRule xsi:type="NameIDQualifierString"/>
+        </AttributeRule>
+
+        <AttributeRule attributeID="persistent-id">
+            <PermitValueRuleReference ref="DukeScopingRule"/>
+        </AttributeRule>
+
+        <!-- Group membership (Grouper) -->
+        <AttributeRule attributeID="isMemberOf">
+            <PermitValueRule xsi:type="ANY"/>
+        </AttributeRule>
+
+        <!-- Catch-all rule for any other attributes -->
+        <AttributeRule attributeID="*" permitAny="true"/>
+
+    </AttributeFilterPolicy>
+
+</AttributeFilterPolicyGroup> 

@@ -48,6 +48,32 @@ __pycache__/
 # Temporary files
 cookies.txt
 
+# Testing and debug files
+test-*.sh
+debug_*.ts
+fix-*.sh
+*test*.local
+**/debug/route.ts
+
+# SSL/TLS Certificates and Keys - SECURITY CRITICAL!
+*.key
+*.pem
+*.crt
+*.csr
+*.p12
+*.pfx
+ssl/
+apache-config/ssl/
+*.cert
+*.cer
+**/ssl/
+**/certs/
+**/certificates/
+
+# Certificate Authority files
+ca-bundle.*
+ca-cert.*
+
 # Node.js dependencies
 node_modules/
 **/node_modules/

@@ -14,6 +14,39 @@ import {
   RefreshCw,
 } from "lucide-react"
 
+interface Alert {
+  type: string
+  ip: string
+  date: string
+  unique_ports: number
+  pcr: number
+  por: number
+  p_value: number
+  severity: "critical" | "high" | "medium" | "low"
+  message: string
+}
+
+interface ProcessedIPData {
+  id: number
+  ip: string
+  country: string
+  confidence: string
+  timestamp: string
+  threatCount: number
+  lastSeen: string
+}
+
+interface ProcessedDomainData {
+  id: number
+  ip: string // domain name or IP-derived domain
+  country: string
+  confidence: string
+  timestamp: string
+  threatCount: number
+  lastSeen: string
+  sourceIp: string // original IP this domain is associated with
+}
+
 function ThreatDashboard() {
   const router = useRouter();
   const [showIPs, setShowIPs] = useState(true);
@@ -25,8 +58,24 @@ function ThreatDashboard() {
   const [prevReportCount, setPrevReportCount] = useState<number | null>(null);
   const [flowCount, setFlowCount] = useState<number | null>(null);
   const [prevFlowCount, setPrevFlowCount] = useState<number | null>(null);
+  
+  // Real-time data state - connected to /api/alerts and /api/geolocation
+  // Recent/Top IPs: Shows actual suspicious IPs from alerts with geolocation data
+  // Recent/Top Domains: Shows only real domains extracted from IP geolocation data (no fake domains)
+  const [recentIPs, setRecentIPs] = useState<ProcessedIPData[]>([]);
+  const [topIPs, setTopIPs] = useState<ProcessedIPData[]>([]);
+  const [loadingIPData, setLoadingIPData] = useState(false);
+
+  // Real domain data state - only legitimate domains from geolocation API
+  const [recentDomains, setRecentDomains] = useState<ProcessedDomainData[]>([]);
+  const [topDomains, setTopDomains] = useState<ProcessedDomainData[]>([]);
 
   function formatTime(date: Date) {
+    // Check if date is valid
+    if (!date || isNaN(date.getTime())) {
+      return "N/A";
+    }
+    
     let hours = date.getHours();
     const minutes = date.getMinutes().toString().padStart(2, "0");
     const ampm = hours >= 12 ? "PM" : "AM";
@@ -34,13 +83,318 @@ function ThreatDashboard() {
     return `${hours}:${minutes} ${ampm}`;
   }
 
+  // Function to get geolocation data for IPs
+  const getGeolocationsForIPs = async (ips: string[]) => {
+    try {
+      const response = await fetch('/api/geolocation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ips })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Geolocation API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return data.results || []
+    } catch (error) {
+      console.error('Error fetching geolocations:', error)
+      return []
+    }
+  }
+
+  // Function to process alerts and get IP data
+  const processAlertsData = async () => {
+    setLoadingIPData(true);
+    try {
+      // Fetch alerts
+      const response = await fetch('/api/alerts');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const result = await response.json();
+      const alerts: Alert[] = result.alerts || [];
+
+      console.log('Received alerts count:', alerts.length); // Debug log
+      if (alerts.length > 0) {
+        console.log('Sample alert:', alerts[0]); // Debug log
+        console.log('Sample alert date:', alerts[0].date); // Debug log
+      }
+
+      // Group alerts by IP
+      const ipGroups: Record<string, {
+        alerts: Alert[]
+        maxSeverity: "critical" | "high" | "medium" | "low"
+        totalThreats: number
+        lastSeen: string
+      }> = {};
+
+      alerts.forEach((alert: Alert) => {
+        if (!ipGroups[alert.ip]) {
+          ipGroups[alert.ip] = {
+            alerts: [],
+            maxSeverity: "low",
+            totalThreats: 0,
+            lastSeen: alert.date
+          };
+        }
+        
+        ipGroups[alert.ip].alerts.push(alert);
+        ipGroups[alert.ip].totalThreats += 1;
+        
+        // Update max severity
+        const severityOrder = { low: 1, medium: 2, high: 3, critical: 4 };
+        if (severityOrder[alert.severity] > severityOrder[ipGroups[alert.ip].maxSeverity]) {
+          ipGroups[alert.ip].maxSeverity = alert.severity;
+        }
+
+        // Update last seen
+        if (alert.date > ipGroups[alert.ip].lastSeen) {
+          ipGroups[alert.ip].lastSeen = alert.date;
+        }
+      });
+
+      // Get unique IPs and fetch geolocation data
+      const uniqueIPs = Object.keys(ipGroups);
+      const geolocations = await getGeolocationsForIPs(uniqueIPs);
+      
+      // Create IP to geolocation mapping
+      const geoMap = new Map();
+      geolocations.forEach((geo: any) => {
+        geoMap.set(geo.ip, geo);
+      });
+
+      // Process the data for dashboard display
+      const processedData: ProcessedIPData[] = Object.entries(ipGroups).map(([ip, group], index) => {
+        const geoData = geoMap.get(ip) || {
+          country: 'Unknown',
+          city: 'Unknown'
+        };
+
+        // Convert severity to confidence
+        const getConfidence = (severity: string) => {
+          switch (severity) {
+            case "critical": return "Critical";
+            case "high": return "High";
+            case "medium": return "Medium";
+            case "low": return "Low";
+            default: return "Medium";
+          }
+        };
+
+        // Format timestamp
+        const formatTimestamp = (dateStr: string) => {
+          try {
+            // Validate that dateStr is not empty or null
+            if (!dateStr || dateStr.trim() === '') {
+              console.warn('Empty date string for formatting:', dateStr);
+              return "Just now";
+            }
+            
+            console.log('Formatting date string:', dateStr); // Debug log
+            
+            // Try multiple date parsing approaches
+            let date: Date;
+            
+            // Try parsing as-is first
+            date = new Date(dateStr);
+            
+            // If that fails, try treating it as a timestamp
+            if (isNaN(date.getTime())) {
+              const timestamp = parseInt(dateStr);
+              if (!isNaN(timestamp)) {
+                date = new Date(timestamp);
+              }
+            }
+            
+            // Check if the date is valid
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid date created from:', dateStr);
+              return "Unknown";
+            }
+            
+            // Check if date is too far in the past or future (sanity check)
+            const now = new Date();
+            const timeDiff = Math.abs(now.getTime() - date.getTime());
+            const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+            
+            if (daysDiff > 365) {
+              console.warn('Date seems too old or too far in future:', dateStr, date);
+              return "Old";
+            }
+            
+            const formattedTime = formatTime(date);
+            console.log('Formatted time result:', formattedTime); // Debug log
+            return formattedTime;
+          } catch (error) {
+            console.warn('Invalid date format:', dateStr, error);
+            return "Error";
+          }
+        };
+
+        return {
+          id: index + 1,
+          ip: ip,
+          country: geoData.country_code || geoData.country || 'UN',
+          confidence: getConfidence(group.maxSeverity),
+          timestamp: formatTimestamp(group.lastSeen),
+          threatCount: group.totalThreats,
+          lastSeen: group.lastSeen
+        };
+      }).filter(item => {
+        // Filter out private IPs for display
+        return !item.ip.startsWith('192.168.') && 
+               !item.ip.startsWith('10.') && 
+               !/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(item.ip) &&
+               !item.ip.startsWith('127.');
+      });
+
+      // Sort for recent IPs (by last seen, most recent first)
+      const recentIPsData = [...processedData]
+        .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())
+        .slice(0, 4);
+
+      // Sort for top IPs (by threat score: severity + threat count combined)
+      const topIPsData = [...processedData]
+        .filter(item => item.confidence !== 'Low') // Only include Critical, High, Medium threats
+        .sort((a, b) => {
+          // Calculate threat score: severity weight + threat count
+          const getSeverityWeight = (severity: string) => {
+            switch (severity) {
+              case "Critical": return 1000;
+              case "High": return 100;
+              case "Medium": return 10;
+              case "Low": return 1;
+              default: return 1;
+            }
+          };
+          
+          const scoreA = getSeverityWeight(a.confidence) + a.threatCount;
+          const scoreB = getSeverityWeight(b.confidence) + b.threatCount;
+          
+          // If scores are equal, sort by threat count
+          if (scoreB === scoreA) {
+            return b.threatCount - a.threatCount;
+          }
+          
+          return scoreB - scoreA;
+        })
+        .slice(0, 4);
+
+      setRecentIPs(recentIPsData);
+      setTopIPs(topIPsData);
+
+      // Generate domain data from the processed IP data
+      const allDomainData = generateDomainData(processedData, geoMap);
+      
+      // Sort for recent domains (by last seen, most recent first)
+      const recentDomainsData = [...allDomainData]
+        .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())
+        .slice(0, 4);
+
+      // Sort for top domains (by threat score: severity + threat count combined)
+      const topDomainsData = [...allDomainData]
+        .filter(item => item.confidence !== 'Low') // Only include Critical, High, Medium threats
+        .sort((a, b) => {
+          // Calculate threat score: severity weight + threat count
+          const getSeverityWeight = (severity: string) => {
+            switch (severity) {
+              case "Critical": return 1000;
+              case "High": return 100;
+              case "Medium": return 10;
+              case "Low": return 1;
+              default: return 1;
+            }
+          };
+          
+          const scoreA = getSeverityWeight(a.confidence) + a.threatCount;
+          const scoreB = getSeverityWeight(b.confidence) + b.threatCount;
+          
+          // If scores are equal, sort by threat count
+          if (scoreB === scoreA) {
+            return b.threatCount - a.threatCount;
+          }
+          
+          return scoreB - scoreA;
+        })
+        .slice(0, 4);
+
+      setRecentDomains(recentDomainsData);
+      setTopDomains(topDomainsData);
+
+    } catch (error) {
+      console.error('Error processing alerts data:', error);
+      // Fallback to empty arrays
+      setRecentIPs([]);
+      setTopIPs([]);
+      setRecentDomains([]);
+      setTopDomains([]);
+    } finally {
+      setLoadingIPData(false);
+    }
+  };
+
+  // Function to extract real domain data from IP data and geolocation
+  const generateDomainData = (ipData: ProcessedIPData[], geoMap: Map<string, any>): ProcessedDomainData[] => {
+    const domainData: ProcessedDomainData[] = [];
+    let domainId = 1;
+
+    ipData.forEach((ipItem) => {
+      const geoData = geoMap.get(ipItem.ip);
+      
+      // Only use real domain data from geolocation API
+      let domainName = geoData?.connection?.domain;
+      
+      // Skip this entry if no real domain is available
+      if (!domainName || domainName === 'N/A' || domainName === 'Unknown' || domainName.trim() === '') {
+        return; // Skip - no real domain data available
+      }
+
+      // Additional validation to ensure domain looks legitimate
+      // Check if domain has proper format (contains . and doesn't look generated)
+      if (!domainName.includes('.') || 
+          domainName.includes('fake') || 
+          domainName.includes('unknown') ||
+          domainName.includes('localhost') ||
+          domainName.includes('example') ||
+          domainName.includes('test') ||
+          domainName.toLowerCase().includes('host') ||
+          domainName.match(/^\d+\.\d+\.\d+\.\d+/) || // IP address format
+          domainName.length < 4 || // Too short
+          domainName.startsWith('.') || 
+          domainName.endsWith('.')) {
+        return; // Skip invalid or fake-looking domains
+      }
+
+      // Create domain entry only for real domains
+      domainData.push({
+        id: domainId++,
+        ip: domainName,
+        country: ipItem.country,
+        confidence: ipItem.confidence,
+        timestamp: ipItem.timestamp,
+        threatCount: ipItem.threatCount,
+        lastSeen: ipItem.lastSeen,
+        sourceIp: ipItem.ip
+      });
+    });
+
+    return domainData;
+  };
+
   useEffect(() => {
     handleRefresh();
   }, []);
 
   const handleRefresh = () => {
-    setLastUpdated(formatTime(new Date()));
+    const currentTime = new Date();
+    const formattedTime = formatTime(currentTime);
+    setLastUpdated(formattedTime);
 
+    // Fetch dashboard metrics
     fetch("/api/alerts")
       .then(res => res.json())
       .then(data => {
@@ -90,6 +444,9 @@ function ThreatDashboard() {
         setFlowCount(typeof data.total_flows === "number" ? data.total_flows : 0);
       })
       .catch(() => setFlowCount(null));
+
+    // Fetch and process IP data
+    processAlertsData();
   };
 
   const getTrend = (current: number | null, previous: number | null) => {
@@ -115,13 +472,16 @@ function ThreatDashboard() {
       </CardHeader>
       <CardContent className="p-0 flex-1 overflow-hidden">
         <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 mb-4 mt-2">
-          <span className="text-xs sm:text-sm text-zinc-300">Last updated: {lastUpdated}</span>
+          <span className="text-xs sm:text-sm text-zinc-300">
+            Last updated: {lastUpdated} {loadingIPData && "(Loading IP data...)"}
+          </span>
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition"
+            disabled={loadingIPData}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-600 text-zinc-200 text-xs font-medium transition"
             title="Refresh"
           >
-            <RefreshCw className="w-4 h-4" /> Refresh
+            <RefreshCw className={`w-4 h-4 ${loadingIPData ? 'animate-spin' : ''}`} /> Refresh
           </button>
         </div>
 
@@ -139,7 +499,7 @@ function ThreatDashboard() {
                 value={flowCount !== null ? flowCount.toLocaleString() : "—"}
                 trend={getTrend(flowCount, prevFlowCount)}
                 trendDirection={getTrendDirection(flowCount, prevFlowCount)}
-                icon={<Activity className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />} // Changed icon and color
+                icon={<Activity className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />}
                 priority="high"
                 onClick={() => router.push("/visualization/network")}
                 clickable
@@ -176,17 +536,9 @@ function ThreatDashboard() {
               >
                 <ThreatTable
                   title={<span className="text-base font-semibold text-white">{showIPs ? "Recent Malicious IPs" : "Recent Malicious Domains"}</span>}
-                  data={showIPs ? [
-                    { id: 1, ip: "185.143.223.12", country: "RU", confidence: "High", timestamp: "10:42:15" },
-                    { id: 2, ip: "103.35.74.74", country: "CN", confidence: "Medium", timestamp: "09:37:22" },
-                    { id: 3, ip: "91.243.85.45", country: "UA", confidence: "High", timestamp: "08:15:03" },
-                    { id: 4, ip: "45.227.255.206", country: "BR", confidence: "Medium", timestamp: "07:52:41" },
-                  ] : [
-                    { id: 1, ip: "malicious-site.com", country: "US", confidence: "High", timestamp: "10:15:33" },
-                    { id: 2, ip: "download-free-stuff.net", country: "NL", confidence: "Medium", timestamp: "09:22:17" },
-                    { id: 3, ip: "crypto-mining-pool.io", country: "RU", confidence: "High", timestamp: "08:45:09" },
-                    { id: 4, ip: "fake-login-portal.com", country: "CN", confidence: "High", timestamp: "07:30:55" },
-                  ]}
+                  data={showIPs ? recentIPs : recentDomains}
+                  loading={loadingIPData}
+                  isDomainTable={!showIPs}
                 />
               </div>
 
@@ -198,18 +550,10 @@ function ThreatDashboard() {
                 aria-pressed={!showTopMisuseIPs}
               >
                 <ThreatTable
-                  title={<span className="text-base font-semibold text-white">{showTopMisuseIPs ? "Top Malicious IPs" : "Top Malicious Domains"}</span>}
-                  data={showTopMisuseIPs ? [
-                    { id: 1, ip: "203.0.113.1", country: "US", confidence: "Critical", timestamp: "11:22:33" },
-                    { id: 2, ip: "198.51.100.2", country: "DE", confidence: "High", timestamp: "10:15:44" },
-                    { id: 3, ip: "192.0.2.3", country: "FR", confidence: "Medium", timestamp: "09:55:12" },
-                    { id: 4, ip: "203.0.113.4", country: "JP", confidence: "Low", timestamp: "08:40:27" },
-                  ] : [
-                    { id: 1, ip: "bad-domain.com", country: "RU", confidence: "Critical", timestamp: "11:10:10" },
-                    { id: 2, ip: "phishing-site.net", country: "CN", confidence: "High", timestamp: "10:50:20" },
-                    { id: 3, ip: "malware-download.org", country: "BR", confidence: "Medium", timestamp: "09:30:45" },
-                    { id: 4, ip: "fakebank-login.com", country: "IN", confidence: "Low", timestamp: "08:20:55" },
-                  ]}
+                  title={<span className="text-base font-semibold text-white">{showTopMisuseIPs ? "Top Critical Threats (IPs)" : "Top Critical Threats (Domains)"}</span>}
+                  data={showTopMisuseIPs ? topIPs : topDomains}
+                  loading={loadingIPData}
+                  isDomainTable={!showTopMisuseIPs}
                 />
               </div>
             </div>
@@ -262,7 +606,7 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
   );
 }
 
-function ThreatTable({ title, data }: { title: React.ReactNode, data: any[] }) {
+function ThreatTable({ title, data, loading, isDomainTable = false }: { title: React.ReactNode, data: any[], loading: boolean, isDomainTable?: boolean }) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
@@ -275,24 +619,42 @@ function ThreatTable({ title, data }: { title: React.ReactNode, data: any[] }) {
               <th className="pb-1 sm:pb-2 text-left font-medium text-zinc-400">IP/Domain</th>
               <th className="pb-1 sm:pb-2 text-left font-medium text-zinc-400 hidden sm:table-cell">Origin</th>
               <th className="pb-1 sm:pb-2 text-left font-medium text-zinc-400">Confidence</th>
-              <th className="pb-1 sm:pb-2 text-right font-medium text-zinc-400 hidden md:table-cell">Time</th>
+              <th className="pb-1 sm:pb-2 text-right font-medium text-zinc-400">Time</th>
             </tr>
           </thead>
           <tbody>
-            {data.map((item, i) => (
-              <tr key={item.id} className={i % 2 === 0 ? "bg-zinc-900" : "bg-zinc-800"}>
-                <td className="py-1 sm:py-2 text-left font-medium text-white">
-                  <div className="truncate max-w-[100px] sm:max-w-[150px]" title={item.ip}>
-                    {item.ip}
-                  </div>
-                </td>
-                <td className="py-1 sm:py-2 text-left text-zinc-300 hidden sm:table-cell">{item.country}</td>
-                <td className="py-1 sm:py-2 text-left">
-                  <ConfidenceBadge confidence={item.confidence} />
-                </td>
-                <td className="py-1 sm:py-2 text-right text-zinc-400 hidden md:table-cell text-xs">{item.timestamp}</td>
+            {loading ? (
+              <tr>
+                <td colSpan={4} className="py-4 text-center text-zinc-500">Loading data...</td>
               </tr>
-            ))}
+            ) : data.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-4 text-center text-zinc-500">No data available.</td>
+              </tr>
+            ) : (
+              data.map((item, i) => (
+                <tr key={item.id} className={i % 2 === 0 ? "bg-zinc-900" : "bg-zinc-800"}>
+                  <td className="py-1 sm:py-2 text-left font-medium text-white">
+                    <div 
+                      className="truncate max-w-[100px] sm:max-w-[150px]" 
+                      title={item.sourceIp ? `${item.ip} (Source IP: ${item.sourceIp})` : item.ip}
+                    >
+                      {item.ip}
+                    </div>
+                    {item.sourceIp && (
+                      <div className="text-xs text-zinc-500 truncate max-w-[100px] sm:max-w-[150px]">
+                        from {item.sourceIp}
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-1 sm:py-2 text-left text-zinc-300 hidden sm:table-cell">{item.country}</td>
+                  <td className="py-1 sm:py-2 text-left">
+                    <ConfidenceBadge confidence={item.confidence} />
+                  </td>
+                  <td className="py-1 sm:py-2 text-right text-zinc-400 text-xs sm:text-sm">{item.timestamp}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

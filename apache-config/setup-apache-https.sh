@@ -39,6 +39,7 @@ detect_os() {
 check_root() {
     if [ "$EUID" -ne 0 ]; then
         print_error "This script must be run as root (use sudo)"
+        print_error "Please run: sudo $0 $*"
         exit 1
     fi
 }
@@ -153,14 +154,29 @@ configure_apache() {
     
     print_status "Configuring Apache virtual host..."
     
+    # Verify source configuration file exists
+    local source_config="$(dirname "$0")/sites-available/mistral-app.conf"
+    if [ ! -f "$source_config" ]; then
+        print_error "Source configuration file not found: $source_config"
+        exit 1
+    fi
+    
     # Copy configuration file
     local config_file=""
     if [ "$os" = "debian" ]; then
         config_file="/etc/apache2/sites-available/mistral-app.conf"
-        cp "$(dirname "$0")/sites-available/mistral-app.conf" "$config_file"
+        if ! cp "$source_config" "$config_file"; then
+            print_error "Failed to copy configuration file to $config_file"
+            print_error "Check permissions and ensure you're running with sudo"
+            exit 1
+        fi
     elif [ "$os" = "redhat" ]; then
         config_file="/etc/httpd/conf.d/mistral-app.conf"
-        cp "$(dirname "$0")/sites-available/mistral-app.conf" "$config_file"
+        if ! cp "$source_config" "$config_file"; then
+            print_error "Failed to copy configuration file to $config_file"
+            print_error "Check permissions and ensure you're running with sudo"
+            exit 1
+        fi
     fi
     
     # Update domain name in configuration

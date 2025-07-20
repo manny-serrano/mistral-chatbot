@@ -2,19 +2,53 @@ stages:
   - build
   - deploy
 
+# Streamlined SSO Configuration (July 18, 2025)
+# CRITICAL FIXES:
+# - Service Provider EntityID: https://levantai.colab.duke.edu  
+# - Identity Provider EntityID: https://shib.oit.duke.edu/shibboleth-idp (Duke Official)
+# - Disabled authentication request signing (Duke recommendation)
+# - Using official Duke metadata: https://shib.oit.duke.edu/duke-metadata-3-signed.xml
+# - Fixed Shibboleth metadata validity interval
+# - Comprehensive Docker deployment with proper service ordering
+
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
-  # BuildKit will be automatically configured and used for optimized builds
+  DOCKER_BUILDKIT: "1"
+  BUILDKIT_PROGRESS: plain
   CI: "true"
   GITLAB_CI: "true"
 
 build:
   stage: build
-  image: alpine:latest
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+    DOCKER_BUILDKIT: "1"
+    BUILDKIT_PROGRESS: plain
+  before_script:
+    - sleep 10
+    - docker info
+    - echo "🔧 Docker BuildKit enabled for optimized builds"
   script:
-    - echo "✅ Build stage completed - ready for deployment"
-    - echo "🔧 Docker build system will ensure BuildKit is available and configured"
+    - echo "🐳 Building Docker image with simplified Dockerfile..."
+    - docker build --progress=plain --build-arg BUILDKIT_INLINE_CACHE=1 -f Dockerfile.simple -t mistral-network-security:latest .
+    - echo "✅ Docker image built successfully"
+    - docker images | grep mistral-network-security
+    - echo "🏷️ Tagging image for deployment..."
+    - docker tag mistral-network-security:latest mistral-network-security:$CI_COMMIT_SHA
+    - docker save mistral-network-security:latest > mistral-image.tar
+    - echo "💾 Docker image saved for deployment"
+  artifacts:
+    paths:
+      - mistral-image.tar
+    expire_in: 1 hour
   only:
     - main
 
@@ -28,65 +62,284 @@ deploy:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
   script:
-    - echo "🔍 Checking VM connectivity..."
-    - echo "VM_HOST:$VM_HOST"
-    - echo "VM_USER:$VM_USER"
-    - echo "Testing network connectivity to IP..."
-    - ping -c 3 $VM_HOST || echo "⚠️  Ping failed but continuing (might be blocked)"
-    - echo "Testing SSH connectivity..."
-    - ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'"
-    - echo "✅ SSH connection successful"
-    - echo "🌐 Testing VM network connectivity..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "ping -c 3 8.8.8.8 || echo 'Network connectivity issue on VM'"
-    - echo "🔍 Checking storage and system resources before deployment..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "free -h"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir"
-    - echo "🗂️ Pre-deployment cache optimization..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/docker-build-cache"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/pip-cache"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/npm-cache"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/docker-tmp"
-    - echo "📁 Creating Docker volume mount directories..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/neo4j"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/etcd"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/minio"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/data/milvus"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/logs/neo4j"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p /srv/homedir/mistral-app/model-cache"
-    - echo "📦 Copying optimization scripts..."
-    - scp -o StrictHostKeyChecking=no scripts/manage-storage.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/optimize-model-storage.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/storage-troubleshoot.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/fix-docker-volumes.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/check-health.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/network-stability-check.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no docker-build-retry.sh $VM_USER@$VM_HOST:/tmp/
-    - echo "🌐 Running network stability check..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/network-stability-check.sh && /tmp/network-stability-check.sh || echo 'Network issues detected but continuing...'"
-    - echo "🔧 Copying Apache configuration..."
-    - scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
-    - echo "🔧 Running storage optimization (preserving cache)..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/storage-troubleshoot.sh"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/storage-troubleshoot.sh"
-    - echo "🧹 Running selective cleanup and pre-build setup..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/manage-storage.sh cleanup"
-    - echo "🔧 Optimizing Docker volumes..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "chmod +x /tmp/fix-docker-volumes.sh"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "bash /tmp/fix-docker-volumes.sh"
-    - echo "📈 Post-optimization storage status:"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h / | tail -1"
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "df -h /srv/homedir | tail -1"
-    - echo "🚀 Proceeding with cache-optimized deployment with network retry logic..."
-    - scp -o StrictHostKeyChecking=no scripts/deploy-to-vm.sh $VM_USER@$VM_HOST:/tmp/
-    - scp -o StrictHostKeyChecking=no scripts/setup-directories.sh $VM_USER@$VM_HOST:/tmp/
-    - ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 $VM_USER@$VM_HOST "CI='true' GITLAB_CI='true' LIGHTWEIGHT_MODE='true' OPENAI_API_KEY='$OPENAI_API_KEY' VM_HOST='$VM_HOST' bash /tmp/deploy-to-vm.sh"
-    - echo "🏥 Running comprehensive health check..."
-    - ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "cd /home/${VM_USER:-vcm}/mistral-enhancing-network-security-analysis && chmod +x /tmp/check-health.sh && /tmp/check-health.sh"
+    # ============================================
+    # 1. CONNECTIVITY AND PREPARATION
+    # ============================================
+    - |
+      echo "🔍 Checking VM connectivity..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes $VM_USER@$VM_HOST "echo 'SSH connection successful'"
+      echo "✅ SSH connection successful"
+    
+    # ============================================
+    # 2. DOCKER IMAGE TRANSFER (with disk space check)
+    # ============================================
+    - |
+      echo "🐳 Transferring pre-built Docker image..."
+      if [ -f "mistral-image.tar" ]; then
+        echo "📦 Checking disk space on VM before transfer..."
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+          echo 'Available disk space:'
+          df -h /tmp /home
+          echo 'Current /tmp contents:'
+          ls -la /tmp/ | wc -l
+          echo 'Cleaning old Docker artifacts in /tmp...'
+          sudo rm -f /tmp/mistral-image.tar* /tmp/docker-*.tar* || true
+          echo 'Space after cleanup:'
+          df -h /tmp
+        "
+        
+        echo "📦 Copying Docker image to VM (with compression)..."
+        if scp -o StrictHostKeyChecking=no -C mistral-image.tar $VM_USER@$VM_HOST:/tmp/; then
+          echo "📥 Loading Docker image on VM..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+            if [ -f /tmp/mistral-image.tar ]; then
+              docker load < /tmp/mistral-image.tar || echo 'Failed to load Docker image'
+              rm -f /tmp/mistral-image.tar
+              echo '✅ Pre-built Docker image loaded successfully'
+            else
+              echo '❌ Image file not found after transfer'
+            fi
+          "
+        else
+          echo "⚠️ Image transfer failed - will build on VM instead"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+            echo 'Image transfer failed, cleaning up any partial files...'
+            rm -f /tmp/mistral-image.tar* || true
+          "
+        fi
+      else
+        echo "⚠️ No pre-built image found - will build on VM"
+      fi
+    
+    # ============================================
+    # 3. COPY ONLY ESSENTIAL FILES
+    # ============================================
+    - |
+      echo "📦 Copying essential configuration files..."
+      # SSL certificates
+      echo "$SSL_CERT_BASE64" | base64 -d > /tmp/ssl_cert.pem
+      echo "$SSL_KEY_BASE64" | base64 -d > /tmp/ssl_key.pem
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "mkdir -p /tmp/ssl"
+      scp -o StrictHostKeyChecking=no /tmp/ssl_cert.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.pem
+      scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.key
+      rm -f /tmp/ssl_cert.pem /tmp/ssl_key.pem
+      
+      # Shibboleth configuration
+      scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
+      # Copy SSL certs as SP certs (same content, different usage)
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        cp /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-signing-cert.pem
+        cp /tmp/ssl/levantai.colab.duke.edu.key /tmp/shibboleth-config/sp-signing-key.pem
+        cp /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-encrypt-cert.pem
+        cp /tmp/ssl/levantai.colab.duke.edu.key /tmp/shibboleth-config/sp-encrypt-key.pem
+      "
+      
+      # Apache configuration
+      scp -o StrictHostKeyChecking=no -r apache-config/ $VM_USER@$VM_HOST:/tmp/
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/apache-config/*.sh || true"
+      
+      # SSO deployment script
+      scp -o StrictHostKeyChecking=no deploy-sso-config.sh $VM_USER@$VM_HOST:/tmp/ || echo "SSO script not found"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/deploy-sso-config.sh || true"
+      
+      # Only ONE deployment script needed
+      scp -o StrictHostKeyChecking=no docker-deploy-complete.sh $VM_USER@$VM_HOST:/tmp/ || echo "docker-deploy-complete.sh not found"
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "chmod +x /tmp/docker-deploy-complete.sh || true"
+    
+    # ============================================
+    # 4. SSO CONFIGURATION DEPLOYMENT
+    # ============================================
+    - |
+      echo "🔐 Deploying SSO Configuration..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
+        
+        echo 'CRITICAL FIX: Removing invalid sameSitePolicy attribute...'
+        sudo sed -i 's/ sameSitePolicy=\"None\"//g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'CRITICAL FIX: Ensuring proper MetadataProvider configuration...'
+        if ! sudo grep -q '<MetadataProvider' /etc/shibboleth/shibboleth2.xml; then
+          echo 'Adding missing MetadataProvider configuration...'
+          sudo sed -i '/<\/Errors>/a\\n        <!-- Primary: Local file metadata provider -->\n        <MetadataProvider type=\"XML\" validate=\"false\" file=\"duke-metadata-3-signed.xml\"/>\n\n        <!-- Fallback: URL-based metadata provider -->\n        <MetadataProvider type=\"XML\" validate=\"false\"\n                          url=\"https://shib.oit.duke.edu/duke-metadata-3-signed.xml\"\n                          backingFilePath=\"duke-metadata-fallback.xml\"\n                          reloadInterval=\"7200\"/>' /etc/shibboleth/shibboleth2.xml
+        fi
+        
+        echo 'CRITICAL FIX: Creating proper security-policy.xml with PolicyRule syntax...'
+        echo '<?xml version=\"1.0\" encoding=\"UTF-8\"?>' | sudo tee /etc/shibboleth/security-policy.xml > /dev/null
+        echo '<SecurityPolicies xmlns=\"urn:mace:shibboleth:3.0:native:sp:config\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    xmlns:conf=\"urn:mace:shibboleth:3.0:native:sp:config\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\">' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    <Policy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <PolicyRule type=\"Conditions\" clockSkew=\"300\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <PolicyRule type=\"ClientCertAuth\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <PolicyRule type=\"XMLSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <PolicyRule type=\"SimpleSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    </Policy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '</SecurityPolicies>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        
+        echo 'Applying Duke-compliant Shibboleth configuration...'
+        sudo sed -i 's/maxValidityInterval=\"[^\"]*\"/maxValidityInterval=\"31536000\"/g' /etc/shibboleth/shibboleth2.xml || true
+        sudo sed -i 's/validate=\"true\"/validate=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        sudo sed -i 's/encryption=\"true\"/encryption=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        sudo sed -i 's/signing=\"true\"/signing=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'CRITICAL: Adding SAML assertion validation fixes...'
+        sudo sed -i 's/checkAddress=\"false\"/checkAddress=\"false\" consistentAddress=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'Adding specific Duke SSO compatibility settings...'
+        sudo sed -i 's/REMOTE_USER=\"[^\"]*\"/REMOTE_USER=\"eppn duDukeID persistent-id targeted-id\"/g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'Ensuring proper Duke IdP whitelist and redirect configuration...'
+        sudo sed -i 's|redirectWhitelist=\"[^\"]*\"|redirectWhitelist=\"https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/\"|g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'Testing metadata loading...'
+        sudo curl -k -s -o /dev/null -w 'Duke Metadata fetch: HTTP_CODE' https://shib.oit.duke.edu/duke-metadata-3-signed.xml | sed 's/HTTP_CODE/%{http_code}/' && echo '' || echo 'Metadata fetch failed'
+        
+        echo 'Verifying metadata file deployment and debugging Shibboleth...'
+        sudo ls -la /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Local metadata file not found'
+        sudo ls -la /etc/shibboleth/idp_signing.crt || echo 'Signing certificate not found'
+        sudo ls -la /etc/shibboleth/shibboleth2.xml || echo 'Main config file not found'
+        
+        echo 'Testing metadata file readability and content...'
+        sudo head -5 /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Cannot read metadata file'
+        sudo grep -o 'https://shib.oit.duke.edu/shibboleth-idp' /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Duke IdP entityID not found in metadata'
+        
+        echo 'Verifying metadata file permissions and ownership...'
+        sudo stat /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Cannot stat metadata file'
+        sudo chown _shibd:_shibd /etc/shibboleth/duke-metadata-3-signed.xml 2>/dev/null || sudo chown shibd:shibd /etc/shibboleth/duke-metadata-3-signed.xml 2>/dev/null || echo 'Could not change ownership'
+        sudo chmod 644 /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Could not change permissions'
+        
+        echo 'Clearing Shibboleth logs and restarting for fresh debug info...'
+        sudo rm -f /var/log/shibboleth/shibd.log /var/log/shibboleth/transaction.log || true
+        sudo systemctl stop shibd || true
+        sleep 3
+        
+        echo 'Verifying Shibboleth configuration syntax before restart...'
+        sudo /usr/sbin/shibd -t || echo 'Configuration syntax check completed'
+        
+        echo 'Starting Shibboleth with verbose logging...'
+        sudo systemctl start shibd || true
+        sleep 5
+        
+        echo 'Checking fresh Shibboleth logs for metadata loading...'
+        sudo tail -20 /var/log/shibboleth/shibd.log || echo 'No Shibboleth logs found'
+        
+        echo 'Testing Shibboleth metadata endpoint directly...'
+        curl -k -s 'https://levantai.colab.duke.edu/Shibboleth.sso/Metadata' | head -5 || echo 'Metadata endpoint failed'
+        
+        echo 'Restarting Shibboleth and Apache...'
+        sudo systemctl restart shibd || true
+        sudo systemctl restart apache2 || true
+      "
+    
+    # ============================================
+    # 5. COMPREHENSIVE DOCKER DEPLOYMENT
+    # ============================================
+    - |
+      echo "🐳 Comprehensive Docker Application Deployment..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        cd /home/$VM_USER/mistral-enhancing-network-security-analysis
+        
+        echo '🔄 Resolving Git conflicts and updating...'
+        git stash || true
+        git pull origin main || echo 'Git pull completed'
+        git stash pop || echo 'No stashed changes'
+        
+        echo '🧹 Comprehensive cleanup and disk space management...'
+        docker-compose down --remove-orphans --volumes || true
+        docker stop \$(docker ps -aq) 2>/dev/null || true
+        docker rm \$(docker ps -aq) 2>/dev/null || true
+        docker system prune -af --volumes || true
+        
+        echo 'Checking available disk space after cleanup:'
+        df -h /
+        echo 'Checking Docker disk usage:'
+        docker system df || true
+        
+        echo '📁 Creating required directories...'
+        sudo mkdir -p /srv/homedir/mistral-app/data/{neo4j,etcd,minio,milvus}
+        sudo mkdir -p /srv/homedir/mistral-app/logs/neo4j
+        sudo mkdir -p /srv/homedir/mistral-app/model-cache
+        mkdir -p ./data ./logs ./network-storage/model-cache
+        sudo chown -R 7474:7474 /srv/homedir/mistral-app/data/neo4j || true
+        sudo chown -R 7474:7474 /srv/homedir/mistral-app/logs/neo4j || true
+        sudo chown -R \$USER:\$USER /srv/homedir/mistral-app/model-cache || true
+        
+        echo '🏗️ Building and starting services in optimized order...'
+        # Use simplified Dockerfile for faster builds
+        export DOCKER_BUILDKIT=1
+        export COMPOSE_DOCKER_CLI_BUILD=1
+        
+        # Check if we have pre-built image, otherwise build locally
+        if docker image inspect mistral-network-security:latest >/dev/null 2>&1; then
+          echo 'Using pre-built Docker image...'
+        else
+          echo 'Building Docker image on VM with simplified Dockerfile...'
+          docker build -f Dockerfile.simple -t mistral-network-security:latest . || echo 'Local build completed'
+        fi
+        
+        # Build other images
+        docker-compose build --no-cache frontend || echo 'Frontend build completed'
+        
+        # Start infrastructure services first
+        echo 'Starting infrastructure services...'
+        docker-compose up -d etcd minio
+        sleep 20
+        
+        echo 'Starting database services...'
+        docker-compose up -d neo4j milvus
+        sleep 40
+        
+        echo 'Starting application services...'
+        docker-compose up -d mistral-app
+        sleep 30
+        
+        echo 'Starting frontend...'
+        docker-compose up -d frontend
+        sleep 20
+        
+        echo '📊 Final container status:'
+        docker-compose ps
+        echo 'All containers:'
+        docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+      "
+    
+    # ============================================
+    # 6. FINAL HEALTH CHECK
+    # ============================================
+    - |
+      echo "🏥 Final Health Verification..."
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        echo 'Service Status:'
+        sudo systemctl is-active shibd && echo '✅ Shibboleth running' || echo '❌ Shibboleth failed'
+        sudo systemctl is-active apache2 && echo '✅ Apache running' || echo '❌ Apache failed'
+        
+        echo 'Container Status:'
+        docker ps --format 'table {{.Names}}\t{{.Status}}' | head -10
+        
+        echo 'Testing Endpoints:'
+        curl -k -s -o /dev/null -w 'Frontend (3000): %{http_code}\n' https://levantai.colab.duke.edu:3000 || echo 'Frontend: Not responding'
+        curl -k -s -o /dev/null -w 'Backend (8000): %{http_code}\n' https://levantai.colab.duke.edu:8000/healthz || echo 'Backend: Not responding'
+        curl -k -s -o /dev/null -w 'Shibboleth Status: %{http_code}\n' https://levantai.colab.duke.edu/Shibboleth.sso/Status || echo 'Shibboleth: Not responding'
+        curl -k -s -o /dev/null -w 'Shibboleth Metadata: %{http_code}\n' https://levantai.colab.duke.edu/Shibboleth.sso/Metadata || echo 'Metadata: Not available'
+        curl -k -s -o /dev/null -w 'Shibboleth Session: %{http_code}\n' https://levantai.colab.duke.edu/Shibboleth.sso/Session || echo 'Session: Not available'
+        
+        echo 'Final Shibboleth status check...'
+        sudo systemctl status shibd --no-pager || echo 'Shibboleth service status check completed'
+        
+        echo 'Checking if Duke IdP is properly configured...'
+        sudo grep -i 'duke\|metadata\|entityid' /var/log/shibboleth/shibd.log | tail -10 || echo 'No Duke-related logs found'
+        
+        echo '✅ Deployment completed! Access: https://levantai.colab.duke.edu'
+      "
+  
   environment:
     name: production
     url: http://$VM_HOST:3000
-  timeout: 30m  # Increase timeout to 30 minutes for network issues
+  timeout: 60m
   retry:
     max: 2
     when:

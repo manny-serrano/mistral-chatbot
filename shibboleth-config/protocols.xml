@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProtocolProvider type="XML" validate="true" xmlns="urn:mace:shibboleth:3.0:native:sp:config"
+    xmlns:conf="urn:mace:shibboleth:3.0:native:sp:config"
+    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+    xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+    xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata">
+
+    <!-- SAML 2.0 Protocol Configuration -->
+    <Protocols>
+        <!-- SAML 2.0 SSO Profile -->
+        <Protocol id="urn:oasis:names:tc:SAML:2.0:protocol" 
+                  artifactEndpointIndex="1">
+            <!-- Browser/POST binding for SSO -->
+            <Binding URI="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" 
+                     Location="/SAML2/POST"/>
+            
+            <!-- Browser/Redirect binding for SSO -->
+            <Binding URI="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" 
+                     Location="/SAML2/Redirect"/>
+            
+            <!-- Artifact binding for SSO -->
+            <Binding URI="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact" 
+                     Location="/SAML2/Artifact"/>
+            
+            <!-- SOAP binding for artifact resolution -->
+            <Binding URI="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" 
+                     Location="/SAML2/SOAP"/>
+            
+            <!-- Single Logout bindings -->
+            <LogoutBinding URI="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" 
+                          Location="/SAML2/POST/SLO"/>
+            <LogoutBinding URI="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" 
+                          Location="/SAML2/Redirect/SLO"/>
+        </Protocol>
+        
+        <!-- SAML 1.1 Protocol Configuration (for backward compatibility) -->
+        <Protocol id="urn:oasis:names:tc:SAML:1.1:protocol" 
+                  artifactEndpointIndex="2">
+            <!-- Browser/POST binding -->
+            <Binding URI="urn:oasis:names:tc:SAML:1.0:bindings:SOAP" 
+                     Location="/SAML/SOAP"/>
+            
+            <!-- Artifact binding -->
+            <Binding URI="urn:oasis:names:tc:SAML:1.0:bindings:browser-artifact" 
+                     Location="/SAML/Artifact"/>
+        </Protocol>
+    </Protocols>
+    
+    <!-- Message encoders/decoders -->
+    <MessageEncoders>
+        <MessageEncoder xsi:type="MessageEncoderFactoryType" 
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                        type="urn:mace:shibboleth:2.0:native:sp:config:HTTPPostEncoder"/>
+        <MessageEncoder xsi:type="MessageEncoderFactoryType" 
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                        type="urn:mace:shibboleth:2.0:native:sp:config:HTTPRedirectEncoder"/>
+        <MessageEncoder xsi:type="MessageEncoderFactoryType" 
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                        type="urn:mace:shibboleth:2.0:native:sp:config:HTTPArtifactEncoder"/>
+        <MessageEncoder xsi:type="MessageEncoderFactoryType" 
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                        type="urn:mace:shibboleth:2.0:native:sp:config:SOAPEncoder"/>
+    </MessageEncoders>
+
+</ProtocolProvider>

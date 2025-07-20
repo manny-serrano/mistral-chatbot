@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SecurityPolicies xmlns="urn:mace:shibboleth:3.0:native:sp:config"
+    xmlns:conf="urn:mace:shibboleth:3.0:native:sp:config"
+    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+    xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+    xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata">
+
+    <!-- Default security policy - permissive for Duke SSO -->
+    <Policy>
+        <Rule type="MessageLifetime" clockSkew="300"/>
+        <Rule type="ClientCertAuth" required="false"/>
+        <Rule type="XMLSigning" required="false"/>
+        <Rule type="SimpleSigning" required="false"/>
+    </Policy>
+
+</SecurityPolicies>

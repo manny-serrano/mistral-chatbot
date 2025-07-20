@@ -129,6 +129,13 @@ function prepareConversationHistory(messages: any[]): any[] {
 
 export async function POST(req: NextRequest) {
   try {
+    // Check authentication first
+    const { getUserFromSession } = await import('../../../lib/auth-utils');
+    const user = getUserFromSession(req);
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { messages } = await req.json()
     
     // Validate latest message
@@ -143,7 +150,7 @@ export async function POST(req: NextRequest) {
       analysis_type: 'auto',
       include_sources: true,
       max_results: 5,
-      user: 'frontend_user',
+      user: user.netId, // Pass actual Duke NetID
       conversation_history: prepareConversationHistory(messages)
     }
 

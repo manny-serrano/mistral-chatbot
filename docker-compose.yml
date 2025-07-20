@@ -2,9 +2,7 @@ services:
   mistral-app:
     build:
       context: .
-      dockerfile: Dockerfile
-      args:
-        - NETWORK_STORAGE=${NETWORK_STORAGE_PATH:-/tmp}
+      dockerfile: Dockerfile.simple
     ports:
       - "8000:8000"
     environment:
@@ -17,43 +15,21 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password123}
       - API_HOST=${API_HOST:-0.0.0.0}
       - API_PORT=${API_PORT:-8000}
-      # Enable lightweight mode for faster startup during health checks
-      - LIGHTWEIGHT_MODE=${LIGHTWEIGHT_MODE:-true}
-      # Network storage optimization
-      - NETWORK_STORAGE_PATH=${NETWORK_STORAGE_PATH:-/tmp}
-      - MODEL_CACHE_DIR=${MODEL_CACHE_DIR:-/tmp/model-cache}
-      - HUGGINGFACE_HUB_CACHE=${HUGGINGFACE_HUB_CACHE:-/tmp/huggingface}
-      - HF_HOME=${HF_HOME:-/tmp/huggingface}
-      - TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE:-/tmp/transformers}
-      - SENTENCE_TRANSFORMERS_HOME=${SENTENCE_TRANSFORMERS_HOME:-/tmp/sentence-transformers}
       - LOW_MEMORY_MODE=${LOW_MEMORY_MODE:-true}
-      - USE_SMALLER_MODEL=${USE_SMALLER_MODEL:-true}
-      # CI/CD specific environment variables
       - CI=${CI:-false}
       - GITLAB_CI=${GITLAB_CI:-false}
-      - STARTUP_MODE=${STARTUP_MODE:-health_check_friendly}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-      # Network storage bind mounts (conditional)
-      - type: bind
-        source: ${NETWORK_STORAGE_PATH:-./network-storage}/model-cache
-        target: /srv/homedir/mistral-app/model-cache
-        consistency: cached
-      - type: bind
-        source: ${LOG_PATH:-./logs}
-        target: /srv/homedir/mistral-app/logs
-        consistency: cached
-    # REMOVED DATABASE DEPENDENCIES - Let mistral-app start independently
-    # This prevents the health check failure when databases are slow to start
+      - ./network-storage/model-cache:/app/.cache
     restart: unless-stopped
     healthcheck:
-      # Simplified health check - just check if the server responds
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/healthz || nc -z localhost 8000 || exit 1"]
-      interval: 15s    # Check more frequently 
-      timeout: 10s     # Shorter timeout
-      retries: 40      # More retries to account for slower startup
-      start_period: 180s  # Reduced from 300s to 3 minutes
+      # Simple health check - just check if port is open
+      test: ["CMD-SHELL", "nc -z localhost 8000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
 
   frontend:
     build:
@@ -62,8 +38,10 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://levantai.colab.duke.edu/api-server}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://levantai.colab.duke.edu}
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://levantai.colab.duke.edu}
     depends_on:
       mistral-app:
         condition: service_started
@@ -131,18 +109,22 @@ services:
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.5
-    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd --auto-compaction-retention=1 --max-request-bytes=33554432
     ports:
       - "2379:2379"
     volumes:
       - etcd_data:/etcd
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=periodic
+      - ETCD_AUTO_COMPACTION_RETENTION=1h
+      - ETCD_QUOTA_BACKEND_BYTES=8589934592
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
+      test: ["CMD-SHELL", "etcdctl endpoint health --endpoints=http://localhost:2379 || exit 1"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
 
   minio:
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
@@ -153,14 +135,16 @@ services:
     environment:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
+      - MINIO_REGION_NAME=us-east-1
     volumes:
       - minio_data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD-SHELL", "timeout 10s bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1"]
       interval: 30s
       timeout: 20s
-      retries: 3
+      retries: 5
+      start_period: 60s
 
 volumes:
   neo4j_data:

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
+import { getUserFromSession } from '../../../../lib/auth-utils';
 
 const PROJECT_ROOT = path.join(process.cwd(), "..");
 const REPORT_GENERATOR_SCRIPT = path.join(PROJECT_ROOT, "report_generator.py");
@@ -36,7 +37,16 @@ const REPORT_GENERATOR_SCRIPT = path.join(PROJECT_ROOT, "report_generator.py");
  */
 export async function POST(request: NextRequest) {
   try {
-    const { type = 'standard', duration_hours = 24 } = await request.json();
+    // Check authentication
+    const user = getUserFromSession(request);
+    if (!user) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Authentication required' 
+      }, { status: 401 });
+    }
+
+    const { type = 'standard', duration_hours = 24, force = false } = await request.json();
 
     // Validate report generator script availability
     if (!fs.existsSync(REPORT_GENERATOR_SCRIPT)) {
@@ -57,7 +67,7 @@ export async function POST(request: NextRequest) {
       
       // For user-specific reports, add appropriate parameters
       if (type === 'custom' || duration_hours !== 24) {
-        pythonArgs.push('--user', 'testuser', '--time-range', duration_hours.toString(), '--type', type);
+        pythonArgs.push('--user', user.netId, '--time-range', duration_hours.toString(), '--type', type);
       }
       
       console.log(`Executing: python3 ${pythonArgs.join(' ')}`);
@@ -111,7 +121,8 @@ export async function POST(request: NextRequest) {
         pid: reportProcess.pid,
         startTime: new Date().toISOString(),
         status: 'generating',
-        type
+        type,
+        user: user.netId
       };
 
       console.log(`[${new Date().toISOString()}] Report generation started:`, processInfo);

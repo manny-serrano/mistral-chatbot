@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import neo4jService, { type ReportWithUser } from "@/lib/neo4j-service";
+import { getUserFromSession } from "../../../lib/auth-utils";
 
 interface ReportMetadata {
   id: string;
@@ -28,47 +29,6 @@ function formatFileSize(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function getUserFromSession(request: NextRequest): { netId: string; role: string } | null {
-  try {
-    const sessionCookie = request.cookies.get('duke-sso-session');
-    if (!sessionCookie) {
-      // Development mode fallback
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Development mode: Using fallback authentication');
-        return { netId: 'testuser', role: 'faculty' };
-      }
-      return null;
-    }
-    
-    const sessionData = JSON.parse(Buffer.from(sessionCookie.value, 'base64').toString());
-    if (Date.now() > sessionData.expires) {
-      // Development mode fallback even for expired sessions
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Development mode: Using fallback authentication for expired session');
-        return { netId: 'testuser', role: 'faculty' };
-      }
-      return null;
-    }
-    
-    const user = sessionData.user;
-    const netId = user.eppn ? user.eppn.split('@')[0] : user.netId || 'unknown';
-    const role = user.affiliation ? (
-      user.affiliation.includes('faculty') ? 'faculty' :
-      user.affiliation.includes('staff') ? 'staff' : 'student'
-    ) : user.role || 'student';
-    
-    return { netId, role };
-  } catch (error) {
-    console.error('Session parsing error in main reports API:', error);
-    // Development mode fallback
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Development mode: Using fallback authentication after error');
-      return { netId: 'testuser', role: 'faculty' };
-    }
-    return null;
-  }
 }
 
 function mapReportToMetadata(report: ReportWithUser): ReportMetadata {

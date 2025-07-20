@@ -1,5 +1,5 @@
 # Multi-stage build for optimized production image with network storage support
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -45,21 +45,24 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     # Install torch first with retries and connection stability
     pip install --retries 10 --timeout 300 \
-        --cache-dir=/tmp/pip-cache \
+        --no-cache-dir \
         --find-links https://download.pytorch.org/whl/cpu \
         --extra-index-url https://download.pytorch.org/whl/cpu \
         torch --no-deps && \
+    # Clear any pip cache after torch installation
+    rm -rf /root/.cache/pip/* /tmp/pip-cache/* 2>/dev/null || true && \
     # Install other requirements with retries and better error handling
     pip install --retries 10 --timeout 300 \
-        --cache-dir=/tmp/pip-cache \
+        --no-cache-dir \
         --trusted-host pypi.org \
         --trusted-host pypi.python.org \
         --trusted-host files.pythonhosted.org \
         -r requirements.txt && \
-    rm -rf /tmp/pip-cache/* /tmp/*.whl
+    # Final cleanup of all cache directories
+    rm -rf /root/.cache/pip/* /tmp/pip-cache/* /tmp/*.whl /root/.cache/* 2>/dev/null || true
 
 # Production stage
-FROM python:3.11-slim
+FROM python:3.11-slim AS production
 
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser

@@ -22,6 +22,12 @@ interface IPWhoisResponse {
   currency: string
   currency_code: string
   currency_symbol: string
+  connection?: {
+    asn: string
+    domain: string
+    isp: string
+    org: string
+  }
   security?: {
     anonymous: boolean
     proxy: boolean
@@ -53,6 +59,12 @@ export async function POST(request: NextRequest) {
       timezone?: string
       isp?: string
       org?: string
+      connection?: {
+        asn?: string
+        domain?: string
+        isp?: string
+        org?: string
+      }
       security?: any
       success: boolean
       error?: string
@@ -89,6 +101,7 @@ export async function POST(request: NextRequest) {
             timezone: cachedData.timezone,
             isp: cachedData.isp,
             org: cachedData.org,
+            connection: cachedData.connection,
             security: cachedData.security,
             success: true
           })
@@ -96,7 +109,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Fetch from IPWHOIS.io API
-        const geoResponse = await fetch(`http://ipwho.is/${ip}?fields=ip,success,country,region,city,latitude,longitude,timezone,isp,org,security`, {
+        const geoResponse = await fetch(`http://ipwho.is/${ip}?fields=ip,success,country,region,city,latitude,longitude,timezone,isp,org,security,connection`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -126,6 +139,7 @@ export async function POST(request: NextRequest) {
             timezone: geoData.timezone,
             isp: geoData.isp,
             org: geoData.org,
+            connection: geoData.connection,
             security: geoData.security,
             success: true
           })

@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+<EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:shibmd="urn:mace:shibboleth:metadata:1.0" xsi:schemaLocation="urn:oasis:names:tc:SAML:2.0:metadata ../schemas/saml-schema-metadata-2.0.xsd urn:mace:shibboleth:metadata:1.0 ../schemas/shibboleth-metadata-1.0.xsd http://www.w3.org/2000/09/xmldsig# ../schemas/xmldsig-core-schema.xsd" Name="urn:mace:duke.edu:shib:federation" validUntil="2040-01-01T00:00:00Z">
+
+    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+        <ds:SignedInfo>
+            <ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#WithComments"/>
+            <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+            <ds:Reference URI="">
+                <ds:Transforms>
+                    <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+                    <ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#WithComments"/>
+                </ds:Transforms>
+                <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+                <ds:DigestValue>dXrGfcxnqd2CaGPliQX3zLKJihNvDookEjnseKVr3ug=</ds:DigestValue>
+            </ds:Reference>
+        </ds:SignedInfo>
+        <ds:SignatureValue>OAxFw7YtDXVjCrX0YgY22VAIBGpJcD7c9mhqOv4SHggE5JhF5u8MdRWDSZGPd9ut
+aPr6pDHV7rs3wTvSKRZ2f8j2Nvfw9bo2IjRP5l+ZT4z/4GrPnkgMLt2HzhkQXGfV
+ZHFppL3M6+FWx0hNOAmqXy5CVOdYM7H3Oo0PpY57QSU+l4hPstte4tS5OfWijyB5
+lpHaC7DYYKb1NMCTCpb3QUaocmlNadQtkPwqB12VO0vVOySDGntjMhdKBDoqcCvq
+npQOUgFzc93OOpm7HMiGPuhDg5xrc0GELDUJmXgqsIC7qAXAw/rJ2Vzjrulj8AiO
+xy+X8VtV0bhw47yz0VTgKw==</ds:SignatureValue>
+    </ds:Signature>
+
+
+<EntityDescriptor entityID="https://shib.oit.duke.edu/shibboleth-idp">
+
+    <IDPSSODescriptor protocolSupportEnumeration="urn:mace:shibboleth:1.0 urn:oasis:names:tc:SAML:1.1:protocol urn:oasis:names:tc:SAML:2.0:protocol">
+      <Extensions>
+          <shibmd:Scope regexp="false">duke.edu</shibmd:Scope>
+      </Extensions>
+      <KeyDescriptor use="signing">
+        <ds:KeyInfo>
+          <ds:X509Data>
+            <ds:X509Certificate>
+MIIEWjCCA0KgAwIBAgIJAP1rB/FjRgy6MA0GCSqGSIb3DQEBBQUAMHsxCzAJBgNV
+BAYTAlVTMRcwFQYDVQQIEw5Ob3J0aCBDYXJvbGluYTEPMA0GA1UEBxMGRHVyaGFt
+MRgwFgYDVQQKEw9EdWtlIFVuaXZlcnNpdHkxDDAKBgNVBAsTA09JVDEaMBgGA1UE
+AxMRc2hpYi5vaXQuZHVrZS5lZHUwHhcNMTAwOTA5MTI0NDU1WhcNMjgwOTA0MTI0
+NDU1WjB7MQswCQYDVQQGEwJVUzEXMBUGA1UECBMOTm9ydGggQ2Fyb2xpbmExDzAN
+BgNVBAcTBkR1cmhhbTEYMBYGA1UEChMPRHVrZSBVbml2ZXJzaXR5MQwwCgYDVQQL
+EwNPSVQxGjAYBgNVBAMTEXNoaWIub2l0LmR1a2UuZWR1MIIBIjANBgkqhkiG9w0B
+AQEFAAOCAQ8AMIIBCgKCAQEAt+hnl6gSRi0Y8VuNl6PCPYejj7VfVs/y8bRa5zAY
+RHwb75+vBSs2j1yeUcSore9Ba5Ni7v947V34afRMGRPOqr4TEDZxU+1Bg0zAvSrR
+n4Y8B+zyJuhtOpmOZzTwE9o/Oc+CB4kYV/K0woKZdcoxHJm8TbqBqdxU4fFYUlNU
+o4Dr5jRdCSr9MHBOqGWXtQMg16qYNB7StNk4twY29FNnpZwkVTfsE76uVsRMkG8i
+6/RiHpXZ/ioOOqndptbEGdsOIE3ivAJOZdvYwnDe5NnTH06P01HsxH3OOnYqhuG2
+J6qdhqoelGeHRG+jfl8YkYXCcKQvja2tJ5G+6iqSN7DP6QIDAQABo4HgMIHdMB0G
+A1UdDgQWBBQHYXwB6otkfyMOmUI59j8823hFRDCBrQYDVR0jBIGlMIGigBQHYXwB
+6otkfyMOmUI59j8823hFRKF/pH0wezELMAkGA1UEBhMCVVMxFzAVBgNVBAgTDk5v
+cnRoIENhcm9saW5hMQ8wDQYDVQQHEwZEdXJoYW0xGDAWBgNVBAoTD0R1a2UgVW5p
+dmVyc2l0eTEMMAoGA1UECxMDT0lUMRowGAYDVQQDExFzaGliLm9pdC5kdWtlLmVk
+dYIJAP1rB/FjRgy6MAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQEFBQADggEBAG7q
+wJpiSLJbx2gj/cGDYeuBW/CeRGNghjQ/mb076P3WXsRNPAimcXulSUbQkS6eDH4t
+Ifvsa0jf4FRsEOwH/x8354/0wyv4RwuavX25kjpmoFn3O+eKokyzsc7/Q2gsm0mv
+V8XQo+5b+4we8AFYlAVp26nLeIqAiJM8xZJ9yHuzVL1O4yxIWIKECWHLqY5+1nas
+XNiLURrHhsK5pZUPLuhzJFgZuJT62TtnrjJXlrRhJ389VSkh6R64C6ncjNkg6/Cu
+tA6SX0infqNRyPRNJK+bnQd1yOP4++tjD/lAPE+5tiD/waI3fArt43ZE/qp7pYMS
+9TEfyQ5QpfRYAUFWXBc=
+            </ds:X509Certificate>
+          </ds:X509Data>
+        </ds:KeyInfo>
+      </KeyDescriptor>
+
+      <NameIDFormat>urn:mace:shibboleth:1.0:nameIdentifier</NameIDFormat>
+      <NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified</NameIDFormat>
+      <NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</NameIDFormat>
+      <SingleSignOnService Binding="urn:mace:shibboleth:1.0:profiles:AuthnRequest" Location="https://shib.oit.duke.edu/idp/profile/Shibboleth/SSO"/>
+      <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://shib.oit.duke.edu/idp/profile/SAML2/POST/SSO"/>
+      <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST-SimpleSign" Location="https://shib.oit.duke.edu/idp/profile/SAML2/POST-SimpleSign/SSO"/>
+      <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://shib.oit.duke.edu/idp/profile/SAML2/Redirect/SSO"/>
+   </IDPSSODescriptor>
+
+   <Organization>
+      <OrganizationName xml:lang="en">Duke University</OrganizationName>
+      <OrganizationDisplayName xml:lang="en">Duke University</OrganizationDisplayName>
+      <OrganizationURL xml:lang="en">http://www.duke.edu/</OrganizationURL>
+   </Organization>
+   <ContactPerson contactType="technical">
+      <GivenName>OIT</GivenName>
+      <EmailAddress>help@oit.duke.edu</EmailAddress>
+   </ContactPerson>
+
+</EntityDescriptor>
+</EntitiesDescriptor>
