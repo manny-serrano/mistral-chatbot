@@ -16,16 +16,11 @@ import {
   Mail,
   Phone,
   MapPin,
-  Calendar,
-  Crown,
-  Activity,
   Camera,
   Save,
   Edit3,
-  Building,
   Globe,
   Clock,
-  Award,
 } from "lucide-react"
 
 export default function ProfilePage() {
@@ -35,11 +30,7 @@ export default function ProfilePage() {
     email: "john.smith@company.com",
     phone: "+1 (555) 123-4567",
     location: "San Francisco, CA",
-    company: "CyberTech Solutions",
-    department: "Security Operations",
-    role: "Senior Security Analyst",
     bio: "Experienced cybersecurity professional with 8+ years in threat detection and incident response. Specialized in advanced persistent threats and security automation.",
-    joinDate: "March 2022",
     timezone: "Pacific Standard Time (PST)",
     website: "https://johnsmith.dev",
   })
@@ -115,14 +106,10 @@ export default function ProfilePage() {
 
                   <div className="mt-4 space-y-2">
                     <h2 className="text-2xl font-bold text-white">{profileData.name}</h2>
-                    <p className="text-purple-400 font-medium">{profileData.role}</p>
-                    <p className="text-zinc-400">{profileData.company}</p>
+                    <p className="text-purple-400 font-medium">Security Analyst</p>
+                    <p className="text-zinc-400">CyberTech Solutions</p>
 
                     <div className="flex items-center justify-center gap-2 mt-3">
-                      <Badge className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-300 border-yellow-500/30">
-                        <Crown className="h-3 w-3 mr-1" />
-                        Pro Plan
-                      </Badge>
                       <Badge className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-300 border-green-500/30">
                         <Shield className="h-3 w-3 mr-1" />
                         Verified
@@ -131,19 +118,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {/* Quick Stats */}
-                <div className="mt-6 grid grid-cols-2 gap-4">
-                  <div className="text-center p-3 bg-purple-500/10 rounded-lg border border-purple-500/20">
-                    <Activity className="h-5 w-5 text-purple-400 mx-auto mb-1" />
-                    <p className="text-sm text-zinc-400">Threats Blocked</p>
-                    <p className="text-lg font-bold text-white">1,247</p>
-                  </div>
-                  <div className="text-center p-3 bg-violet-500/10 rounded-lg border border-violet-500/20">
-                    <Award className="h-5 w-5 text-violet-400 mx-auto mb-1" />
-                    <p className="text-sm text-zinc-400">Security Score</p>
-                    <p className="text-lg font-bold text-white">98%</p>
-                  </div>
-                </div>
+
               </CardContent>
             </Card>
           </div>
@@ -154,12 +129,6 @@ export default function ProfilePage() {
               <TabsList className="bg-gray-900/50 border border-purple-500/30">
                 <TabsTrigger value="personal" className="data-[state=active]:bg-purple-600">
                   Personal Info
-                </TabsTrigger>
-                <TabsTrigger value="professional" className="data-[state=active]:bg-purple-600">
-                  Professional
-                </TabsTrigger>
-                <TabsTrigger value="activity" className="data-[state=active]:bg-purple-600">
-                  Activity
                 </TabsTrigger>
               </TabsList>
 
@@ -289,123 +258,9 @@ export default function ProfilePage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="professional">
-                <Card className="bg-gray-900/50 border-purple-500/30 backdrop-blur-xl">
-                  <CardHeader>
-                    <CardTitle className="text-white">Professional Information</CardTitle>
-                    <CardDescription className="text-zinc-400">
-                      Your work details and professional background
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="company" className="text-zinc-300">
-                          Company
-                        </Label>
-                        <div className="relative">
-                          <Building className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
-                          <Input
-                            id="company"
-                            value={profileData.company}
-                            onChange={(e) => setProfileData({ ...profileData, company: e.target.value })}
-                            disabled={!isEditing}
-                            className="pl-10 bg-gray-800/50 border-purple-500/30 text-white"
-                          />
-                        </div>
-                      </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="department" className="text-zinc-300">
-                          Department
-                        </Label>
-                        <Input
-                          id="department"
-                          value={profileData.department}
-                          onChange={(e) => setProfileData({ ...profileData, department: e.target.value })}
-                          disabled={!isEditing}
-                          className="bg-gray-800/50 border-purple-500/30 text-white"
-                        />
-                      </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="role" className="text-zinc-300">
-                          Job Title
-                        </Label>
-                        <Input
-                          id="role"
-                          value={profileData.role}
-                          onChange={(e) => setProfileData({ ...profileData, role: e.target.value })}
-                          disabled={!isEditing}
-                          className="bg-gray-800/50 border-purple-500/30 text-white"
-                        />
-                      </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="joinDate" className="text-zinc-300">
-                          Join Date
-                        </Label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
-                          <Input
-                            id="joinDate"
-                            value={profileData.joinDate}
-                            disabled
-                            className="pl-10 bg-gray-800/30 border-purple-500/20 text-zinc-400"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="activity">
-                <Card className="bg-gray-900/50 border-purple-500/30 backdrop-blur-xl">
-                  <CardHeader>
-                    <CardTitle className="text-white">Recent Activity</CardTitle>
-                    <CardDescription className="text-zinc-400">
-                      Your recent security activities and achievements
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {[
-                        { action: "Blocked malware attack", time: "2 hours ago", type: "security" },
-                        { action: "Updated security policies", time: "1 day ago", type: "config" },
-                        { action: "Completed security training", time: "3 days ago", type: "training" },
-                        { action: "Investigated phishing attempt", time: "1 week ago", type: "investigation" },
-                        { action: "Generated security report", time: "2 weeks ago", type: "report" },
-                      ].map((activity, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center gap-4 p-4 bg-gray-800/30 rounded-lg border border-purple-500/20"
-                        >
-                          <div
-                            className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                              activity.type === "security"
-                                ? "bg-red-500/20 text-red-400"
-                                : activity.type === "config"
-                                  ? "bg-blue-500/20 text-blue-400"
-                                  : activity.type === "training"
-                                    ? "bg-green-500/20 text-green-400"
-                                    : activity.type === "investigation"
-                                      ? "bg-yellow-500/20 text-yellow-400"
-                                      : "bg-purple-500/20 text-purple-400"
-                            }`}
-                          >
-                            <Shield className="h-5 w-5" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-white font-medium">{activity.action}</p>
-                            <p className="text-zinc-400 text-sm">{activity.time}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
             </Tabs>
           </div>
         </div>

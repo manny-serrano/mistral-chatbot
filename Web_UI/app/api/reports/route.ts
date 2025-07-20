@@ -160,6 +160,7 @@ export async function GET(request: NextRequest) {
     const riskLevel = url.searchParams.get('riskLevel') || undefined;
     const type = url.searchParams.get('type') || undefined;
     const status = url.searchParams.get('status') || undefined;
+    const archived = url.searchParams.get('archived') === 'true';
     const limit = parseInt(url.searchParams.get('limit') || '50');
     const offset = parseInt(url.searchParams.get('offset') || '0');
 
@@ -203,7 +204,7 @@ export async function GET(request: NextRequest) {
         offset,
         riskLevel,
         type,
-        status,
+        status: archived ? 'ARCHIVED' : status,
         sortBy: 'createdAt',
         sortOrder: 'DESC'
       });

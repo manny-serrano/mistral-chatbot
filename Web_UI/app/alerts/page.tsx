@@ -40,11 +40,6 @@ import {
   Database,
   Activity,
   MoreHorizontal,
-  Archive,
-  Flag,
-  MessageSquare,
-  ExternalLink,
-  Download,
   Trash2,
   RefreshCw,
   MapPin,
@@ -168,33 +163,14 @@ export default function AlertsPage() {
     }
   }
 
-  const handleEscalateAlert = async (alertId: string) => {
+  const handleDeleteAlert = async (alertId: string) => {
     try {
-      // Update alert status to escalated
-      setAlertsData((prev: AlertUI[]) => prev.map((alert: AlertUI) => 
-        alert.id === alertId 
-          ? { ...alert, status: 'escalated', assignee: 'Security Team' }
-          : alert
-      ))
-      // TODO: Add API call to persist status change
-      console.log(`Alert ${alertId} escalated`)
+      // Remove alert from the list
+      setAlertsData((prev: AlertUI[]) => prev.filter((alert: AlertUI) => alert.id !== alertId))
+      // TODO: Add API call to delete alert
+      console.log(`Alert ${alertId} deleted`)
     } catch (error) {
-      console.error('Error escalating alert:', error)
-    }
-  }
-
-  const handleInvestigateAlert = async (alertId: string) => {
-    try {
-      // Update alert status to investigating
-      setAlertsData((prev: AlertUI[]) => prev.map((alert: AlertUI) => 
-        alert.id === alertId 
-          ? { ...alert, status: 'investigating', assignee: 'Analyst' }
-          : alert
-      ))
-      // TODO: Add API call to persist status change
-      console.log(`Alert ${alertId} under investigation`)
-    } catch (error) {
-      console.error('Error investigating alert:', error)
+      console.error('Error deleting alert:', error)
     }
   }
 
@@ -524,10 +500,7 @@ export default function AlertsPage() {
                   <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   Refresh
                 </Button>
-                <Button size="sm" className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-xs sm:text-sm">
-                  <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  Export
-                </Button>
+
               </div>
             </div>
           </div>
@@ -636,14 +609,6 @@ export default function AlertsPage() {
                           <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40 text-xs">
                             <CheckCircle className="h-3 w-3 mr-2" />
                             Mark as Resolved
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40 text-xs">
-                            <Archive className="h-3 w-3 mr-2" />
-                            Archive
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40 text-xs">
-                            <Flag className="h-3 w-3 mr-2" />
-                            Escalate
                           </DropdownMenuItem>
                           <DropdownMenuSeparator className="bg-purple-500/20" />
                           <DropdownMenuItem className="text-red-400 hover:bg-red-900/40 text-xs">
@@ -807,8 +772,7 @@ export default function AlertsPage() {
                       isSelected={selectedAlerts.includes(alert.id)}
                       onToggleSelection={toggleAlertSelection}
                       onResolve={handleResolveAlert}
-                      onEscalate={handleEscalateAlert}
-                      onInvestigate={handleInvestigateAlert}
+                      onDelete={handleDeleteAlert}
                     />
                   ))
                 ) : filteredAlerts.length === 0 ? (
@@ -948,11 +912,10 @@ interface AlertItemProps {
   isSelected: boolean
   onToggleSelection: (alertId: string) => void
   onResolve: (alertId: string) => void
-  onEscalate: (alertId: string) => void
-  onInvestigate: (alertId: string) => void
+  onDelete: (alertId: string) => void
 }
 
-function AlertItem({ alert, isSelected, onToggleSelection, onResolve, onEscalate, onInvestigate }: AlertItemProps) {
+function AlertItem({ alert, isSelected, onToggleSelection, onResolve, onDelete }: AlertItemProps) {
   const severityConfig = {
     critical: { color: "red", bgColor: "bg-red-900/20", borderColor: "border-red-500/30", textColor: "text-red-400" },
     high: {
@@ -1037,8 +1000,7 @@ function AlertItem({ alert, isSelected, onToggleSelection, onResolve, onEscalate
                     <AlertDetailsModal 
                       alert={alert} 
                       onResolve={onResolve}
-                      onEscalate={onEscalate}
-                      onInvestigate={onInvestigate}
+                      onDelete={onDelete}
                     />
                   </div>
                 </DialogContent>
@@ -1058,27 +1020,11 @@ function AlertItem({ alert, isSelected, onToggleSelection, onResolve, onEscalate
                     Resolve Alert
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    className="text-zinc-200 hover:bg-purple-900/40"
-                    onClick={() => onEscalate(alert.id)}
+                    className="text-red-200 hover:bg-red-900/40"
+                    onClick={() => onDelete(alert.id)}
                   >
-                    <Flag className="h-4 w-4 mr-2" />
-                    Escalate
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    className="text-zinc-200 hover:bg-purple-900/40"
-                    onClick={() => onInvestigate(alert.id)}
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    Investigate
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-purple-500/20" />
-                  <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Add Comment
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="text-zinc-200 hover:bg-purple-900/40">
-                    <Archive className="h-4 w-4 mr-2" />
-                    Archive
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1190,7 +1136,7 @@ function getSeverityColor(severity: string) {
 }
 
 // Alert Details Modal Component
-function AlertDetailsModal({ alert, onResolve, onEscalate, onInvestigate }: { alert: AlertUI, onResolve: (alertId: string) => void, onEscalate: (alertId: string) => void, onInvestigate: (alertId: string) => void }) {
+function AlertDetailsModal({ alert, onResolve, onDelete }: { alert: AlertUI, onResolve: (alertId: string) => void, onDelete: (alertId: string) => void }) {
   return (
     <div className="space-y-6">
       {/* Timeline */}
@@ -1340,13 +1286,9 @@ function AlertDetailsModal({ alert, onResolve, onEscalate, onInvestigate }: { al
           <CheckCircle className="h-4 w-4 mr-2" />
           Resolve Alert
         </Button>
-        <Button variant="outline" className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent" onClick={() => onEscalate(alert.id)}>
-          <Flag className="h-4 w-4 mr-2" />
-          Escalate
-        </Button>
-        <Button variant="outline" className="border-purple-400/40 text-zinc-200 hover:bg-purple-900/40 bg-transparent" onClick={() => onInvestigate(alert.id)}>
-          <ExternalLink className="h-4 w-4 mr-2" />
-          Investigate
+        <Button variant="outline" className="border-red-400/40 text-red-200 hover:bg-red-900/40 bg-transparent" onClick={() => onDelete(alert.id)}>
+          <Trash2 className="h-4 w-4 mr-2" />
+          Delete
         </Button>
       </div>
     </div>

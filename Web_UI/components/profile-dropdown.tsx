@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { User, Settings, Shield, Bell, HelpCircle, LogOut, Crown, Activity, Database, Key } from "lucide-react"
+import { User, Settings, Bell, HelpCircle, LogOut } from "lucide-react"
 
 interface ProfileDropdownProps {
   user?: {
@@ -92,31 +92,9 @@ export function ProfileDropdown({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="text-white font-medium truncate">{user.name}</p>
-                <Badge className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-300 border-yellow-500/30 text-xs">
-                  <Crown className="h-3 w-3 mr-1" />
-                  {user.plan}
-                </Badge>
               </div>
               <p className="text-sm text-zinc-400 truncate">{user.email}</p>
               <p className="text-xs text-zinc-500">{user.role}</p>
-            </div>
-          </div>
-
-          {/* Quick Stats */}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-2 p-2 bg-purple-500/10 rounded-lg border border-purple-500/20">
-              <Activity className="h-4 w-4 text-purple-400" />
-              <div>
-                <p className="text-xs text-zinc-400">Last Active</p>
-                <p className="text-xs text-white font-medium">{user.lastActive}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 p-2 bg-violet-500/10 rounded-lg border border-violet-500/20">
-              <Shield className="h-4 w-4 text-violet-400" />
-              <div>
-                <p className="text-xs text-zinc-400">Threats Blocked</p>
-                <p className="text-xs text-white font-medium">1,247</p>
-              </div>
             </div>
           </div>
         </div>
@@ -145,45 +123,6 @@ export function ProfileDropdown({
               <div className="flex-1">
                 <p className="font-medium">Settings</p>
                 <p className="text-xs text-zinc-400">Preferences and configuration</p>
-              </div>
-            </Link>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem asChild>
-            <Link
-              href="/security"
-              className="flex items-center gap-3 px-3 py-2 text-zinc-200 hover:text-white hover:bg-purple-500/20 rounded-lg cursor-pointer transition-colors"
-            >
-              <Shield className="h-4 w-4" />
-              <div className="flex-1">
-                <p className="font-medium">Security Center</p>
-                <p className="text-xs text-zinc-400">Manage your security settings</p>
-              </div>
-            </Link>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem asChild>
-            <Link
-              href="/api-keys"
-              className="flex items-center gap-3 px-3 py-2 text-zinc-200 hover:text-white hover:bg-purple-500/20 rounded-lg cursor-pointer transition-colors"
-            >
-              <Key className="h-4 w-4" />
-              <div className="flex-1">
-                <p className="font-medium">API Keys</p>
-                <p className="text-xs text-zinc-400">Manage your API access</p>
-              </div>
-            </Link>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem asChild>
-            <Link
-              href="/data-usage"
-              className="flex items-center gap-3 px-3 py-2 text-zinc-200 hover:text-white hover:bg-purple-500/20 rounded-lg cursor-pointer transition-colors"
-            >
-              <Database className="h-4 w-4" />
-              <div className="flex-1">
-                <p className="font-medium">Data Usage</p>
-                <p className="text-xs text-zinc-400">View your usage statistics</p>
               </div>
             </Link>
           </DropdownMenuItem>

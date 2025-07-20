@@ -94,6 +94,7 @@ interface ReportSummary {
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<ReportData[]>([])
+  const [archivedReports, setArchivedReports] = useState<ReportData[]>([])
   const [, setCategorizedReports] = useState<CategorizedReports | null>(null)
   const [summary, setSummary] = useState<ReportSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -131,6 +132,9 @@ export default function ReportsPage() {
   // Replace report type filter with date filter
   const [dateFilter, setDateFilter] = useState<'all' | 'last24h' | 'last7d' | 'last30d' | 'custom'>('all')
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' })
+  
+  // Add view state for active vs archived reports
+  const [activeView, setActiveView] = useState<'active' | 'archived'>('active')
   
   // Confirmation dialog states
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; reportId: string; reportName: string; isLoading: boolean }>({
@@ -201,24 +205,75 @@ export default function ReportsPage() {
     return reports.filter(report => new Date(report.date) >= filterDate)
   }
 
-  // Filtered and paginated reports - include generating placeholders
+  // Filtered and paginated reports - include generating placeholders only for active view
   const placeholderArray = Array.from(generatingPlaceholders.values())
-  const allReports = [...placeholderArray, ...reports]
   
-  // Deduplicate reports by ID to prevent React key conflicts
-  const deduplicatedReports = allReports.reduce((unique: ReportData[], report: ReportData) => {
-    if (!unique.some(r => r.id === report.id)) {
-      unique.push(report)
-    } else {
-      // Log duplicate report IDs for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(`Duplicate report ID detected: ${report.id}`)
+  // Choose which reports to display based on active view
+  let reportsToDisplay: ReportData[]
+  
+  if (activeView === 'active') {
+    // For active view, include generating placeholders and deduplicate
+    const allReports = [...placeholderArray, ...reports]
+    
+    // Deduplicate reports by ID to prevent React key conflicts
+    // Use a Map to keep the most recent version of each report
+    const reportMap = new Map<string, ReportData>()
+    
+    allReports.forEach(report => {
+      const existing = reportMap.get(report.id)
+      if (!existing) {
+        reportMap.set(report.id, report)
+      } else {
+        // If duplicate exists, keep the one with more recent date or generating status
+        const existingDate = new Date(existing.date).getTime()
+        const newDate = new Date(report.date).getTime()
+        
+        // Prioritize generating reports over completed ones
+        if (report.status === 'generating' && existing.status !== 'generating') {
+          reportMap.set(report.id, report)
+        } else if (existing.status === 'generating' && report.status !== 'generating') {
+          // Keep existing generating report
+        } else if (newDate > existingDate) {
+          reportMap.set(report.id, report)
+        }
+        
+        // Log duplicate report IDs for debugging
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`Duplicate report ID detected: ${report.id} - keeping most recent`)
+        }
       }
-    }
-    return unique
-  }, [])
+    })
+    
+    reportsToDisplay = Array.from(reportMap.values())
+  } else {
+    // For archived view, only show archived reports (no generating placeholders)
+    // Also deduplicate archived reports to prevent duplicates
+    const archivedMap = new Map<string, ReportData>()
+    
+    archivedReports.forEach(report => {
+      const existing = archivedMap.get(report.id)
+      if (!existing) {
+        archivedMap.set(report.id, report)
+      } else {
+        // Keep the most recent archived report
+        const existingDate = new Date(existing.date).getTime()
+        const newDate = new Date(report.date).getTime()
+        
+        if (newDate > existingDate) {
+          archivedMap.set(report.id, report)
+        }
+        
+        // Log duplicate archived report IDs for debugging
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`Duplicate archived report ID detected: ${report.id} - keeping most recent`)
+        }
+      }
+    })
+    
+    reportsToDisplay = Array.from(archivedMap.values())
+  }
   
-  const filteredReports = filterReportsByDate(deduplicatedReports)
+  const filteredReports = filterReportsByDate(reportsToDisplay)
   const totalPages = Math.ceil(filteredReports.length / reportsPerPage)
   const paginatedReports = filteredReports.slice((currentPage - 1) * reportsPerPage, currentPage * reportsPerPage)
   
@@ -341,6 +396,19 @@ export default function ReportsPage() {
         setReports(flattenReports(data.categorized))
       } else {
         setReports([])
+      }
+      
+      // Fetch archived reports
+      const archivedResponse = await fetch('/api/reports?archived=true')
+      if (archivedResponse.ok) {
+        const archivedData = await archivedResponse.json()
+        if (archivedData.categorized) {
+          setArchivedReports(flattenReports(archivedData.categorized))
+        } else {
+          setArchivedReports([])
+        }
+      } else {
+        setArchivedReports([])
       }
       
       if (data.summary) {
@@ -596,8 +664,9 @@ export default function ReportsPage() {
         description: `"${archiveDialog.reportName}" has been archived.`,
       })
 
-      // Refresh reports list
-      await refreshAndResetPage()
+      // Refresh both active and archived reports lists
+      await fetchReports({ silent: true })
+      setCurrentPage(1)
     } catch (error) {
       console.error('Error archiving report:', error)
       toast({
@@ -631,8 +700,9 @@ export default function ReportsPage() {
         description: `"${restoreDialog.reportName}" has been restored.`,
       })
 
-      // Refresh reports list
-      await refreshAndResetPage()
+      // Refresh both active and archived reports lists
+      await fetchReports({ silent: true })
+      setCurrentPage(1)
     } catch (error) {
       console.error('Error restoring report:', error)
       toast({
@@ -968,16 +1038,37 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* Recent Reports - Responsive */}
+              {/* Reports Tabs - Responsive */}
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
                 <CardHeader className="p-4 sm:p-6">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base sm:text-lg text-white">Recent Reports</CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="bg-purple-900/40 text-purple-200 border-purple-500/30 text-xs">
-                        {filteredReports.length} reports
-                      </Badge>
-                      {filteredReports.length > 0 && (
+                    <div className="flex items-center gap-4">
+                      <CardTitle className="text-base sm:text-lg text-white">Reports</CardTitle>
+                      <Tabs value={activeView} onValueChange={(value) => {
+                        setActiveView(value as 'active' | 'archived')
+                        setCurrentPage(1) // Reset to first page when switching tabs
+                      }}>
+                                                    <TabsList className="bg-gray-800/50 border-purple-400/30">
+                              <TabsTrigger 
+                                value="active" 
+                                className="text-xs sm:text-sm data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                              >
+                                Reports
+                              </TabsTrigger>
+                              <TabsTrigger 
+                                value="archived" 
+                                className="text-xs sm:text-sm data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                              >
+                                Archived Reports
+                              </TabsTrigger>
+                            </TabsList>
+                      </Tabs>
+                    </div>
+                                            <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="bg-purple-900/40 text-purple-200 border-purple-500/30 text-xs">
+                            {reportsToDisplay.length} {activeView === 'active' ? 'reports' : 'archived reports'}
+                          </Badge>
+                      {filteredReports.length > 0 && activeView === 'active' && (
                         <Button 
                           variant="destructive" 
                           size="sm"
@@ -1016,22 +1107,29 @@ export default function ReportsPage() {
                         Retry
                       </Button>
                     </div>
-                  ) : paginatedReports.length === 0 ? (
-                    <div className="text-center py-8 sm:py-12 px-4 sm:px-6">
-                      <FileText className="h-8 w-8 sm:h-12 sm:w-12 text-purple-400 mb-4 mx-auto" />
-                      <h3 className="text-base sm:text-lg font-semibold text-white mb-2">No Reports Found</h3>
-                      <p className="text-xs sm:text-sm text-zinc-400 mb-6">
-                        Get started by generating your first security report.
-                      </p>
-                      <Button 
-                        onClick={generateStandardReport} 
-                        disabled={isGeneratingStandard}
-                        className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-xs sm:text-sm"
-                      >
-                        <Zap className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                        Generate Report
-                      </Button>
-                    </div>
+                                        ) : paginatedReports.length === 0 ? (
+                        <div className="text-center py-8 sm:py-12 px-4 sm:px-6">
+                          <FileText className="h-8 w-8 sm:h-12 sm:w-12 text-purple-400 mb-4 mx-auto" />
+                          <h3 className="text-base sm:text-lg font-semibold text-white mb-2">
+                            {activeView === 'active' ? 'No Reports Found' : 'No Archived Reports'}
+                          </h3>
+                          <p className="text-xs sm:text-sm text-zinc-400 mb-6">
+                            {activeView === 'active' 
+                              ? 'Get started by generating your first security report.'
+                              : 'No reports have been archived yet.'
+                            }
+                          </p>
+                          {activeView === 'active' && (
+                            <Button 
+                              onClick={generateStandardReport} 
+                              disabled={isGeneratingStandard}
+                              className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-xs sm:text-sm"
+                            >
+                              <Zap className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                              Generate Report
+                            </Button>
+                          )}
+                        </div>
                   ) : (
                     <>
                       <div className="space-y-3 sm:space-y-4 p-4 sm:p-6">
@@ -1171,13 +1269,23 @@ export default function ReportsPage() {
                                     </Button>
                                   </DropdownMenuTrigger>
                                     <DropdownMenuContent className="bg-gray-800 border-purple-500/20">
-                                      <DropdownMenuItem 
-                                        onClick={() => setArchiveDialog({ open: true, reportId: report.id, reportName: report.title, isLoading: false })}
-                                        className="text-zinc-300 hover:text-white hover:bg-purple-900/40"
-                                      >
-                                        <Archive className="h-4 w-4 mr-2" />
-                                        Archive
-                                      </DropdownMenuItem>
+                                      {activeView === 'active' ? (
+                                        <DropdownMenuItem 
+                                          onClick={() => setArchiveDialog({ open: true, reportId: report.id, reportName: report.title, isLoading: false })}
+                                          className="text-zinc-300 hover:text-white hover:bg-purple-900/40"
+                                        >
+                                          <Archive className="h-4 w-4 mr-2" />
+                                          Archive
+                                        </DropdownMenuItem>
+                                      ) : (
+                                        <DropdownMenuItem 
+                                          onClick={() => setRestoreDialog({ open: true, reportId: report.id, reportName: report.title, isLoading: false })}
+                                          className="text-zinc-300 hover:text-white hover:bg-purple-900/40"
+                                        >
+                                          <RotateCcw className="h-4 w-4 mr-2" />
+                                          Restore
+                                        </DropdownMenuItem>
+                                      )}
                                     <DropdownMenuSeparator className="bg-purple-500/20" />
                                     <DropdownMenuItem 
                                         onClick={() => setDeleteDialog({ open: true, reportId: report.id, reportName: report.title, isLoading: false })}
