@@ -154,10 +154,16 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
         
-        echo 'CRITICAL FIX: Cleaning up metadata providers in shibboleth2.xml...'
-        sudo sed -i '/<!-- Emergency fallback: Minimal metadata provider -->/,/<!-- Map to extract attributes/{ /<!-- Map to extract attributes/!d; }' /etc/shibboleth/shibboleth2.xml || true
+        echo 'CRITICAL FIX: Removing invalid sameSitePolicy attribute...'
+        sudo sed -i 's/ sameSitePolicy=\"None\"//g' /etc/shibboleth/shibboleth2.xml || true
         
-        echo 'CRITICAL FIX: Creating proper security-policy.xml...'
+        echo 'CRITICAL FIX: Ensuring proper MetadataProvider configuration...'
+        if ! sudo grep -q '<MetadataProvider' /etc/shibboleth/shibboleth2.xml; then
+          echo 'Adding missing MetadataProvider configuration...'
+          sudo sed -i '/<\/Errors>/a\\n        <!-- Primary: Local file metadata provider -->\n        <MetadataProvider type=\"XML\" validate=\"false\" file=\"duke-metadata-3-signed.xml\"/>\n\n        <!-- Fallback: URL-based metadata provider -->\n        <MetadataProvider type=\"XML\" validate=\"false\"\n                          url=\"https://shib.oit.duke.edu/duke-metadata-3-signed.xml\"\n                          backingFilePath=\"duke-metadata-fallback.xml\"\n                          reloadInterval=\"7200\"/>' /etc/shibboleth/shibboleth2.xml
+        fi
+        
+        echo 'CRITICAL FIX: Creating proper security-policy.xml with PolicyRule syntax...'
         echo '<?xml version=\"1.0\" encoding=\"UTF-8\"?>' | sudo tee /etc/shibboleth/security-policy.xml > /dev/null
         echo '<SecurityPolicies xmlns=\"urn:mace:shibboleth:3.0:native:sp:config\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '    xmlns:conf=\"urn:mace:shibboleth:3.0:native:sp:config\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
@@ -166,10 +172,10 @@ deploy:
         echo '    xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\">' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '    <Policy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
-        echo '        <Rule type=\"MessageLifetime\" clockSkew=\"300\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
-        echo '        <Rule type=\"ClientCertAuth\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
-        echo '        <Rule type=\"XMLSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
-        echo '        <Rule type=\"SimpleSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <PolicyRule type=\"Conditions\" clockSkew=\"300\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <PolicyRule type=\"ClientCertAuth\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <PolicyRule type=\"XMLSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <PolicyRule type=\"SimpleSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '    </Policy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '</SecurityPolicies>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
@@ -182,7 +188,6 @@ deploy:
         
         echo 'CRITICAL: Adding SAML assertion validation fixes...'
         sudo sed -i 's/checkAddress=\"false\"/checkAddress=\"false\" consistentAddress=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
-        sudo sed -i 's/cookieProps=\"https\"/cookieProps=\"https\" sameSitePolicy=\"None\"/g' /etc/shibboleth/shibboleth2.xml || true
         
         echo 'Adding specific Duke SSO compatibility settings...'
         sudo sed -i 's/REMOTE_USER=\"[^\"]*\"/REMOTE_USER=\"eppn duDukeID persistent-id targeted-id\"/g' /etc/shibboleth/shibboleth2.xml || true
