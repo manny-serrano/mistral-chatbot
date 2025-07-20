@@ -155,7 +155,7 @@ deploy:
         cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
         
         echo 'CRITICAL FIX: Creating proper security-policy.xml...'
-        cat > /tmp/security-policy-fixed.xml << 'SECPOL'
+        sudo tee /etc/shibboleth/security-policy.xml > /dev/null << 'SECPOL'
 <?xml version="1.0" encoding="UTF-8"?>
 <SecurityPolicies xmlns="urn:mace:shibboleth:3.0:native:sp:config"
     xmlns:conf="urn:mace:shibboleth:3.0:native:sp:config"
@@ -172,7 +172,6 @@ deploy:
 
 </SecurityPolicies>
 SECPOL
-        sudo cp /tmp/security-policy-fixed.xml /etc/shibboleth/security-policy.xml
         
         echo 'Applying Duke-compliant Shibboleth configuration...'
         sudo sed -i 's/maxValidityInterval=\"[^\"]*\"/maxValidityInterval=\"31536000\"/g' /etc/shibboleth/shibboleth2.xml || true
@@ -184,7 +183,7 @@ SECPOL
         sudo sed -i 's|redirectWhitelist=\"[^\"]*\"|redirectWhitelist=\"https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/\"|g' /etc/shibboleth/shibboleth2.xml || true
         
         echo 'Testing metadata loading...'
-        sudo curl -k -s -o /dev/null -w 'Duke Metadata fetch: %%{http_code}\n' https://shib.oit.duke.edu/duke-metadata-3-signed.xml || echo 'Metadata fetch failed'
+        sudo curl -k -s -o /dev/null -w 'Duke Metadata fetch: HTTP_CODE' https://shib.oit.duke.edu/duke-metadata-3-signed.xml | sed 's/HTTP_CODE/%{http_code}/' && echo '' || echo 'Metadata fetch failed'
         
         echo 'Verifying metadata file deployment and debugging Shibboleth...'
         sudo ls -la /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Local metadata file not found'
