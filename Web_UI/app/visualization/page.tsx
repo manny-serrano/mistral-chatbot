@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ShieldCheck, Bell, Network, BarChart3, PieChart, TrendingUp, Activity, Map, Globe, Zap, LineChart, MapPin, RefreshCw, Download } from "lucide-react"
+import { ShieldCheck, Bell, Network, BarChart3, PieChart, TrendingUp, Activity, Map, Globe, Zap, LineChart, MapPin, RefreshCw } from "lucide-react"
 import { ProfileDropdown } from "@/components/profile-dropdown"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -165,10 +165,6 @@ export default function VisualizationPage() {
                 >
                   <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   Refresh
-                </Button>
-                <Button size="sm" className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-xs sm:text-sm">
-                  <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  Export
                 </Button>
               </div>
             </div>

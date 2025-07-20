@@ -658,13 +658,14 @@ export default function HeatmapVisualizationPage() {
 
             {/* Statistics */}
             {data?.data && data.data.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="bg-gray-900/80 border-blue-400/40 backdrop-blur-xl">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-zinc-400">Data Points</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-white">{data.data.length}</div>
+                    <div className="text-xs text-zinc-500 mt-1">Total number of data entries displayed in the heatmap</div>
                   </CardContent>
                 </Card>
 
@@ -676,6 +677,7 @@ export default function HeatmapVisualizationPage() {
                     <div className="text-2xl font-bold text-white">
                       {Math.max(...data.data.map(d => d.value))}
                     </div>
+                    <div className="text-xs text-zinc-500 mt-1">Highest recorded value in the dataset</div>
                   </CardContent>
                 </Card>
 
@@ -687,17 +689,7 @@ export default function HeatmapVisualizationPage() {
                     <div className="text-2xl font-bold text-white">
                       {(data.data.reduce((sum, d) => sum + d.value, 0) / data.data.length).toFixed(1)}
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-gray-900/80 border-amber-400/40 backdrop-blur-xl">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-zinc-400">Intensity</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-white">
-                      {Math.max(...data.data.map(d => d.value)) > 50 ? "🔥" : "📊"}
-                    </div>
+                    <div className="text-xs text-zinc-500 mt-1">Mean value across all data points</div>
                   </CardContent>
                 </Card>
               </div>

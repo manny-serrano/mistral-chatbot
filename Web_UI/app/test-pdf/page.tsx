@@ -8,63 +8,141 @@ import { generatePDFFromHTML, downloadReportAsPDF } from '@/lib/pdf-utils'
 import { Shield, AlertTriangle, TrendingUp, Calendar, Clock, FileText } from 'lucide-react'
 
 export default function TestPDFPage() {
-  const [isGenerating, setIsGenerating] = useState(false)
   const [testResults, setTestResults] = useState<string[]>([])
+  const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const addTestResult = (message: string) => {
-    setTestResults(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`])
+  const addTestResult = (result: string) => {
+    setTestResults(prev => [...prev, result])
   }
 
-  const testDirectHTML = async () => {
+  const testRealReportStructure = async () => {
     try {
       setIsGenerating(true)
       setError(null)
-      addTestResult('Starting direct HTML test...')
+      addTestResult('Testing with real report structure from wrapped_report.json...')
 
-      const testHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>Test PDF</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
-            .content { font-size: 16px; line-height: 1.6; }
-            .card { background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 10px 0; }
-            .red { color: red; }
-            .green { color: green; }
-            .blue { color: blue; }
-          </style>
-        </head>
-        <body>
-          <div class="header">PDF Generation Test</div>
-          <div class="content">
-            <div class="card">
-              <h2>Test Section 1</h2>
-              <p>This is a test paragraph with <span class="red">red text</span> and <span class="green">green text</span>.</p>
-            </div>
-            <div class="card">
-              <h2>Test Section 2</h2>
-              <p>This is another test paragraph with <span class="blue">blue text</span>.</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `
+      // Use the actual report structure from your wrapped_report.json
+      const testReportData = {
+        success: true,
+        report: {
+          metadata: {
+            report_title: "Test Network Traffic Analysis Report",
+            reporting_period: "2024-05-31T07:36:19.896000+00:00 to 2024-05-31T11:06:19.029000+00:00",
+            generated_by: "LEVANT AI Security Platform",
+            generation_date: new Date().toISOString(),
+            report_version: "3.0",
+            analysis_duration_hours: 3.5,
+            analysis_scope: "Normal network flows (excluding known malicious/honeypot traffic)"
+          },
+          executive_summary: {
+            overall_risk_level: "MEDIUM",
+            key_findings: [
+              "High-severity port scanning detected",
+              "High-severity data exfiltration detected"
+            ],
+            critical_issues_count: 2,
+            recommendations_priority: "SCHEDULED"
+          },
+          network_traffic_overview: {
+            basic_stats: {
+              total_flows: 127473,
+              total_bytes: 23990676301,
+              total_packets: 38931511,
+              avg_duration: 223.82
+            },
+            top_sources: [
+              {
+                ip: "10.183.3.60",
+                bytes: 6534054600,
+                flow_count: 9
+              }
+            ],
+            protocol_breakdown: {
+              protocol_6: {
+                protocol_id: 6,
+                flow_count: 98765,
+                total_bytes: 12345678901,
+                is_suspicious: false
+              },
+              protocol_17: {
+                protocol_id: 17,
+                flow_count: 28708,
+                total_bytes: 11644997400,
+                is_suspicious: false
+              }
+            }
+          },
+          security_findings: {
+            port_scanning: {
+              severity: "HIGH",
+              count: 15,
+              matching_flows: 1543,
+              potential_scanners: [
+                {
+                  source_ip: "192.168.1.100",
+                  ports_scanned: 25
+                }
+              ]
+            }
+          },
+          recommendations_and_next_steps: {
+            prioritized_recommendations: [
+              {
+                priority: "HIGH",
+                category: "Network Security",
+                finding: "Port scanning activity detected",
+                recommendation: "Implement port scan detection and blocking",
+                estimated_effort: "2-4 hours",
+                timeline: "Immediate"
+              }
+            ]
+          },
+          ai_analysis: [
+            {
+              attack_technique: "T1046",
+              confidence_score: 0.85,
+              finding: "Network service scanning detected",
+              business_impact: "Medium risk of reconnaissance",
+              recommended_action: "Monitor and block suspicious scanning",
+              timeline: "24-48 hours"
+            }
+          ]
+        }
+      }
 
-      addTestResult('Calling generatePDFFromHTML...')
-      await generatePDFFromHTML(testHTML, {
-        filename: 'direct-test.pdf',
-        quality: 1.0,
-        margin: 10
+      addTestResult('Sending test data to PDF API...')
+
+      const pdfResponse = await fetch('/api/reports/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          reportData: testReportData, 
+          reportId: 'test-report-' + Date.now() 
+        })
       })
-      addTestResult('✅ Direct HTML test successful!')
+
+      if (!pdfResponse.ok) {
+        const errorText = await pdfResponse.text()
+        throw new Error(`PDF API error: ${pdfResponse.status} - ${errorText}`)
+      }
+
+      const result = await pdfResponse.json()
+      addTestResult(`✅ PDF API returned: ${result.success ? 'SUCCESS' : 'FAILED'}`)
+
+      if (result.html) {
+        addTestResult('Generating PDF from HTML...')
+        await generatePDFFromHTML(result.html, 'test-real-structure.pdf')
+        addTestResult('✅ Real structure test successful!')
+      } else {
+        throw new Error('No HTML returned from PDF API')
+      }
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-      addTestResult(`❌ Direct HTML test failed: ${errorMsg}`)
+      addTestResult(`❌ Real structure test failed: ${errorMsg}`)
       setError(errorMsg)
     } finally {
       setIsGenerating(false)
@@ -75,70 +153,54 @@ export default function TestPDFPage() {
     try {
       setIsGenerating(true)
       setError(null)
-      addTestResult('Starting API generation test...')
+      addTestResult('Starting PDF API generation test...')
 
       const testData = {
         metadata: {
-          report_title: 'Test Security Report',
-          generated_by: 'LEVANT AI Security Platform',
+          report_title: 'API Test Report',
+          generated_by: 'Test System',
           generation_date: new Date().toISOString(),
-          report_version: '3.0',
-          analysis_duration_hours: 24
+          report_version: '1.0',
+          analysis_duration_hours: 1
         },
         executive_summary: {
-          overall_risk_level: 'MEDIUM',
-          critical_issues_count: 3,
-          recommendations_priority: 'HIGH',
-          key_findings: [
-            'Test finding 1',
-            'Test finding 2',
-            'Test finding 3'
-          ]
+          overall_risk_level: 'LOW',
+          key_findings: ['Test finding 1', 'Test finding 2'],
+          critical_issues_count: 0,
+          recommendations_priority: 'LOW'
         },
         network_traffic_overview: {
           basic_stats: {
             total_flows: 1000,
             total_bytes: 50000000,
-            total_packets: 10000
+            total_packets: 75000,
+            avg_duration: 120
           },
-          bandwidth_stats: {
-            average_mbps: 25.5
-          },
-          top_sources: [
-            { ip: '192.168.1.100', bytes: 10000000, flow_count: 100 }
-          ],
-          top_destinations: [
-            { ip: '8.8.8.8', bytes: 5000000, flow_count: 50 }
-          ],
-          protocol_distribution: {
-            'TCP': { flow_count: 800, total_bytes: 40000000, is_suspicious: false },
-            'UDP': { flow_count: 200, total_bytes: 10000000, is_suspicious: false }
+          protocol_breakdown: {
+            tcp: { protocol_id: 6, flow_count: 800, total_bytes: 40000000, is_suspicious: false },
+            udp: { protocol_id: 17, flow_count: 200, total_bytes: 10000000, is_suspicious: false }
           }
         }
       }
 
-      addTestResult('Calling PDF API...')
       const response = await fetch('/api/reports/pdf', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ reportData: testData })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportData: testData, reportId: 'test-123' })
       })
 
       if (!response.ok) {
-        throw new Error(`API call failed: ${response.status}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const result = await response.json()
-      addTestResult(`✅ API returned HTML (${result.html.length} characters)`)
+      addTestResult(`Received response: ${result.success ? 'Success' : 'Failed'}`)
 
-      addTestResult('Generating PDF from API HTML...')
-      await generatePDFFromHTML(result.html, {
-        filename: 'api-test.pdf',
-        quality: 1.0,
-        margin: 15
-      })
+      if (!result.html) {
+        throw new Error('No HTML content in response')
+      }
+
+      await generatePDFFromHTML(result.html, 'api-test.pdf')
       addTestResult('✅ API generation test successful!')
 
     } catch (error) {
@@ -263,40 +325,37 @@ export default function TestPDFPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <Button 
-                onClick={testDirectHTML}
+                onClick={testRealReportStructure}
                 disabled={isGenerating}
                 className="w-full"
+                variant="default"
               >
-                Test Direct HTML
+                {isGenerating ? 'Testing...' : 'Test Real Report Structure'}
               </Button>
+              
               <Button 
                 onClick={testAPIGeneration}
                 disabled={isGenerating}
                 className="w-full"
+                variant="outline"
               >
-                Test API Generation
+                {isGenerating ? 'Testing...' : 'Test API Generation'}
               </Button>
+
               <Button 
                 onClick={testRealReport}
                 disabled={isGenerating}
                 className="w-full"
+                variant="secondary"
               >
-                Test Real Report
+                {isGenerating ? 'Testing...' : 'Test Real Report Download'}
               </Button>
-              <Button 
-                onClick={testCurrentPage}
-                disabled={isGenerating}
-                className="w-full"
-              >
-                Test Current Page
-              </Button>
-              <Button 
-                onClick={clearResults}
-                variant="outline"
-                className="w-full"
-              >
-                Clear Results
-              </Button>
+
+              {error && (
+                <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded text-red-700">
+                  <strong>Error:</strong> {error}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -306,22 +365,16 @@ export default function TestPDFPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {testResults.map((result, index) => (
+                {testResults.length === 0 ? (
+                  <p className="text-gray-500 italic">No tests run yet</p>
+                ) : (
+                  testResults.map((result, index) => (
                   <div key={index} className="text-sm font-mono p-2 bg-gray-100 rounded">
                     {result}
                   </div>
-                ))}
-                {testResults.length === 0 && (
-                  <div className="text-gray-500 text-center py-8">
-                    No test results yet. Click a test button to start.
-                  </div>
+                  ))
                 )}
               </div>
-              {error && (
-                <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded text-red-700">
-                  <strong>Error:</strong> {error}
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>

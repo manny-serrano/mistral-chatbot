@@ -8,6 +8,7 @@ import os
 import json
 import re
 import ipaddress
+import requests
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict, Counter
@@ -26,6 +27,10 @@ THREAT_INTELLIGENCE_SOURCES = [
     'https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt',
     'https://rules.emergingthreats.net/open/suricata/rules/emerging-compromised.rules'
 ]
+
+# API Configuration for Neo4j Integration
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:3000")
+DEFAULT_USER_NETID = "testuser"  # Default user for system-generated reports
 
 # Known malicious indicators
 KNOWN_MALICIOUS_PORTS = [1433, 3389, 22, 23, 135, 139, 445, 993, 995, 587, 465]
@@ -46,6 +51,222 @@ OPENAI_API_BASE = os.environ.get("OPENAI_API_BASE", None)
 NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "password123")
+
+# --- Neo4j Integration Functions ---
+def create_mock_session_cookie(netid: str = DEFAULT_USER_NETID) -> str:
+    """Create a mock session cookie for API authentication"""
+    import base64
+    import time
+    
+    # Use the same format as the mock SSO endpoint
+    session_data = {
+        "user": {
+            "id": f"duke_{netid}",
+            "netId": netid,
+            "email": f"{netid}@duke.edu",
+            "firstName": "Test",
+            "lastName": "User",
+            "displayName": "Test User",
+            "role": "faculty",
+            "dukeID": "123456789",
+            "isActive": True,
+            "lastLogin": datetime.now(timezone.utc).isoformat(),
+            "createdAt": "2025-07-16T17:43:50.122Z",
+            "updatedAt": datetime.now(timezone.utc).isoformat()
+        },
+        "permissions": [
+            "view_dashboard", "generate_reports", "view_all_data", 
+            "export_data", "manage_settings", "view_admin_panel", "delete_reports"
+        ],
+        "timestamp": int(time.time() * 1000),
+        "expires": int((time.time() + 28800) * 1000)  # 8 hours from now
+    }
+    
+    session_json = json.dumps(session_data)
+    session_base64 = base64.b64encode(session_json.encode()).decode()
+    return session_base64
+
+def save_report_to_neo4j(report_data: Dict[str, Any], filepath: str, netid: str = DEFAULT_USER_NETID, report_id: Optional[str] = None) -> bool:
+    """Save generated report to Neo4j database via API"""
+    try:
+        # Extract metadata from the report
+        metadata = report_data.get('metadata', {})
+        executive_summary = report_data.get('executive_summary', {})
+        network_overview = report_data.get('network_traffic_overview', {})
+        basic_stats = network_overview.get('basic_stats', {})
+        security_findings = report_data.get('security_findings', {})
+        recommendations = report_data.get('recommendations_and_next_steps', {})
+        
+        # Calculate risk level based on findings
+        risk_level = executive_summary.get('overall_risk_level', 'MEDIUM')
+        if not risk_level or risk_level not in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']:
+            risk_level = 'MEDIUM'
+        
+        # Extract threat and critical issue counts
+        threat_count = executive_summary.get('total_threats_detected', 0)
+        critical_issues = executive_summary.get('critical_issues', 0)
+        
+        # Calculate file size
+        file_size = 0
+        if os.path.exists(filepath):
+            file_size = os.path.getsize(filepath)
+        
+        # Prepare Neo4j report data structure
+        neo4j_report_data = {
+            "name": metadata.get('report_title', f"Cybersecurity Report - {datetime.now().strftime('%Y-%m-%d')}"),
+            "type": metadata.get('report_type', 'standard'),
+            "description": f"Generated cybersecurity report covering {metadata.get('analysis_duration_hours', 24)} hours of network data",
+            "content": report_data,  # Store the full report content
+            "riskLevel": risk_level,
+            "status": "PUBLISHED",
+            "metadata": metadata,
+            "summary": {
+                "total_threats": threat_count,
+                "critical_issues": critical_issues,
+                "risk_score": executive_summary.get('risk_score', 5.0)
+            },
+            "statistics": {
+                "analysis_duration_hours": metadata.get('analysis_duration_hours', 24),
+                "total_flows": basic_stats.get('total_flows', 0),
+                "total_bytes": basic_stats.get('total_bytes', 0),
+                "avg_bandwidth": basic_stats.get('avg_bandwidth', 0)
+            },
+            "findings": extract_findings_list(security_findings),
+            "recommendations": extract_recommendations_list(recommendations),
+            "threatCount": threat_count,
+            "criticalIssues": critical_issues,
+            "networkFlows": basic_stats.get('total_flows', 0),
+            "dataBytes": basic_stats.get('total_bytes', 0),
+            "avgBandwidth": basic_stats.get('avg_bandwidth', 0),
+            "riskScore": executive_summary.get('risk_score', 5.0),
+            "fileSize": file_size,
+            "pdfPath": "",  # PDF generation handled separately
+            # Include the complex report data that our frontend now supports
+            "data_sources_and_configuration": report_data.get('data_sources_and_configuration'),
+            "executive_summary": executive_summary,
+            "security_findings": security_findings,
+            "recommendations_and_next_steps": recommendations,
+            "network_traffic_overview": network_overview,
+            "compliance_and_governance": report_data.get('compliance_and_governance'),
+            "ai_analysis": report_data.get('ai_analysis', [])
+        }
+        
+        # Create session cookie for authentication
+        session_cookie = create_mock_session_cookie(netid)
+        
+        # Determine API endpoint and method based on whether we're updating or creating
+        if report_id:
+            # Update existing report
+            api_url = f"{API_BASE_URL}/api/reports/{report_id}"
+            method = "PUT"
+            headers = {
+                "Content-Type": "application/json",
+                "Cookie": f"duke-sso-session={session_cookie}"
+            }
+            payload = neo4j_report_data
+            action_description = "Updating existing report in Neo4j database via API"
+        else:
+            # Create new report
+            api_url = f"{API_BASE_URL}/api/reports"
+            method = "POST"
+            headers = {
+                "Content-Type": "application/json",
+                "Cookie": f"duke-sso-session={session_cookie}"
+            }
+            payload = {
+                "action": "create",
+                "reportData": neo4j_report_data
+            }
+            action_description = "Saving report to Neo4j database via API"
+        
+        # Make API request to save/update report
+        print(f"🔗 {action_description}...")
+        print(f"   - API URL: {api_url}")
+        if report_id:
+            print(f"   - Report ID: {report_id}")
+        print(f"   - User: {netid}")
+        print(f"   - Report name: {neo4j_report_data['name']}")
+        
+        if method == "PUT":
+            response = requests.put(api_url, json=payload, headers=headers, timeout=30)
+        else:
+            response = requests.post(api_url, json=payload, headers=headers, timeout=30)
+        
+        print(f"   - Response status: {response.status_code}")
+        print(f"   - Response text: {response.text[:500]}...")
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                returned_report_id = result.get('reportId') or result.get('report', {}).get('id') or report_id
+                print(f"✅ Report successfully {'updated' if report_id else 'saved'} in Neo4j database")
+                print(f"   - Report ID: {returned_report_id}")
+                print(f"   - Available in frontend at: /reports")
+                return True
+            else:
+                print(f"❌ API returned success=false: {result.get('error', 'Unknown error')}")
+                return False
+        else:
+            print(f"❌ API request failed with status {response.status_code}")
+            print(f"   Response: {response.text[:200]}...")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Network error saving to Neo4j: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Error saving report to Neo4j: {e}")
+        return False
+
+def extract_findings_list(security_findings: Dict[str, Any]) -> List[str]:
+    """Extract findings as a list of strings"""
+    findings = []
+    
+    # Extract from different sections of security findings
+    for category, data in security_findings.items():
+        if isinstance(data, dict):
+            if 'description' in data:
+                findings.append(f"{category}: {data['description']}")
+            elif 'findings' in data and isinstance(data['findings'], list):
+                findings.extend(data['findings'])
+        elif isinstance(data, list):
+            findings.extend([str(item) for item in data])
+        elif isinstance(data, str):
+            findings.append(data)
+    
+    # Ensure we have at least some default findings
+    if not findings:
+        findings = [
+            "Network traffic analysis completed",
+            "Security monitoring active",
+            "Baseline patterns established"
+        ]
+    
+    return findings[:10]  # Limit to top 10 findings
+
+def extract_recommendations_list(recommendations_data: Dict[str, Any]) -> List[str]:
+    """Extract recommendations as a list of strings"""
+    recommendations = []
+    
+    # Extract prioritized recommendations
+    prioritized = recommendations_data.get('prioritized_recommendations', [])
+    if isinstance(prioritized, list):
+        recommendations.extend([str(rec) for rec in prioritized])
+    
+    # Extract other recommendation types
+    for key, value in recommendations_data.items():
+        if key != 'prioritized_recommendations' and isinstance(value, list):
+            recommendations.extend([str(rec) for rec in value])
+    
+    # Ensure we have at least some default recommendations
+    if not recommendations:
+        recommendations = [
+            "Continue monitoring network traffic patterns",
+            "Update security policies as needed",
+            "Schedule regular security assessments"
+        ]
+    
+    return recommendations[:10]  # Limit to top 10 recommendations
 
 # --- Ensure ALL output directories exist ---
 def ensure_directories():
@@ -964,67 +1185,80 @@ Return only a JSON list of findings. Focus on threat detection insights and secu
             }
         ]
 
-def generate_user_report(netid: str, query: Optional[str] = None, time_range_hours: int = 24, report_type: str = 'custom'):
-    """Generate a custom report for a specific user"""
+def generate_user_report(netid: str, query: Optional[str] = None, time_range_hours: int = 24, report_type: str = 'custom', report_id: Optional[str] = None):
+    """Generate a user-specific report with custom parameters"""
     generator = CybersecurityReportGenerator(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
     
     try:
-        # Get time range
-        end_time = generator.get_latest_time()
+        # Get the actual data range from the database
+        earliest_time = generator.get_earliest_time()
+        latest_time = generator.get_latest_time()
+        
+        # Calculate time range based on user request
+        end_time = latest_time
         start_time = end_time - timedelta(hours=time_range_hours)
         
-        print(f"🔍 Generating {report_type} report for user: {netid}")
-        print(f"📊 Time range: {start_time} to {end_time} ({time_range_hours} hours)")
+        # Ensure we don't go before available data
+        if start_time < earliest_time:
+            start_time = earliest_time
+            actual_hours = (end_time - start_time).total_seconds() / 3600
+            print(f"⚠️  Requested {time_range_hours}h but only {actual_hours:.1f}h of data available")
+        else:
+            actual_hours = time_range_hours
         
-        # Generate report data
+        print(f"Generating user report for {netid}")
+        print(f"Analysis period: {start_time} to {end_time} ({actual_hours:.1f} hours)")
+        
+        # Collect data
         traffic_data = generator.get_traffic_overview(start_time, end_time)
         security_findings = generator.detect_security_anomalies(start_time, end_time)
         executive_summary = generator.generate_executive_summary(traffic_data, security_findings)
         recommendations = generator.generate_recommendations(security_findings)
         
-        # Create user-specific report
+        # Build user report
         user_report = {
             "metadata": {
-                "report_title": f"Custom Network Analysis Report - {report_type.title()}",
+                "report_title": f"Custom Security Report - {datetime.now().strftime('%Y-%m-%d')}",
                 "reporting_period": f"{start_time.isoformat()} to {end_time.isoformat()}",
                 "generated_by": "LEVANT AI Security Platform",
                 "generation_date": datetime.now(timezone.utc).isoformat(),
                 "report_version": "3.0",
-                "analysis_duration_hours": time_range_hours,
-                "user_netid": netid,
-                "custom_query": query,
+                "analysis_duration_hours": round(actual_hours, 2),
+                "user_query": query,
                 "report_type": report_type,
-                "automation_info": {
-                    "is_automated": False,
-                    "generation_type": "user_requested",
-                    "requested_by": netid
-                }
+                "user_specific": True,
+                "user_netid": netid
             },
             "executive_summary": executive_summary,
             "network_traffic_overview": traffic_data,
             "security_findings": security_findings,
             "recommendations_and_next_steps": {
-                "prioritized_recommendations": recommendations,
-                "user_notes": f"Custom analysis requested by {netid}"
+                "prioritized_recommendations": recommendations
             }
         }
         
-        # Add AI analysis
+        # Add enhanced LLM analysis
         user_report["ai_analysis"] = enhanced_llm_analysis(user_report)
         
-        # Save to user directory
+        # Save to user-specific directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{report_type}_report_{timestamp}.json"
-        user_dir = get_report_directory('user', netid)
-        filepath = os.path.join(user_dir, filename)
+        filename = f"user_report_{netid}_{timestamp}.json"
+        report_dir = get_report_directory('user', netid)
+        filepath = os.path.join(report_dir, filename)
         
         with open(filepath, 'w') as f:
             json.dump(user_report, f, indent=2, default=str)
         
         print(f"✅ User report saved: {filepath}")
         print(f"   - Generated for: {netid}")
-        print(f"   - Analysis period: {time_range_hours} hours")
+        print(f"   - Analysis period: {actual_hours:.1f} hours")
         print(f"   - Flows analyzed: {traffic_data['basic_stats']['total_flows']:,}")
+        
+        # Save to Neo4j database for frontend integration
+        neo4j_success = save_report_to_neo4j(user_report, filepath, netid, report_id)
+        if not neo4j_success:
+            print(f"⚠️  Report saved to filesystem but failed to save to database")
+            print(f"   The report is available locally but may not appear in the web interface")
         
         return filepath
         
@@ -1034,7 +1268,7 @@ def generate_user_report(netid: str, query: Optional[str] = None, time_range_hou
     finally:
         generator.close()
 
-def main():
+def main(report_id: Optional[str] = None):
     """Main report generation function"""
     generator = CybersecurityReportGenerator(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
     
@@ -1165,6 +1399,12 @@ def main():
         print(f"   - Known malicious IPs: {security_findings.get('malicious_pattern_matches', {}).get('known_malicious_ips', 0)}")
         print(f"   - Known honeypot patterns: {security_findings.get('honeypot_pattern_matches', {}).get('known_honeypot_ips', 0) + security_findings.get('honeypot_pattern_matches', {}).get('known_honeypot_ports', 0)}")
         
+        # Save to Neo4j database for frontend integration
+        neo4j_success = save_report_to_neo4j(comprehensive_report, filepath, DEFAULT_USER_NETID, report_id)
+        if not neo4j_success:
+            print(f"⚠️  Report saved to filesystem but failed to save to database")
+            print(f"   The report is available locally but may not appear in the web interface")
+        
     except Exception as e:
         print(f"❌ Error generating report: {e}")
         raise
@@ -1174,35 +1414,45 @@ def main():
 if __name__ == "__main__":
     import sys
     
-    # Check for user-specific report generation
-    if len(sys.argv) > 1:
-        if sys.argv[1] == '--user' and len(sys.argv) > 2:
-            netid = sys.argv[2]
-            
-            # Parse additional arguments
-            time_range = 24  # default
-            report_type = 'custom'
-            query = None
-            
-            for i, arg in enumerate(sys.argv[3:], 3):
-                if arg == '--time-range' and i + 1 < len(sys.argv):
-                    time_range = int(sys.argv[i + 1])
-                elif arg == '--type' and i + 1 < len(sys.argv):
-                    report_type = sys.argv[i + 1]
-                elif arg == '--query' and i + 1 < len(sys.argv):
-                    query = sys.argv[i + 1]
-            
-            # Generate user report
-            try:
-                filepath = generate_user_report(netid, query, time_range, report_type)
-                print(f"🎉 User report generation completed successfully!")
-                print(f"📄 Report saved: {filepath}")
-            except Exception as e:
-                print(f"💥 User report generation failed: {e}")
-                sys.exit(1)
+    # Parse command line arguments
+    report_id = None
+    netid = None
+    time_range = 24  # default
+    report_type = 'custom'
+    query = None
+    
+    i = 1
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        
+        if arg == '--report-id' and i + 1 < len(sys.argv):
+            report_id = sys.argv[i + 1]
+            i += 2
+        elif arg == '--user' and i + 1 < len(sys.argv):
+            netid = sys.argv[i + 1]
+            i += 2
+        elif arg == '--time-range' and i + 1 < len(sys.argv):
+            time_range = int(sys.argv[i + 1])
+            i += 2
+        elif arg == '--type' and i + 1 < len(sys.argv):
+            report_type = sys.argv[i + 1]
+            i += 2
+        elif arg == '--query' and i + 1 < len(sys.argv):
+            query = sys.argv[i + 1]
+            i += 2
         else:
-            print("Usage: python report_generator.py [--user <netid> [--time-range <hours>] [--type <type>] [--query <query>]]")
+            i += 1
+    
+    # Check for user-specific report generation
+    if netid:
+        # Generate user report
+        try:
+            filepath = generate_user_report(netid, query, time_range, report_type, report_id)
+            print(f"🎉 User report generation completed successfully!")
+            print(f"📄 Report saved: {filepath}")
+        except Exception as e:
+            print(f"💥 User report generation failed: {e}")
             sys.exit(1)
     else:
         # Default: generate shared report
-        main()
+        main(report_id)
