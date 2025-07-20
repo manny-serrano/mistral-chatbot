@@ -18,6 +18,8 @@ interface ReportMetadata {
   risk_score?: number;
   threat_count?: number;
   critical_issues?: number;
+  progress?: number;
+  progress_message?: string;
 }
 
 function formatFileSize(bytes: number): string {
@@ -73,26 +75,59 @@ function mapReportToMetadata(report: ReportWithUser): ReportMetadata {
   // Map database status to frontend status
   let frontendStatus: "completed" | "generating" | "failed" | "draft" | "archived";
   
-  // Handle status conversion - note that GENERATING and FAILED may come from 
-  // the application layer, not the database schema
+  // Parse metadata to extract progress information
+  let progressInfo = {
+    progress: 0,
+    message: '',
+    generation_status: 'draft'
+  };
+  
+  try {
+    if (report.metadata) {
+      // Handle both parsed objects and string metadata
+      let metadata;
+      if (typeof report.metadata === 'string') {
+        metadata = JSON.parse(report.metadata);
+      } else if (typeof report.metadata === 'object') {
+        metadata = report.metadata;
+      } else {
+        metadata = {};
+      }
+      
+      progressInfo = {
+        progress: metadata.generation_progress || 0,
+        message: metadata.progress_message || '',
+        generation_status: metadata.generation_status || 'draft'
+      };
+    }
+  } catch (error) {
+    console.log(`Failed to parse metadata for report ${report.id}:`, error);
+  }
+  
+  // Handle status conversion - prioritize metadata status for generating reports
   const reportStatus = report.status as string;
-  switch (reportStatus) {
-    case 'PUBLISHED':
-      frontendStatus = 'completed';
-      break;
-    case 'GENERATING':
-    case 'DRAFT':
-      frontendStatus = 'generating';
-      break;
-    case 'ARCHIVED':
-      frontendStatus = 'archived';
-      break;
-    case 'FAILED':
-      frontendStatus = 'failed';
-      break;
-    default:
-      // Fallback for any other status
-      frontendStatus = 'draft';
+  if (progressInfo.generation_status === 'generating') {
+    frontendStatus = 'generating';
+  } else if (progressInfo.generation_status === 'completed' || reportStatus === 'PUBLISHED') {
+    frontendStatus = 'completed';
+  } else {
+    switch (reportStatus) {
+      case 'PUBLISHED':
+        frontendStatus = 'completed';
+        break;
+      case 'GENERATING':
+      case 'DRAFT':
+        frontendStatus = 'generating';
+        break;
+      case 'ARCHIVED':
+        frontendStatus = 'archived';
+        break;
+      case 'FAILED':
+        frontendStatus = 'failed';
+        break;
+      default:
+        frontendStatus = 'draft';
+    }
   }
 
   return {
@@ -111,7 +146,10 @@ function mapReportToMetadata(report: ReportWithUser): ReportMetadata {
     user_netid: report.generatedBy.netId,
     risk_score: report.riskScore,
     threat_count: report.threatCount,
-    critical_issues: report.criticalIssues
+    critical_issues: report.criticalIssues,
+    // PROGRESS INFORMATION: Include progress data for generating reports
+    progress: frontendStatus === 'generating' ? progressInfo.progress : 100,
+    progress_message: frontendStatus === 'generating' ? progressInfo.message : 'Completed'
   };
 }
 
@@ -141,11 +179,15 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Report not found' }, { status: 404 });
         }
 
+        // Use mapReportToMetadata to ensure progress data is included
+        const mappedReport = mapReportToMetadata(report);
+
         return NextResponse.json({ 
           success: true, 
           report: {
-            ...report,
-            content: typeof report.content === 'string' ? JSON.parse(report.content) : report.content
+            ...mappedReport,
+            content: typeof report.content === 'string' ? JSON.parse(report.content) : report.content,
+            metadata: report.metadata || {} // Ensure metadata is always included
           }
         });
       } catch (error) {

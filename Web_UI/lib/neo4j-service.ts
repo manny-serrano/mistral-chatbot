@@ -54,6 +54,14 @@ interface Report {
   updatedAt: Date;
   fileSize?: number;
   pdfPath?: string;
+  // Parse complex report fields from Python script
+  data_sources_and_configuration?: any;
+  executive_summary?: any;
+  security_findings?: any;
+  recommendations_and_next_steps?: any;
+  network_traffic_overview?: any;
+  compliance_and_governance?: any;
+  ai_analysis?: any;
 }
 
 interface ReportWithUser extends Report {
@@ -454,7 +462,34 @@ class Neo4jService {
     const session = await this.getSession()
     
     try {
-      const setClause = Object.keys(updateData)
+      // Helper function to check if a value is a complex object that needs JSON stringification
+      const isComplexObject = (value: any): boolean => {
+        if (value === null || value === undefined) return false
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return false
+        if (Array.isArray(value)) {
+          // Check if array contains only primitives
+          return value.some(item => isComplexObject(item))
+        }
+        if (typeof value === 'object') {
+          // This is a complex object
+          return true
+        }
+        return false
+      }
+
+      // Process updateData to handle complex objects
+      const processedUpdateData: Record<string, any> = {}
+      
+      for (const [key, value] of Object.entries(updateData)) {
+        if (isComplexObject(value)) {
+          // JSON stringify complex objects
+          processedUpdateData[key] = JSON.stringify(value)
+        } else {
+          processedUpdateData[key] = value
+        }
+      }
+
+      const setClause = Object.keys(processedUpdateData)
         .map(key => `r.${key} = $${key}`)
         .join(', ')
 
@@ -468,7 +503,7 @@ class Neo4jService {
         SET ${setClause}, r.updatedAt = datetime()
         RETURN r
         `,
-        { reportId, netId, ...updateData }
+        { reportId, netId, ...processedUpdateData }
       )
 
       if (result.records.length === 0) {
@@ -477,6 +512,9 @@ class Neo4jService {
 
       const reportRecord = result.records[0].get('r')
       return this.mapNeo4jReportToReport(reportRecord)
+    } catch (error) {
+      console.error('Error updating report in Neo4j:', error)
+      throw error
     } finally {
       await session.close()
     }
@@ -647,6 +685,21 @@ class Neo4jService {
 
   private mapNeo4jReportToReport(reportRecord: any): Report {
     const props = reportRecord.properties
+    
+    // Helper function to safely parse JSON strings
+    const parseJsonField = (field: any, fallback: any = null) => {
+      if (!field) return fallback
+      if (typeof field === 'string') {
+        try {
+          return JSON.parse(field)
+        } catch (error) {
+          console.warn(`Failed to parse JSON field:`, error)
+          return fallback
+        }
+      }
+      return field
+    }
+    
     return {
       id: props.id,
       name: props.name,
@@ -655,9 +708,9 @@ class Neo4jService {
       content: props.content,
       riskLevel: props.riskLevel,
       status: props.status,
-      metadata: props.metadata ? JSON.parse(props.metadata) : {},
-      summary: props.summary ? JSON.parse(props.summary) : {},
-      statistics: props.statistics ? JSON.parse(props.statistics) : {},
+      metadata: parseJsonField(props.metadata, {}),
+      summary: parseJsonField(props.summary, {}),
+      statistics: parseJsonField(props.statistics, {}),
       findings: props.findings || [],
       recommendations: props.recommendations || [],
       threatCount: props.threatCount,
@@ -669,7 +722,15 @@ class Neo4jService {
       createdAt: new Date(props.createdAt),
       updatedAt: new Date(props.updatedAt),
       fileSize: props.fileSize,
-      pdfPath: props.pdfPath
+      pdfPath: props.pdfPath,
+      // Parse complex report fields from Python script
+      data_sources_and_configuration: parseJsonField(props.data_sources_and_configuration),
+      executive_summary: parseJsonField(props.executive_summary),
+      security_findings: parseJsonField(props.security_findings),
+      recommendations_and_next_steps: parseJsonField(props.recommendations_and_next_steps),
+      network_traffic_overview: parseJsonField(props.network_traffic_overview),
+      compliance_and_governance: parseJsonField(props.compliance_and_governance),
+      ai_analysis: parseJsonField(props.ai_analysis, [])
     }
   }
 }

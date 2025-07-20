@@ -75,61 +75,101 @@ export async function GET(request: NextRequest) {
       // Poll for status updates
       const checkStatus = async () => {
         try {
+          // Check if controller is still open before proceeding
+          if (!controller.desiredSize || controller.desiredSize < 0) {
+            console.log(`[${reportId}] Controller is closed, stopping status check`)
+            activeSubscriptions.delete(subscriptionId)
+            return
+          }
+
+          console.log(`[${reportId}] Checking report status via Neo4j...`)
           const allowAdmin = user.role === 'faculty' || user.role === 'staff'
           const report = await neo4jService.getReport(reportId, user.netId, allowAdmin)
           
           if (report) {
+            console.log(`[${reportId}] Found report in Neo4j with status: ${report.status}`)
+            
             const statusUpdate = {
               type: 'status',
               reportId,
-              status: report.status.toLowerCase(),
+              status: report.status?.toLowerCase() || 'unknown',
               timestamp: new Date().toISOString(),
-              metadata: {
+              progress: {
+                percentage: report.status === 'PUBLISHED' ? 100 : 
+                          report.status === 'FAILED' ? 0 : 50,
+                message: report.status === 'PUBLISHED' ? 'Report completed!' :
+                        report.status === 'FAILED' ? 'Report generation failed' :
+                        'Processing report...'
+              },
+              data: {
                 name: report.name,
+                type: report.type,
                 riskLevel: report.riskLevel,
                 threatCount: report.threatCount,
                 criticalIssues: report.criticalIssues
               }
             }
             
-            controller.enqueue(`data: ${JSON.stringify(statusUpdate)}\n\n`)
+            // Check again before enqueueing
+            if (controller.desiredSize && controller.desiredSize >= 0) {
+              controller.enqueue(`data: ${JSON.stringify(statusUpdate)}\n\n`)
+            } else {
+              console.log(`[${reportId}] Controller closed during processing, stopping`)
+              activeSubscriptions.delete(subscriptionId)
+              return
+            }
             
             // If report is completed or failed, stop polling
             if (report.status === 'PUBLISHED' || report.status === 'FAILED') {
-              controller.enqueue(`data: ${JSON.stringify({
-                type: 'complete',
-                reportId,
-                status: report.status.toLowerCase(),
-                timestamp: new Date().toISOString()
-              })}\n\n`)
-              
-              // Clean up subscription
-              activeSubscriptions.delete(subscriptionId)
-              controller.close()
+              if (controller.desiredSize && controller.desiredSize >= 0) {
+                controller.enqueue(`data: ${JSON.stringify({
+                  type: 'complete',
+                  reportId,
+                  status: report.status.toLowerCase(),
+                  timestamp: new Date().toISOString()
+                })}\n\n`)
+                
+                // Clean up subscription
+                activeSubscriptions.delete(subscriptionId)
+                controller.close()
+              }
               return
             }
           } else {
             // Check if report is still generating (not in Neo4j yet)
-            controller.enqueue(`data: ${JSON.stringify({
-              type: 'status',
-              reportId,
-              status: 'generating',
-              timestamp: new Date().toISOString()
-            })}\n\n`)
+            if (controller.desiredSize && controller.desiredSize >= 0) {
+              controller.enqueue(`data: ${JSON.stringify({
+                type: 'status',
+                reportId,
+                status: 'generating',
+                timestamp: new Date().toISOString()
+              })}\n\n`)
+            } else {
+              console.log(`[${reportId}] Controller closed, stopping polling`)
+              activeSubscriptions.delete(subscriptionId)
+              return
+            }
           }
           
-          // Continue polling if still active
-          if (activeSubscriptions.has(subscriptionId)) {
+          // Continue polling if still active and controller is open
+          if (activeSubscriptions.has(subscriptionId) && controller.desiredSize && controller.desiredSize >= 0) {
             setTimeout(checkStatus, 2000) // Check every 2 seconds
           }
         } catch (error) {
           console.error('Error checking report status:', error)
-          controller.enqueue(`data: ${JSON.stringify({
-            type: 'error',
-            reportId,
-            error: 'Failed to check status',
-            timestamp: new Date().toISOString()
-          })}\n\n`)
+          
+          // Check if controller is still open before enqueueing error
+          if (controller.desiredSize && controller.desiredSize >= 0) {
+            controller.enqueue(`data: ${JSON.stringify({
+              type: 'error',
+              reportId,
+              error: 'Failed to check status',
+              timestamp: new Date().toISOString()
+            })}\n\n`)
+          } else {
+            console.log(`[${reportId}] Controller closed, cannot send error message`)
+            activeSubscriptions.delete(subscriptionId)
+          }
         }
       }
       

@@ -375,10 +375,10 @@ export default function ReportsPage() {
       const result = await response.json()
       
       if (result.reportId) {
-        // Create placeholder for immediate feedback
+        // Create placeholder for immediate feedback with optimization notice
         const placeholder: ReportData = {
           id: result.reportId,
-          title: 'Generating Security Report...',
+          title: 'Generating Security Report... (ANALYZING REAL DATA)',
           type: 'Cybersecurity Analysis',
           category: 'user',
           date: new Date().toISOString(),
@@ -397,8 +397,8 @@ export default function ReportsPage() {
         reportStatus.startTracking(result.reportId)
         
                 toast({
-          title: 'Report Generation Started',
-          description: 'Your security report is being generated. Real-time progress will be shown below.',
+          title: 'Real Report Generation Started',
+          description: `${result.estimatedTime} - Analyzing actual network security data from your system.`,
         })
       }
       
@@ -1204,7 +1204,7 @@ export default function ReportsPage() {
           onConfirm={handleCancelReport}
           itemName={cancelDialog.reportName}
           isLoading={cancelDialog.isLoading}
-        />
+      />
     </div>
   )
 }

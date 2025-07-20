@@ -43,7 +43,7 @@ function getUserFromSession(request: NextRequest): { netId: string; role: string
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = getUserFromSession(request);
@@ -51,7 +51,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const reportId = params.id;
+    const { id: reportId } = await params;
     
     console.log(`[${new Date().toISOString()}] Cancelling report generation: ${reportId}`);
 

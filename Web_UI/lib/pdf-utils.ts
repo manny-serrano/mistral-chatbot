@@ -317,19 +317,19 @@ export const downloadReportAsPDF = async (reportId: string): Promise<void> => {
       // FALLBACK: We got HTML content - use html2canvas method
       console.log('Received HTML fallback from API, using client-side generation')
       
-      const htmlContent = await pdfResponse.text()
-      
-      if (!htmlContent || htmlContent.trim().length === 0) {
-        throw new Error('No HTML content received from PDF API')
-      }
-      
-      console.log(`PDF HTML generated successfully (${htmlContent.length} characters)`)
-      
+    const htmlContent = await pdfResponse.text()
+    
+    if (!htmlContent || htmlContent.trim().length === 0) {
+      throw new Error('No HTML content received from PDF API')
+    }
+    
+    console.log(`PDF HTML generated successfully (${htmlContent.length} characters)`)
+    
       // Generate filename from report metadata
-      const reportTitle = reportData.metadata?.report_title || reportData.name || 'Security Report'
-      const filename = `${reportTitle.replace(/[^a-zA-Z0-9\s]/g, '_').replace(/\s+/g, '_')}.pdf`
-      
-      await generatePDFFromHTML(htmlContent, filename)
+    const reportTitle = reportData.metadata?.report_title || reportData.name || 'Security Report'
+    const filename = `${reportTitle.replace(/[^a-zA-Z0-9\s]/g, '_').replace(/\s+/g, '_')}.pdf`
+    
+    await generatePDFFromHTML(htmlContent, filename)
       console.log('PDF generated and downloaded using HTML fallback method')
       
     } else {

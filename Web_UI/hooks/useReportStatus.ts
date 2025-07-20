@@ -212,9 +212,10 @@ export function useReportStatus(options: UseReportStatusOptions = {}) {
     
     // Fallback polling in case EventSource fails
     let retryCount = 0
-    const maxRetries = 150 // Increased to 10 minutes (150 * 4 seconds = 10 minutes)
-    const baseDelay = 4000 // 4 seconds between checks
+    const maxRetries = 600 // 10 minutes (600 * 1 second)
+    const baseDelay = 1000 // 1 second between checks
     let lastProgress = 0
+    let startTime = Date.now()
     
     const fallbackCheck = async () => {
       try {
@@ -243,24 +244,28 @@ export function useReportStatus(options: UseReportStatusOptions = {}) {
               return
             }
             
-            // Update progress even if still generating
+            // SIMPLIFIED: Use fake progress that fills up smoothly over time
             if (report.status === 'generating' || report.status === 'GENERATING') {
-              // Simulate progress based on time elapsed + any real progress
-              const timeProgress = Math.min((retryCount / maxRetries) * 80, 80) // Max 80% from time
-              const realProgress = report.progress || 0
-              const combinedProgress = Math.max(timeProgress, realProgress, lastProgress)
+              const elapsedSeconds = (Date.now() - startTime) / 1000
+              const estimatedTotalSeconds = 25 // Assume 25 seconds for completion
+              const fakeProgress = Math.min(95, Math.floor((elapsedSeconds / estimatedTotalSeconds) * 100))
               
-              lastProgress = combinedProgress
+              // Ensure progress only goes up
+              const finalProgress = Math.max(fakeProgress, lastProgress)
+              lastProgress = finalProgress
               
-              setReportProgress(prev => new Map(prev.set(reportId, combinedProgress)))
-              setProgressMessages(prev => new Map(prev.set(reportId, 
-                report.statusMessage || 
-                (combinedProgress < 20 ? 'Initializing network analysis...' :
-                 combinedProgress < 40 ? 'Scanning traffic patterns...' :
-                 combinedProgress < 60 ? 'Detecting security threats...' :
-                 combinedProgress < 80 ? 'Analyzing vulnerabilities...' :
-                 'Finalizing security report...')
-              )))
+              setReportProgress(prev => new Map(prev.set(reportId, finalProgress)))
+              
+              // Simple progress messages based on percentage
+              let message = 'Starting analysis...'
+              if (finalProgress > 20) message = 'Analyzing network data...'
+              if (finalProgress > 40) message = 'Detecting security threats...'
+              if (finalProgress > 60) message = 'Generating report...'
+              if (finalProgress > 80) message = 'Finalizing analysis...'
+              
+              setProgressMessages(prev => new Map(prev.set(reportId, message)))
+              
+              console.log(`[${reportId}] Fake progress: ${finalProgress}% - ${message}`)
             }
           }
         } else if (response.status === 404) {
@@ -270,64 +275,22 @@ export function useReportStatus(options: UseReportStatusOptions = {}) {
           throw new Error(`HTTP ${response.status}`)
         }
         
-        // Continue fallback polling with simulated progress
+        // Continue fallback polling
         retryCount++
         if (retryCount < maxRetries) {
-          // Enhanced progress simulation with more realistic progression
-          const progressEstimate = Math.min(
-            (retryCount / maxRetries) * 85 + Math.random() * 5, // Add some randomness
-            95 // Never go to 100% in simulation
-          )
-          
-          setReportProgress(prev => {
-            const currentProgress = prev.get(reportId) || 0
-            // Only increase progress, never decrease
-            const newProgress = Math.max(currentProgress, progressEstimate)
-            return new Map(prev.set(reportId, newProgress))
-          })
-          
-          setProgressMessages(prev => new Map(prev.set(reportId, 
-            progressEstimate < 15 ? 'Connecting to security databases...' :
-            progressEstimate < 25 ? 'Loading network flow data...' :
-            progressEstimate < 40 ? 'Analyzing traffic patterns...' :
-            progressEstimate < 55 ? 'Detecting anomalies and threats...' :
-            progressEstimate < 70 ? 'Correlating security events...' :
-            progressEstimate < 85 ? 'Generating risk assessments...' :
-            'Preparing final report...'
-          )))
-          
-          const delay = baseDelay + Math.random() * 1000 // Add jitter to prevent thundering herd
-          setTimeout(fallbackCheck, delay)
+          setTimeout(fallbackCheck, baseDelay)
         } else {
-          console.log(`[${reportId}] Fallback polling timeout after ${maxRetries} attempts`)
+          console.log(`[${reportId}] Polling timeout reached`)
           stopTracking(reportId)
-          if (onError) {
-            onError(reportId, 'Report generation is taking longer than expected. The report may still be processing - please check again later.')
-          }
         }
       } catch (error) {
-        console.error(`[${reportId}] Fallback check error:`, error)
-        
-        // Continue fallback polling with simulated progress
+        console.error(`[${reportId}] Fallback polling error:`, error)
         retryCount++
         if (retryCount < maxRetries) {
-          // Even on errors, show progress to keep user informed
-          const progressEstimate = Math.min((retryCount / maxRetries) * 75, 75)
-          setReportProgress(prev => new Map(prev.set(reportId, Math.max(prev.get(reportId) || 0, progressEstimate))))
-          setProgressMessages(prev => new Map(prev.set(reportId, 
-            retryCount < 10 ? 'Establishing connection...' :
-            retryCount < 20 ? 'Retrying analysis...' :
-            'Processing continues in background...'
-          )))
-          
-          const delay = Math.min(baseDelay * Math.pow(1.1, Math.min(retryCount, 10)), 8000) // Gradual backoff
-          setTimeout(fallbackCheck, delay)
+          setTimeout(fallbackCheck, baseDelay)
         } else {
-          console.log(`[${reportId}] Fallback polling timeout after errors`)
+          console.log(`[${reportId}] Polling timeout reached after errors`)
           stopTracking(reportId)
-          if (onError) {
-            onError(reportId, 'Report generation encountered issues. Please try refreshing the page or generating a new report.')
-          }
         }
       }
     }

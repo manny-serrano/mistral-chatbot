@@ -73,18 +73,18 @@ export function DataSourcesConfiguration({ data }: DataSourcesConfigurationProps
             <div className="space-y-3">
               {data.analysis_methodology && (
                 <>
-                  <div>
+              <div>
                     <span className="text-sm font-medium text-gray-600">Normal Traffic Analysis:</span>
                     <p className="text-sm text-gray-900">{data.analysis_methodology.normal_traffic_analysis || 'Not specified'}</p>
-                  </div>
-                  <div>
+              </div>
+              <div>
                     <span className="text-sm font-medium text-gray-600">Threat Detection:</span>
                     <p className="text-sm text-gray-900">{data.analysis_methodology.threat_detection || 'Not specified'}</p>
-                  </div>
-                  <div>
+              </div>
+              <div>
                     <span className="text-sm font-medium text-gray-600">Comparison Scope:</span>
                     <p className="text-sm text-gray-900">{data.analysis_methodology.comparison_scope || 'Not specified'}</p>
-                  </div>
+                    </div>
                 </>
               )}
               
@@ -93,12 +93,12 @@ export function DataSourcesConfiguration({ data }: DataSourcesConfigurationProps
                   <div>
                     <span className="text-sm font-medium text-gray-600">Sampling Rate:</span>
                     <p className="text-sm text-gray-900">{data.configuration_details.sampling_rate || 'Not specified'}</p>
-                  </div>
+                </div>
                   <div>
                     <span className="text-sm font-medium text-gray-600">Flow Timeout:</span>
                     <p className="text-sm text-gray-900">{data.configuration_details.flow_timeout || 'Not specified'}</p>
-                  </div>
-                  <div>
+              </div>
+              <div>
                     <span className="text-sm font-medium text-gray-600">Collection Method:</span>
                     <p className="text-sm text-gray-900">{data.configuration_details.collection_method || 'Not specified'}</p>
                   </div>
@@ -108,10 +108,10 @@ export function DataSourcesConfiguration({ data }: DataSourcesConfigurationProps
               {data.ipfix_information_elements && data.ipfix_information_elements.length > 0 && (
                 <div>
                   <span className="text-sm font-medium text-gray-600">IPFIX Elements:</span>
-                  <p className="text-sm text-gray-900">
+                <p className="text-sm text-gray-900">
                     {data.ipfix_information_elements.length} information elements configured
-                  </p>
-                </div>
+                </p>
+              </div>
               )}
             </div>
           </div>

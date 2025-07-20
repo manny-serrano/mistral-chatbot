@@ -25,12 +25,12 @@ export function SecurityFindings({ findings }: SecurityFindingsProps) {
                 <div>
                   <span className="text-sm text-gray-600">Severity</span>
                   {data.severity && (
-                    <Badge 
-                      variant="outline" 
+                  <Badge 
+                    variant="outline" 
                       className={`ml-2 text-xs ${REPORT_STYLES.badges.base} ${REPORT_STYLES.badges.severity[data.severity.toLowerCase() as keyof typeof REPORT_STYLES.badges.severity]}`}
-                    >
-                      {data.severity}
-                    </Badge>
+                  >
+                    {data.severity}
+                  </Badge>
                   )}
                 </div>
                 <div>

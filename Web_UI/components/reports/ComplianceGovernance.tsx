@@ -95,32 +95,32 @@ export function ComplianceGovernance({ data }: ComplianceGovernanceProps) {
                       <div className={REPORT_STYLES.cards.base}>
             <div className="space-y-3">
               {data.governance_policies?.data_retention && (
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Data Retention:</span>
-                  <p className="text-sm text-gray-900">{data.governance_policies.data_retention}</p>
-                </div>
+              <div>
+                <span className="text-sm font-medium text-gray-600">Data Retention:</span>
+                <p className="text-sm text-gray-900">{data.governance_policies.data_retention}</p>
+              </div>
               )}
               {data.governance_policies?.access_controls && (
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Access Controls:</span>
-                  <ul className="text-sm text-gray-900 ml-4">
-                    {data.governance_policies.access_controls.map((control, index) => (
-                      <li key={index} className="list-disc">{control}</li>
-                    ))}
-                  </ul>
-                </div>
+              <div>
+                <span className="text-sm font-medium text-gray-600">Access Controls:</span>
+                <ul className="text-sm text-gray-900 ml-4">
+                  {data.governance_policies.access_controls.map((control, index) => (
+                    <li key={index} className="list-disc">{control}</li>
+                  ))}
+                </ul>
+              </div>
               )}
               {data.governance_policies?.review_schedule && (
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Review Schedule:</span>
-                  <p className="text-sm text-gray-900">{data.governance_policies.review_schedule}</p>
-                </div>
+              <div>
+                <span className="text-sm font-medium text-gray-600">Review Schedule:</span>
+                <p className="text-sm text-gray-900">{data.governance_policies.review_schedule}</p>
+              </div>
               )}
               {data.governance_policies?.approval_authority && (
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Approval Authority:</span>
-                  <p className="text-sm text-gray-900">{data.governance_policies.approval_authority}</p>
-                </div>
+              <div>
+                <span className="text-sm font-medium text-gray-600">Approval Authority:</span>
+                <p className="text-sm text-gray-900">{data.governance_policies.approval_authority}</p>
+              </div>
               )}
             </div>
           </div>
