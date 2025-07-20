@@ -162,12 +162,12 @@ deploy:
         echo '    xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '    xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\">' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
-        echo '    <SecurityPolicy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    <Policy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '        <Rule type=\"MessageLifetime\" clockSkew=\"300\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '        <Rule type=\"ClientCertAuth\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '        <Rule type=\"XMLSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '        <Rule type=\"SimpleSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
-        echo '    </SecurityPolicy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    </Policy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         echo '</SecurityPolicies>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         
