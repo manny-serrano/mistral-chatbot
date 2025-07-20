@@ -155,23 +155,21 @@ deploy:
         cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
         
         echo 'CRITICAL FIX: Creating proper security-policy.xml...'
-        sudo tee /etc/shibboleth/security-policy.xml > /dev/null << 'SECPOL'
-<?xml version="1.0" encoding="UTF-8"?>
-<SecurityPolicies xmlns="urn:mace:shibboleth:3.0:native:sp:config"
-    xmlns:conf="urn:mace:shibboleth:3.0:native:sp:config"
-    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-    xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
-    xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata">
-
-    <SecurityPolicy>
-        <Rule type="MessageLifetime" clockSkew="300"/>
-        <Rule type="ClientCertAuth" required="false"/>
-        <Rule type="XMLSigning" required="false"/>
-        <Rule type="SimpleSigning" required="false"/>
-    </SecurityPolicy>
-
-</SecurityPolicies>
-SECPOL
+        echo '<?xml version=\"1.0\" encoding=\"UTF-8\"?>' | sudo tee /etc/shibboleth/security-policy.xml > /dev/null
+        echo '<SecurityPolicies xmlns=\"urn:mace:shibboleth:3.0:native:sp:config\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    xmlns:conf=\"urn:mace:shibboleth:3.0:native:sp:config\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\">' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    <SecurityPolicy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <Rule type=\"MessageLifetime\" clockSkew=\"300\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <Rule type=\"ClientCertAuth\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <Rule type=\"XMLSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '        <Rule type=\"SimpleSigning\" required=\"false\"/>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '    </SecurityPolicy>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
+        echo '</SecurityPolicies>' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
         
         echo 'Applying Duke-compliant Shibboleth configuration...'
         sudo sed -i 's/maxValidityInterval=\"[^\"]*\"/maxValidityInterval=\"31536000\"/g' /etc/shibboleth/shibboleth2.xml || true
