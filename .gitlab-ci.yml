@@ -154,6 +154,9 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
         
+        echo 'CRITICAL FIX: Cleaning up metadata providers in shibboleth2.xml...'
+        sudo sed -i '/<!-- Emergency fallback: Minimal metadata provider -->/,/<!-- Map to extract attributes/{ /<!-- Map to extract attributes/!d; }' /etc/shibboleth/shibboleth2.xml || true
+        
         echo 'CRITICAL FIX: Creating proper security-policy.xml...'
         echo '<?xml version=\"1.0\" encoding=\"UTF-8\"?>' | sudo tee /etc/shibboleth/security-policy.xml > /dev/null
         echo '<SecurityPolicies xmlns=\"urn:mace:shibboleth:3.0:native:sp:config\"' | sudo tee -a /etc/shibboleth/security-policy.xml > /dev/null
@@ -176,6 +179,13 @@ deploy:
         sudo sed -i 's/validate=\"true\"/validate=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/encryption=\"true\"/encryption=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/signing=\"true\"/signing=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'CRITICAL: Adding SAML assertion validation fixes...'
+        sudo sed -i 's/checkAddress=\"false\"/checkAddress=\"false\" consistentAddress=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        sudo sed -i 's/cookieProps=\"https\"/cookieProps=\"https\" sameSitePolicy=\"None\"/g' /etc/shibboleth/shibboleth2.xml || true
+        
+        echo 'Adding specific Duke SSO compatibility settings...'
+        sudo sed -i 's/REMOTE_USER=\"[^\"]*\"/REMOTE_USER=\"eppn duDukeID persistent-id targeted-id\"/g' /etc/shibboleth/shibboleth2.xml || true
         
         echo 'Ensuring proper Duke IdP whitelist and redirect configuration...'
         sudo sed -i 's|redirectWhitelist=\"[^\"]*\"|redirectWhitelist=\"https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/\"|g' /etc/shibboleth/shibboleth2.xml || true
