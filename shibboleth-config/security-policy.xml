@@ -1,46 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<SecurityPolicyProvider type="XML" validate="true" xmlns="urn:mace:shibboleth:3.0:native:sp:config"
+<SecurityPolicyProvider xmlns="urn:mace:shibboleth:3.0:native:sp:config"
     xmlns:conf="urn:mace:shibboleth:3.0:native:sp:config"
     xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
     xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
     xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata">
 
-    <!-- Default security policy for SAML interactions -->
+    <!-- Default security policy - permissive for Duke SSO -->
     <SecurityPolicy>
-        <PolicyRule type="SimpleSecurityPolicy">
-            <!-- Signature verification policy -->
-            <Rule type="Signature" required="false"/>
-            
-            <!-- Message lifetime policy (5 minutes) -->
-            <Rule type="MessageLifetime" clockSkew="300"/>
-            
-            <!-- Replay detection policy -->
-            <Rule type="MessageReplay" checkReplay="true"/>
-            
-            <!-- Client certificate policy (if using client certs) -->
-            <Rule type="ClientCertAuth" required="false"/>
-            
-            <!-- IP address validation (relaxed for load balancers) -->
-            <Rule type="IPAddressRule" required="false"/>
-        </PolicyRule>
-    </SecurityPolicy>
-    
-    <!-- Specific policy for authentication requests -->
-    <SecurityPolicy id="AuthnRequest">
-        <PolicyRule type="SimpleSecurityPolicy">
-            <Rule type="Signature" required="false"/>
-            <Rule type="MessageLifetime" clockSkew="300"/>
-            <Rule type="MessageReplay" checkReplay="true"/>
-        </PolicyRule>
-    </SecurityPolicy>
-    
-    <!-- Specific policy for logout requests -->
-    <SecurityPolicy id="LogoutRequest">
-        <PolicyRule type="SimpleSecurityPolicy">
-            <Rule type="Signature" required="false"/>
-            <Rule type="MessageLifetime" clockSkew="300"/>
-            <Rule type="MessageReplay" checkReplay="true"/>
-        </PolicyRule>
+        <Rule type="MessageLifetime" clockSkew="300"/>
+        <Rule type="ClientCertAuth" required="false"/>
+        <Rule type="XMLSigning" required="false"/>
+        <Rule type="SimpleSigning" required="false"/>
     </SecurityPolicy>
 
 </SecurityPolicyProvider>

@@ -154,6 +154,26 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
         
+        echo 'CRITICAL FIX: Creating proper security-policy.xml...'
+        cat > /tmp/security-policy-fixed.xml << 'SECPOL'
+      <?xml version=\"1.0\" encoding=\"UTF-8\"?>
+      <SecurityPolicyProvider xmlns=\"urn:mace:shibboleth:3.0:native:sp:config\"
+          xmlns:conf=\"urn:mace:shibboleth:3.0:native:sp:config\"
+          xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"
+          xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\"
+          xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\">
+      
+          <SecurityPolicy>
+              <Rule type=\"MessageLifetime\" clockSkew=\"300\"/>
+              <Rule type=\"ClientCertAuth\" required=\"false\"/>
+              <Rule type=\"XMLSigning\" required=\"false\"/>
+              <Rule type=\"SimpleSigning\" required=\"false\"/>
+          </SecurityPolicy>
+      
+      </SecurityPolicyProvider>
+      SECPOL
+        sudo cp /tmp/security-policy-fixed.xml /etc/shibboleth/security-policy.xml
+        
         echo 'Applying Duke-compliant Shibboleth configuration...'
         sudo sed -i 's/maxValidityInterval=\"[^\"]*\"/maxValidityInterval=\"31536000\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/validate=\"true\"/validate=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
@@ -164,7 +184,7 @@ deploy:
         sudo sed -i 's|redirectWhitelist=\"[^\"]*\"|redirectWhitelist=\"https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/\"|g' /etc/shibboleth/shibboleth2.xml || true
         
         echo 'Testing metadata loading...'
-        sudo curl -k -s -o /dev/null -w 'Duke Metadata fetch: %{http_code}\n' https://shib.oit.duke.edu/duke-metadata-3-signed.xml || echo 'Metadata fetch failed'
+        sudo curl -k -s -o /dev/null -w 'Duke Metadata fetch: %%{http_code}\n' https://shib.oit.duke.edu/duke-metadata-3-signed.xml || echo 'Metadata fetch failed'
         
         echo 'Verifying metadata file deployment and debugging Shibboleth...'
         sudo ls -la /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Local metadata file not found'
