@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import {
+  Filter,
   ShieldCheck,
   FileText,
   Download,
@@ -992,7 +993,9 @@ export default function ReportsPage() {
               {/* Filters and Controls - Responsive */}
               <Card className="bg-gray-900/80 border-purple-400/40 backdrop-blur-xl">
                 <CardHeader className="p-3 sm:p-6">
-                  <CardTitle className="text-base sm:text-lg text-white">Filter Reports</CardTitle>
+                  <CardTitle className="text-base sm:text-lg text-white flex items-center gap-2">
+                  <Filter className="h-5 w-5 text-purple-400" />Filter Reports</CardTitle>
+                
                 </CardHeader>
                 <CardContent className="p-3 sm:p-6 pt-0">
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
