@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" 
+                     xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
+                     entityID="https://levantai.colab.duke.edu">
+  
+  <md:SPSSODescriptor AuthnRequestsSigned="true" WantAssertionsSigned="true" 
+                      protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    
+    <!-- Encryption Key -->
+    <md:KeyDescriptor use="encryption">
+      <ds:KeyInfo>
+        <ds:X509Data>
+          <ds:X509Certificate>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</ds:X509Certificate>
+        </ds:X509Data>
+      </ds:KeyInfo>
+    </md:KeyDescriptor>
+    
+    <!-- Signing Key -->
+    <md:KeyDescriptor use="signing">
+      <ds:KeyInfo>
+        <ds:X509Data>
+          <ds:X509Certificate>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</ds:X509Certificate>
+        </ds:X509Data>
+      </ds:KeyInfo>
+    </md:KeyDescriptor>
+    
+    <!-- Single Logout Service -->
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+                           Location="https://levantai.colab.duke.edu/Shibboleth.sso/SLO/Redirect"/>
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                           Location="https://levantai.colab.duke.edu/Shibboleth.sso/SLO/POST"/>
+    
+    <!-- NameID Formats -->
+    <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
+    <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+    
+    <!-- Assertion Consumer Services -->
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                                Location="https://levantai.colab.duke.edu/Shibboleth.sso/SAML2/POST" 
+                                index="1"/>
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+                                Location="https://levantai.colab.duke.edu/Shibboleth.sso/SAML2/Redirect" 
+                                index="2"/>
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact"
+                                Location="https://levantai.colab.duke.edu/Shibboleth.sso/SAML2/Artifact" 
+                                index="3"/>
+    
+  </md:SPSSODescriptor>
+  
+  <md:Organization>
+    <md:OrganizationName xml:lang="en">Duke University</md:OrganizationName>
+    <md:OrganizationDisplayName xml:lang="en">Duke University</md:OrganizationDisplayName>
+    <md:OrganizationURL xml:lang="en">https://duke.edu</md:OrganizationURL>
+  </md:Organization>
+  
+  <md:ContactPerson contactType="technical">
+    <md:EmailAddress>support@duke.edu</md:EmailAddress>
+  </md:ContactPerson>
+  
+</md:EntityDescriptor>

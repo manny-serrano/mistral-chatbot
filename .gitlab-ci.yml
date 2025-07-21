@@ -124,14 +124,16 @@ deploy:
       scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.key
       rm -f /tmp/ssl_cert.pem /tmp/ssl_key.pem
       
-      # Shibboleth configuration
+      # Shibboleth configuration - Updated to use production SSL certificates
       scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
-      # Copy SSL certs as SP certs (same content, different usage)
+      # Copy SSL certs as SP certs (production configuration with encryption/signing enabled)
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         cp /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-signing-cert.pem
         cp /tmp/ssl/levantai.colab.duke.edu.key /tmp/shibboleth-config/sp-signing-key.pem
         cp /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-encrypt-cert.pem
         cp /tmp/ssl/levantai.colab.duke.edu.key /tmp/shibboleth-config/sp-encrypt-key.pem
+        chmod 644 /tmp/shibboleth-config/sp-*-cert.pem
+        chmod 600 /tmp/shibboleth-config/sp-*-key.pem
       "
       
       # Apache configuration
