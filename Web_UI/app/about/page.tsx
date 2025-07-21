@@ -418,7 +418,7 @@ export default function AboutPage() {
                   bio="Computer Science | Electrical and Computer Engineering"
                   image="/team/andy-chen.png"
                   social={{
-                    linkedin: "#",
+                    linkedin: "https://www.linkedin.com/in/andy-chen-0707aa327/",
                     twitter: "#",
                     github: "#",
                   }}
@@ -429,7 +429,7 @@ export default function AboutPage() {
                   bio="Computer Science | Electrical and Computer Engineering"
                   image="/team/emmanual-serrano.png"
                   social={{
-                    linkedin: "#",
+                    linkedin: "https://www.linkedin.com/in/emmanuel-serrano-campa",
                     twitter: "#",
                     github: "#",
                   }}
@@ -440,7 +440,7 @@ export default function AboutPage() {
                   bio="Cybersecurity and Digital Forensics"
                   image="/team/ahmed-al-ghannam.png"
                   social={{
-                    linkedin: "#",
+                    linkedin: "https://www.linkedin.com/in/ahmed-alghannam-ba1a632b7/",
                     twitter: "#",
                     github: "#",
                   }}
@@ -455,7 +455,7 @@ export default function AboutPage() {
                   bio="Computer Science"
                   image="/team/fahad-al-athel.png"
                   social={{
-                    linkedin: "#",
+                    linkedin: "https://www.linkedin.com/in/fahad-alathel/",
                     twitter: "#",
                     github: "#",
                   }}
@@ -466,7 +466,7 @@ export default function AboutPage() {
                   bio="Computer Engineering"
                   image="/team/Meshari-alsughayyir.jpg"
                   social={{
-                    linkedin: "#",
+                    linkedin: "https://www.linkedin.com/in/meshari-alsughayyir-37860b262/",
                     twitter: "#",
                     github: "#",
                   }}
@@ -537,7 +537,7 @@ function TeamMember({ name, role, bio, image, social }: TeamMemberProps) {
           <img
             src={image || "/placeholder.svg"}
             alt={name}
-            className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-purple-400/30"
+            className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-purple-400/30 object-cover"
           />
           <h3 className="text-xl font-bold text-white">{name}</h3>
           <p className="text-purple-300 font-medium">{role}</p>
@@ -552,26 +552,6 @@ function TeamMember({ name, role, bio, image, social }: TeamMemberProps) {
               rel="noopener noreferrer"
             >
               <Linkedin className="h-5 w-5" />
-            </a>
-          )}
-          {social.twitter && (
-            <a
-              href={social.twitter}
-              className="text-zinc-400 hover:text-purple-300 transition-colors"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Twitter className="h-5 w-5" />
-            </a>
-          )}
-          {social.github && (
-            <a
-              href={social.github}
-              className="text-zinc-400 hover:text-purple-300 transition-colors"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Github className="h-5 w-5" />
             </a>
           )}
         </div>
