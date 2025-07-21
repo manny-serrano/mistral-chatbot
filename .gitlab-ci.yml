@@ -185,8 +185,9 @@ deploy:
         echo 'Applying Duke-compliant Shibboleth configuration...'
         sudo sed -i 's/maxValidityInterval=\"[^\"]*\"/maxValidityInterval=\"31536000\"/g' /etc/shibboleth/shibboleth2.xml || true
         sudo sed -i 's/validate=\"true\"/validate=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
-        sudo sed -i 's/encryption=\"true\"/encryption=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
-        sudo sed -i 's/signing=\"true\"/signing=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        # REMOVED: encryption and signing are now enabled with production certificates
+        # sudo sed -i 's/encryption=\"true\"/encryption=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
+        # sudo sed -i 's/signing=\"true\"/signing=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
         
         echo 'CRITICAL: Adding SAML assertion validation fixes...'
         sudo sed -i 's/checkAddress=\"false\"/checkAddress=\"false\" consistentAddress=\"false\"/g' /etc/shibboleth/shibboleth2.xml || true
