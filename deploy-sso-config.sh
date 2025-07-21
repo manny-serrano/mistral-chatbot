@@ -149,8 +149,18 @@ print_step "3. Deploying Apache configuration..."
 
 # Deploy the CORRECTED Apache configuration
 print_status "Deploying CORRECTED Apache HTTPS configuration"
-cp "$APACHE_CONFIG_SOURCE/mistral-app-https-fixed.conf" "$APACHE_SITES_DIR/mistral-app-https.conf"
-chmod 644 "$APACHE_SITES_DIR/mistral-app-https.conf"
+if [ -f "$APACHE_CONFIG_SOURCE/mistral-app-https-fixed.conf" ]; then
+    cp "$APACHE_CONFIG_SOURCE/mistral-app-https-fixed.conf" "$APACHE_SITES_DIR/mistral-app-https.conf"
+    chmod 644 "$APACHE_SITES_DIR/mistral-app-https.conf"
+    print_status "✅ Apache configuration deployed successfully (using fixed version)"
+elif [ -f "$APACHE_CONFIG_SOURCE/mistral-app-https.conf" ]; then
+    cp "$APACHE_CONFIG_SOURCE/mistral-app-https.conf" "$APACHE_SITES_DIR/mistral-app-https.conf"
+    chmod 644 "$APACHE_SITES_DIR/mistral-app-https.conf"
+    print_status "✅ Apache configuration deployed successfully"
+else
+    print_error "Apache configuration file not found in $APACHE_CONFIG_SOURCE"
+    exit 1
+fi
 
 print_step "4. Deploying debug and test files..."
 
