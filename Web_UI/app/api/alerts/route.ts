@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
       if (entry.p_value >= 0.8) severity = 'critical';        // >= 0.8 Critical
       else if (entry.p_value >= 0.6) severity = 'high';       // >= 0.6 High  
       else if (entry.p_value >= 0.4) severity = 'medium';     // >= 0.4 Medium
-      else if (entry.p_value >= 0.01) severity = 'low';        // >= 0.1 Low
+      else if (entry.p_value >= 0.1) severity = 'low';        // >= 0.1 Low
       else return null; // Filter out alerts with p_value < 0.1
       
       return {
