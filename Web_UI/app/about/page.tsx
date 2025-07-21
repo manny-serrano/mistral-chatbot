@@ -398,7 +398,7 @@ export default function AboutPage() {
                   bio="Sr. IT Analyst"
                   image="/team/vanessa-simmons.jpg"
                   social={{
-                    linkedin: "#",
+                    linkedin: "https://www.linkedin.com/in/vanessa-simmons-a969913/",
                     twitter: "#",
                     github: "#",
                   }}
