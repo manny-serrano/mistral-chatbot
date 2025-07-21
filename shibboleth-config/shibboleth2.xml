@@ -20,9 +20,8 @@
                   redirectLimit="exact" redirectWhitelist="https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/">
 
             <!-- Default SSO location - Points to Duke IdP with official URLs -->
-            <!-- Fixed: Only use SAML2 to ensure AuthnStatement is included -->
             <SSO entityID="https://shib.oit.duke.edu/shibboleth-idp">
-                SAML2
+                SAML2 SAML1
             </SSO>
 
             <!-- SAML and local-only logout. -->
@@ -35,12 +34,6 @@
 
             <!-- JSON feed of discovery information. -->
             <Handler type="DiscoveryFeed" Location="/DiscoFeed"/>
-            
-            <!-- Explicit SAML2 handlers to ensure AuthnStatement processing -->
-            <Handler type="SAML2Consumer" Location="/SAML2/POST" 
-                     binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" />
-            <Handler type="SAML2Consumer" Location="/SAML2/Redirect" 
-                     binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" />
         </Sessions>
 
         <!-- Allows overriding of error template information/filenames. -->
