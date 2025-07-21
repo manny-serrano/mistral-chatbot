@@ -9,8 +9,8 @@
     <!-- The ApplicationDefaults element is where most of Shibboleth's SAML bits are defined. -->
     <ApplicationDefaults entityID="https://levantai.colab.duke.edu"
                          REMOTE_USER="eppn persistent-id targeted-id"
-                         encryption="false"
-                         signing="false"
+                         encryption="true"
+                         signing="true"
                          signingAlg="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
                          digestAlg="http://www.w3.org/2001/04/xmlenc#sha256">
 
@@ -28,7 +28,7 @@
             <Logout>SAML2 Local</Logout>
 
             <!-- Administrative functions -->
-            <Handler type="MetadataGenerator" Location="/Metadata" signing="false"/>
+            <Handler type="MetadataGenerator" Location="/Metadata" signing="true"/>
             <Handler type="Status" Location="/Status" acl="127.0.0.1 ::1"/>
             <Handler type="Session" Location="/Session" showAttributeValues="true"/>
 
