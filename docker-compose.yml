@@ -22,6 +22,9 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./network-storage/model-cache:/app/.cache
+    depends_on:
+      neo4j:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       # Simple health check - just check if port is open
@@ -101,23 +104,34 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      test: ["CMD-SHELL", "nc -z localhost 19530 || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 90s
+      retries: 10
+      start_period: 180s
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.5
-    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd --auto-compaction-retention=1 --max-request-bytes=33554432
+    command: >
+      etcd
+      --name=etcd0
+      --data-dir=/etcd-data
+      --listen-client-urls=http://0.0.0.0:2379
+      --advertise-client-urls=http://0.0.0.0:2379
+      --listen-peer-urls=http://0.0.0.0:2380
+      --initial-advertise-peer-urls=http://0.0.0.0:2380
+      --initial-cluster=etcd0=http://0.0.0.0:2380
+      --initial-cluster-token=etcd-cluster-1
+      --initial-cluster-state=new
+      --auto-compaction-retention=1h
+      --quota-backend-bytes=4294967296
+      --max-request-bytes=33554432
     ports:
       - "2379:2379"
     volumes:
-      - etcd_data:/etcd
+      - etcd_data:/etcd-data
     environment:
-      - ETCD_AUTO_COMPACTION_MODE=periodic
-      - ETCD_AUTO_COMPACTION_RETENTION=1h
-      - ETCD_QUOTA_BACKEND_BYTES=8589934592
+      - ETCD_ENABLE_V2=true
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "etcdctl endpoint health --endpoints=http://localhost:2379 || exit 1"]
