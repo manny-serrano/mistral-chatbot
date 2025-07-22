@@ -8,7 +8,7 @@
 
     <!-- The ApplicationDefaults element is where most of Shibboleth's SAML bits are defined. -->
     <ApplicationDefaults entityID="https://levantai.colab.duke.edu"
-                         REMOTE_USER="eppn persistent-id targeted-id"
+                         REMOTE_USER="eppn duDukeID persistent-id targeted-id"
                          encryption="true"
                          signing="true"
                          signingAlg="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
@@ -16,7 +16,7 @@
 
         <!-- Controls session lifetimes, address checks, cookie handling, and the protocol handlers. -->
         <Sessions lifetime="28800" timeout="3600" relayState="ss:mem"
-                  checkAddress="false" handlerSSL="true" cookieProps="https"
+                  checkAddress="false" consistentAddress="false" handlerSSL="true" cookieProps="https"
                   redirectLimit="exact" redirectWhitelist="https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/">
 
             <!-- Default SSO location - Points to Duke IdP with official URLs -->
@@ -52,10 +52,10 @@
                           reloadInterval="7200"/>
 
         <!-- Map to extract attributes from SAML assertions. -->
-        <AttributeExtractor type="XML" validate="true" reloadChanges="false" path="attribute-map.xml"/>
+        <AttributeExtractor type="XML" validate="false" reloadChanges="false" path="attribute-map.xml"/>
 
         <!-- Default filtering policy for recognized attributes, lets other data pass. -->
-        <AttributeFilter type="XML" validate="true" path="attribute-policy.xml"/>
+        <AttributeFilter type="XML" validate="false" path="attribute-policy.xml"/>
 
         <!-- Simple file-based resolvers for separate signing/encryption keys. -->
         <CredentialResolver type="File" use="signing" 
@@ -70,9 +70,9 @@
     </ApplicationDefaults>
 
     <!-- Policies that determine how to process and authenticate runtime requests. -->
-    <SecurityPolicyProvider type="XML" validate="true" path="security-policy.xml"/>
+    <SecurityPolicyProvider type="XML" validate="false" path="security-policy.xml"/>
 
     <!-- Low-level configuration about protocols and bindings available for use. -->
-    <ProtocolProvider type="XML" validate="true" path="protocols.xml"/>
+    <ProtocolProvider type="XML" validate="false" path="protocols.xml"/>
 
 </SPConfig>

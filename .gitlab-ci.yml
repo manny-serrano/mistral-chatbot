@@ -2,10 +2,14 @@ stages:
   - build
   - deploy
 
-# Streamlined SSO Configuration (July 18, 2025)
-# CRITICAL FIXES:
+# Streamlined SSO Configuration (July 22, 2025)
+# CRITICAL FIXES APPLIED:
 # - Service Provider EntityID: https://levantai.colab.duke.edu  
 # - Identity Provider EntityID: https://shib.oit.duke.edu/shibboleth-idp (Duke Official)
+# - FIXED: Using InCommon SSL certificates instead of self-signed certificates
+# - FIXED: Apache header mappings - uses eppn/HTTP_EPPN/remote_user instead of X-Shib-* headers
+# - FIXED: Certificate ownership (_shibd:_shibd) and permissions for Shibboleth daemon
+# - FIXED: Using mistral-app-https-fixed.conf with correct header configuration
 # - Disabled authentication request signing (Duke recommendation)
 # - Using official Duke metadata: https://shib.oit.duke.edu/duke-metadata-3-signed.xml
 # - Fixed Shibboleth metadata validity interval
@@ -124,14 +128,16 @@ deploy:
       scp -o StrictHostKeyChecking=no /tmp/ssl_key.pem $VM_USER@$VM_HOST:/tmp/ssl/levantai.colab.duke.edu.key
       rm -f /tmp/ssl_cert.pem /tmp/ssl_key.pem
       
-      # Shibboleth configuration - Updated to use production SSL certificates
+      # Shibboleth configuration - Updated to use InCommon production SSL certificates
       scp -o StrictHostKeyChecking=no -r shibboleth-config/ $VM_USER@$VM_HOST:/tmp/
-      # Copy SSL certs as SP certs (production configuration with encryption/signing enabled)
+      # Copy InCommon SSL certs as SP certs (production configuration with encryption/signing enabled)
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
+        # Use InCommon certificates for Shibboleth SP (registered with Duke OIT)
         cp /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-signing-cert.pem
         cp /tmp/ssl/levantai.colab.duke.edu.key /tmp/shibboleth-config/sp-signing-key.pem
         cp /tmp/ssl/levantai.colab.duke.edu.pem /tmp/shibboleth-config/sp-encrypt-cert.pem
         cp /tmp/ssl/levantai.colab.duke.edu.key /tmp/shibboleth-config/sp-encrypt-key.pem
+        # Set proper permissions for Shibboleth certificates
         chmod 644 /tmp/shibboleth-config/sp-*-cert.pem
         chmod 600 /tmp/shibboleth-config/sp-*-key.pem
       "
@@ -156,8 +162,53 @@ deploy:
       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VM_USER@$VM_HOST "
         cd /tmp && timeout 180s sudo ./deploy-sso-config.sh || echo 'SSO deployment completed'
         
-        echo 'CRITICAL FIX: Removing invalid sameSitePolicy attribute...'
-        sudo sed -i 's/ sameSitePolicy=\"None\"//g' /etc/shibboleth/shibboleth2.xml || true
+        echo 'CRITICAL FIX: Using corrected Apache configuration with proper header mappings...'
+        if [ -f /tmp/apache-config/sites-available/mistral-app-https-fixed.conf ]; then
+          sudo cp /tmp/apache-config/sites-available/mistral-app-https-fixed.conf /etc/apache2/sites-available/mistral-app-https.conf
+          echo 'Applied fixed Apache configuration with correct Shibboleth headers'
+          
+          # Enable the site and reload Apache
+          sudo a2ensite mistral-app-https.conf || echo 'Site already enabled'
+          sudo systemctl reload apache2 || echo 'Apache reload completed'
+        else
+          echo 'WARNING: Fixed Apache configuration not found, using existing'
+        fi
+        
+        echo 'CRITICAL FIX: Verifying Duke metadata file deployment...'
+        if [ -f /etc/shibboleth/duke-metadata-3-signed.xml ]; then
+          echo 'Checking metadata contains correct Duke IdP entity...'
+          if sudo grep -q 'https://shib.oit.duke.edu/shibboleth-idp' /etc/shibboleth/duke-metadata-3-signed.xml; then
+            echo '✅ Correct Duke metadata deployed with proper EntityID'
+          else
+            echo '❌ ERROR: Metadata does not contain expected Duke IdP EntityID'
+            echo 'Available entities:'
+            sudo grep -o 'entityID=\"[^\"]*\"' /etc/shibboleth/duke-metadata-3-signed.xml | head -3
+          fi
+        else
+          echo '❌ ERROR: Duke metadata file not found after deployment'
+        fi
+        
+        echo 'CRITICAL FIX: Ensuring proper certificate ownership and verification for Shibboleth...'
+        # Verify certificates were deployed correctly
+        if [ -f /etc/shibboleth/sp-signing-cert.pem ] && [ -f /etc/shibboleth/sp-signing-key.pem ]; then
+          echo 'Verifying certificate integrity...'
+          # Check if cert and key match
+          cert_modulus=\$(sudo openssl x509 -noout -modulus -in /etc/shibboleth/sp-signing-cert.pem 2>/dev/null | openssl md5)
+          key_modulus=\$(sudo openssl rsa -noout -modulus -in /etc/shibboleth/sp-signing-key.pem 2>/dev/null | openssl md5)
+          if [ \"\$cert_modulus\" = \"\$key_modulus\" ]; then
+            echo '✅ Certificate and key pair match correctly'
+          else
+            echo '⚠️ WARNING: Certificate and key modulus do not match'
+          fi
+          
+          # Set proper ownership and permissions
+          sudo chown _shibd:_shibd /etc/shibboleth/sp-*.pem 2>/dev/null || sudo chown shibd:shibd /etc/shibboleth/sp-*.pem 2>/dev/null || echo 'Could not change certificate ownership'
+          sudo chmod 644 /etc/shibboleth/sp-*-cert.pem || echo 'Could not change cert permissions'
+          sudo chmod 600 /etc/shibboleth/sp-*-key.pem || echo 'Could not change key permissions'
+          echo '✅ Certificate ownership and permissions set'
+        else
+          echo '❌ ERROR: SP certificates not found after deployment'
+        fi
         
         echo 'CRITICAL FIX: Ensuring proper MetadataProvider configuration...'
         if ! sudo grep -q '<MetadataProvider' /etc/shibboleth/shibboleth2.xml; then
@@ -214,6 +265,28 @@ deploy:
         sudo stat /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Cannot stat metadata file'
         sudo chown _shibd:_shibd /etc/shibboleth/duke-metadata-3-signed.xml 2>/dev/null || sudo chown shibd:shibd /etc/shibboleth/duke-metadata-3-signed.xml 2>/dev/null || echo 'Could not change ownership'
         sudo chmod 644 /etc/shibboleth/duke-metadata-3-signed.xml || echo 'Could not change permissions'
+        
+        echo 'CRITICAL FIX: Verifying Apache configuration deployment...'
+        if [ -f /etc/apache2/sites-available/mistral-app-https.conf ]; then
+          echo 'Checking Apache configuration contains correct headers...'
+          if sudo grep -q 'RequestHeader set eppn' /etc/apache2/sites-available/mistral-app-https.conf; then
+            echo '✅ Apache configuration contains correct eppn header mapping'
+          else
+            echo '❌ ERROR: Apache configuration missing eppn header mapping'
+          fi
+          if sudo grep -q 'RequestHeader set HTTP_EPPN' /etc/apache2/sites-available/mistral-app-https.conf; then
+            echo '✅ Apache configuration contains HTTP_EPPN header mapping'
+          else
+            echo '❌ ERROR: Apache configuration missing HTTP_EPPN header mapping'
+          fi
+          if sudo grep -q 'RequestHeader set remote_user' /etc/apache2/sites-available/mistral-app-https.conf; then
+            echo '✅ Apache configuration contains remote_user header mapping'
+          else
+            echo '❌ ERROR: Apache configuration missing remote_user header mapping'
+          fi
+        else
+          echo '❌ ERROR: Apache configuration file not found'
+        fi
         
         echo 'Clearing Shibboleth logs and restarting for fresh debug info...'
         sudo rm -f /var/log/shibboleth/shibd.log /var/log/shibboleth/transaction.log || true

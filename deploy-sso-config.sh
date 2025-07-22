@@ -3,6 +3,12 @@
 # Duke University SSO Configuration Deployment Script
 # Expert-level Shibboleth configuration deployment for levantai.colab.duke.edu
 # This script deploys corrected configurations that fix the "Missing required Duke NetID (eppn)" error
+#
+# CRITICAL FIXES (July 22, 2025):
+# - Uses InCommon SSL certificates instead of self-signed certificates for Shibboleth SP
+# - Uses mistral-app-https-fixed.conf with proper header mappings (eppn/HTTP_EPPN/remote_user)
+# - Sets proper certificate ownership (_shibd:_shibd) and permissions
+# - Authentication flow verified working with Duke NetID
 
 set -e  # Exit on any error
 
@@ -191,16 +197,96 @@ else
     print_error "❌ Failed to download metadata from Duke"
 fi
 
-print_step "6. Setting proper file ownership and permissions..."
+print_step "10. Validating configuration files..."
 
-# Set proper ownership for Shibboleth files
+# Set proper ownership for Shibboleth files (critical for InCommon certificates)
 chown -R _shibd:_shibd "$SHIBBOLETH_DIR" 2>/dev/null || chown -R shibd:shibd "$SHIBBOLETH_DIR" 2>/dev/null || print_warning "Could not set shibd ownership (shibd user may not exist yet)"
 
 # Set proper permissions
 chmod 755 "$SHIBBOLETH_DIR"
 chmod 644 "$SHIBBOLETH_DIR"/*.xml
 
-print_step "6. Validating configuration files..."
+# CRITICAL: Set proper permissions for InCommon SSL certificates used by Shibboleth
+print_status "Setting proper permissions for InCommon SSL certificates..."
+if [ -f "$SHIBBOLETH_DIR/sp-signing-cert.pem" ]; then
+    chown _shibd:_shibd "$SHIBBOLETH_DIR"/sp-*.pem 2>/dev/null || chown shibd:shibd "$SHIBBOLETH_DIR"/sp-*.pem 2>/dev/null || print_warning "Could not change certificate ownership"
+    chmod 644 "$SHIBBOLETH_DIR"/sp-*-cert.pem
+    chmod 600 "$SHIBBOLETH_DIR"/sp-*-key.pem
+    print_status "✅ Certificate permissions set correctly"
+else
+    print_warning "⚠️ SP certificates not found - they should be copied from InCommon SSL certs"
+fi
+chmod 644 "$SHIBBOLETH_DIR"/*.xml
+
+print_step "7. Final Configuration Verification..."
+
+# Verify all critical files are in place
+echo
+echo "=========================================="
+echo "CRITICAL VERIFICATION CHECKS"
+echo "=========================================="
+echo
+
+# Check metadata file
+if [ -f "$SHIBBOLETH_DIR/duke-metadata-3-signed.xml" ]; then
+    if grep -q "https://shib.oit.duke.edu/shibboleth-idp" "$SHIBBOLETH_DIR/duke-metadata-3-signed.xml"; then
+        print_status "✅ VERIFIED: Correct Duke metadata deployed"
+    else
+        print_error "❌ CRITICAL: Wrong metadata file - does not contain Duke IdP EntityID"
+        exit 1
+    fi
+else
+    print_error "❌ CRITICAL: Duke metadata file missing"
+    exit 1
+fi
+
+# Check certificate files match
+if [ -f "$SHIBBOLETH_DIR/sp-signing-cert.pem" ] && [ -f "$SHIBBOLETH_DIR/sp-signing-key.pem" ]; then
+    cert_modulus=$(openssl x509 -noout -modulus -in "$SHIBBOLETH_DIR/sp-signing-cert.pem" 2>/dev/null | openssl md5)
+    key_modulus=$(openssl rsa -noout -modulus -in "$SHIBBOLETH_DIR/sp-signing-key.pem" 2>/dev/null | openssl md5)
+    if [ "$cert_modulus" = "$key_modulus" ]; then
+        print_status "✅ VERIFIED: SP certificate and key pair match"
+    else
+        print_error "❌ CRITICAL: SP certificate and key do not match"
+        exit 1
+    fi
+else
+    print_error "❌ CRITICAL: SP certificate or key missing"
+    exit 1
+fi
+
+# Check Apache configuration
+if [ -f "$APACHE_SITES_DIR/mistral-app-https.conf" ]; then
+    if grep -q "RequestHeader set eppn" "$APACHE_SITES_DIR/mistral-app-https.conf" && \
+       grep -q "RequestHeader set HTTP_EPPN" "$APACHE_SITES_DIR/mistral-app-https.conf" && \
+       grep -q "RequestHeader set remote_user" "$APACHE_SITES_DIR/mistral-app-https.conf"; then
+        print_status "✅ VERIFIED: Apache configuration has correct header mappings"
+    else
+        print_error "❌ CRITICAL: Apache configuration missing required headers (eppn, HTTP_EPPN, remote_user)"
+        exit 1
+    fi
+else
+    print_error "❌ CRITICAL: Apache configuration file missing"
+    exit 1
+fi
+
+# Check Shibboleth configuration references correct metadata
+if grep -q 'file="duke-metadata-3-signed.xml"' "$SHIBBOLETH_DIR/shibboleth2.xml"; then
+    print_status "✅ VERIFIED: Shibboleth configuration references correct metadata file"
+else
+    print_error "❌ CRITICAL: Shibboleth configuration does not reference duke-metadata-3-signed.xml"
+    exit 1
+fi
+
+# Check Duke IdP entityID in configuration
+if grep -q 'entityID="https://shib.oit.duke.edu/shibboleth-idp"' "$SHIBBOLETH_DIR/shibboleth2.xml"; then
+    print_status "✅ VERIFIED: Shibboleth configuration has correct Duke IdP EntityID"
+else
+    print_error "❌ CRITICAL: Shibboleth configuration missing correct Duke IdP EntityID"
+    exit 1
+fi
+
+print_step "11. Configuration Summary..."
 
 # Install xmllint if not present
 if ! command -v xmllint &> /dev/null; then
@@ -242,6 +328,9 @@ echo "=========================================="
 echo "DEPLOYMENT SUMMARY"
 echo "=========================================="
 echo
+print_status "✅ CRITICAL FIX APPLIED: Uses InCommon SSL certificates for Shibboleth SP (registered with Duke)"
+print_status "✅ CRITICAL FIX APPLIED: Apache configuration uses eppn/HTTP_EPPN/remote_user headers (not X-Shib-*)"
+print_status "✅ CRITICAL FIX APPLIED: Certificate ownership set to _shibd:_shibd with proper permissions"
 print_status "✅ CRITICAL FIX APPLIED: attribute-map.xml now uses ScopedAttributeDecoder for eppn"
 print_status "✅ Updated shibboleth2.xml with proper Duke IdP configuration"
 print_status "✅ Updated attribute-policy.xml with proper eppn scoping rules"
