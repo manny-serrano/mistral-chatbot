@@ -11,13 +11,27 @@ interface DukeSSOButtonProps {
 }
 
 export default function DukeSSOButton({ className, variant = 'default', redirectPath = '/dashboard' }: DukeSSOButtonProps) {
-  const handleDukeSSO = () => {
-    // Build SSO URL with redirect parameter
-    const ssoUrl = new URL('/api/auth/sso', window.location.origin)
-    if (redirectPath) {
-      ssoUrl.searchParams.set('redirect', redirectPath)
+  const handleDukeSSO = async () => {
+    try {
+      // Build SSO URL with redirect parameter
+      const ssoUrl = new URL('/api/auth/sso', window.location.origin)
+      if (redirectPath) {
+        ssoUrl.searchParams.set('redirect', redirectPath)
+      }
+      
+      // Fetch the SSO URL from the backend
+      const response = await fetch(ssoUrl.toString())
+      const data = await response.json()
+      
+      if (data.redirectUrl) {
+        // Redirect to Duke Shibboleth SSO on the frontend
+        window.location.href = data.redirectUrl
+      } else {
+        console.error('No redirect URL received from SSO endpoint')
+      }
+    } catch (error) {
+      console.error('SSO authentication error:', error)
     }
-    window.location.href = ssoUrl.toString()
   }
 
   return (

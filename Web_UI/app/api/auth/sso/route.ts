@@ -6,24 +6,33 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url)
     const redirectPath = url.searchParams.get('redirect') || '/dashboard'
     
-    // For development, redirect directly to mock SSO
+    // For development, return mock SSO URL for frontend redirect
     if (process.env.NODE_ENV === 'development') {
-      // Use the request URL to get the correct host and protocol
       const baseUrl = new URL(req.url).origin
       const mockSsoUrl = new URL('/api/auth/sso/mock', baseUrl)
       mockSsoUrl.searchParams.set('target', redirectPath)
-      return NextResponse.redirect(mockSsoUrl.toString())
+      
+      return NextResponse.json({
+        redirectUrl: mockSsoUrl.toString(),
+        environment: 'development'
+      })
     }
     
-    // Production SSO configuration
-    const entityId = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin
+    // Production SSO configuration - return Duke Shibboleth URL for frontend redirect
+    const entityId = 'https://levantai.colab.duke.edu'
     
-    // Build the SSO redirect URL for production
-    // This redirects to your own Shibboleth.sso endpoint which handles Duke SSO
-    const ssoUrl = new URL('/Shibboleth.sso/Login', entityId)
-    ssoUrl.searchParams.set('target', `/api/auth/shibboleth?target=${encodeURIComponent(redirectPath)}`)
+    // Use the registered Shibboleth.sso endpoint with target parameter for post-auth redirect
+    const shibbolethUrl = `${entityId}/Shibboleth.sso/Login`
+    const targetUrl = `${entityId}/api/auth/shibboleth?target=${encodeURIComponent(redirectPath)}`
     
-    return NextResponse.redirect(ssoUrl.toString())
+    // Build the Shibboleth SSO URL using your registered ACS endpoint
+    const dukeSSO = new URL(shibbolethUrl)
+    dukeSSO.searchParams.set('target', targetUrl)
+    
+    return NextResponse.json({
+      redirectUrl: dukeSSO.toString(),
+      environment: 'production'
+    })
     
   } catch (error) {
     console.error('SSO redirect error:', error)
