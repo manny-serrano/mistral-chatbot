@@ -46,15 +46,9 @@
                 helpLocation="/about.html"
                 styleSheet="/shibboleth-sp/main.css"/>
 
-        <!-- Multiple metadata providers for redundancy -->
-        <!-- Primary: Local file metadata provider -->
-        <MetadataProvider type="XML" validate="false" file="duke-metadata-3-signed.xml"/>
-        
-        <!-- Simplified fallback: just use local file -->
-        <!-- <MetadataProvider type="XML" validate="false"
-                          url="https://shib.oit.duke.edu/duke-metadata-3-signed.xml"
-                          backingFilePath="duke-metadata-3-signed.xml"
-                          reloadInterval="7200"/> -->
+        <!-- Temporary: Minimal MetadataProvider for basic functionality -->
+        <!-- Using local file only to avoid URL/validation issues -->
+        <MetadataProvider type="XML" validate="false" file="duke-metadata-3-signed.xml" reloadInterval="7200"/>
 
         <!-- Map to extract attributes from SAML assertions. -->
         <AttributeExtractor type="XML" validate="false" reloadChanges="false" path="attribute-map.xml"/>

@@ -6,7 +6,7 @@
     xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata">
 
     <!-- Default security policy - permissive for Duke SSO -->
-    <Policy>
+    <Policy id="default">
         <Rule type="MessageLifetime" clockSkew="300"/>
         <Rule type="ClientCertAuth" required="false"/>
         <Rule type="XMLSigning" required="false"/>
