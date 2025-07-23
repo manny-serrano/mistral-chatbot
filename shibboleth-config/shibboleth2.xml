@@ -51,11 +51,11 @@
         <!-- Primary: Local file metadata provider -->
         <MetadataProvider type="XML" validate="false" file="duke-metadata-3-signed.xml"/>
         
-        <!-- Fallback: URL-based metadata provider -->
-        <MetadataProvider type="XML" validate="false"
+        <!-- Simplified fallback: just use local file -->
+        <!-- <MetadataProvider type="XML" validate="false"
                           url="https://shib.oit.duke.edu/duke-metadata-3-signed.xml"
-                          backingFilePath="duke-metadata-fallback.xml"
-                          reloadInterval="7200"/>
+                          backingFilePath="duke-metadata-3-signed.xml"
+                          reloadInterval="7200"/> -->
 
         <!-- Map to extract attributes from SAML assertions. -->
         <AttributeExtractor type="XML" validate="false" reloadChanges="false" path="attribute-map.xml"/>
