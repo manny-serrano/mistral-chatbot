@@ -15,9 +15,14 @@
                          digestAlg="http://www.w3.org/2001/04/xmlenc#sha256">
 
         <!-- Controls session lifetimes, address checks, cookie handling, and the protocol handlers. -->
-        <Sessions lifetime="28800" timeout="3600" relayState="ss:mem"
-                  checkAddress="false" consistentAddress="false" handlerSSL="true" 
-                  cookieProps="https" redirectLimit="exact" 
+        <Sessions lifetime="28800" 
+                  timeout="3600" 
+                  relayState="ss:mem"
+                  checkAddress="false" 
+                  consistentAddress="false" 
+                  handlerSSL="true" 
+                  cookieProps="https" 
+                  redirectLimit="exact" 
                   redirectWhitelist="https://shib.oit.duke.edu/ https://levantai.colab.duke.edu/">
 
             <!-- Default SSO location - Points to Duke IdP with official URLs -->
