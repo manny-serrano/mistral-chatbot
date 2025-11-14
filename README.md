@@ -503,29 +503,10 @@ The project utilizes statistical analysis through aggregated queries on the Neo4
 
 These statistics are exposed via API endpoints (`/network/stats`, `/visualization/*`) to support data-driven security assessments.
 
-## Contributing
-
-*   **Project Structure**: The codebase is organized into several directories:
-    *   `Agent/`: Contains the core agent logic, API server, and standalone runner scripts.
-    *   `neo4j-graphdatabase/`: Scripts related to Neo4j data ingestion and schema management.
-    *   `embedding_with_llm/`: Scripts for initializing Milvus, loading embedding models, and processing data for Milvus.
-*   **Development Workflow**:
-    1.  Fork the repository.
-    2.  Create a new branch for your feature.
-    3.  Make your changes and commit them.
-    4.  Ensure your code adheres to project standards (e.g., linting, formatting).
-    5.  Submit a pull request.
-*   **Code Standards**: Follow PEP 8 for Python code style. Ensure comprehensive logging is used for debugging and operational insights.
-
 ## Testing
-
-*   **Unit Tests**: (Not explicitly provided in the codebase, but recommended) Implement unit tests for individual components like retrievers, parsers, and utility functions.
 *   **Integration Tests**: Test the interactions between different components, such as the agent's query routing and database retrieval.
 *   **API Tests**: Use tools like `pytest` and `httpx` to test the FastAPI endpoints, verifying request/response formats and data integrity.
 *   **Data Ingestion Tests**: Verify that data is correctly ingested into Neo4j and Milvus with accurate embeddings and relationships.
 
 ## License
 
-(No license was specified in the provided codebase or project context.)
-
-*README.md was made with [Etchr](https://etchr.dev)*
